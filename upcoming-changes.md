@@ -252,6 +252,24 @@ Verify:
   installs the plugin there, clones jeeves-cmd to `C:\Users\winux\gitrepos\config\jeeves-cmd`, runs
   `/jeeves:setup` (first sync, backup to `hosts/RAIVEN-win/`); the edit hook on Windows.
 
+Built (2026-11-16, branch `feat/generic`):
+- Scripts: `lib/lib.sh` (shared vs `HOST_FILES` lists, `-win` suffix, `bad_name`, `case_collisions`, hashes
+  with `--no-filters`, data repo git with `core.autocrlf=false`), `jeeves-snapshot` (backup to
+  `hosts/<host>/`, old layout removed, names refused), `jeeves-hook-edit` (`C:\` paths), new
+  `jeeves-restore` and `jeeves-init`; skills `setup` and `restore`; update skill limited to shared files.
+  `.gitattributes` in both repos. 35 tests, passing on Linux and under Windows Git Bash; every new test fails
+  against `main`'s scripts.
+- Found while building: Git for Windows' `core.autocrlf=true` made `git add` print CRLF warnings into the edit
+  hook's message even with the new layout (the test repo has no `.gitattributes`, and a user's data repo may
+  not either), hence `core.autocrlf=false` on the data repo's git calls. A Windows clone of the plugin keeps LF
+  scripts thanks to `.gitattributes` (checked: `C:\Users\winux\gitrepos\config\jeeves`, cloned with
+  Windows git over SSH).
+- Live on RAIVEN (WSL): the real snapshot moved jeeves-cmd to the new layout in one commit (`2e54988`,
+  settings and memories renamed unchanged into `hosts/RAIVEN/`); a second snapshot was silent; scan clean;
+  pushed `09be4a3..2e54988`.
+- Live on RAIVEN-win: pending (the user installs the plugin in the Windows VS Code extension, then
+  `/jeeves:setup`).
+
 ## 2. Publish (was 3)
 
 Own GitHub marketplace; versioned releases; Anthropic directory optional.
