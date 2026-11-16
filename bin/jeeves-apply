@@ -21,13 +21,13 @@ say() { echo "jeeves apply: $*"; }
 find_data_repo || { say "$DATA_REPO_PROBLEM"; exit 1; }
 saved_dir=$STATE_DIR/overwritten/$(date +%Y%m%d-%H%M%S)
 
-installed=() skipped=() status=0
+installed=() skipped=() status=0 saved=0
 while IFS= read -r p; do
   [ -n "$p" ] || continue
   d=$(hash_of "$CLAUDE_HOME/$p"); r=$(hash_of "$HOME_COPY/$p"); b=$(base_of "$p")
   state=$(classify "$d" "$r" "$b")
   if [ "$state" = conflict ] && [ $force = 1 ]; then
-    [ "$d" = "-" ] || copy_file "$CLAUDE_HOME/$p" "$saved_dir/$p"
+    [ "$d" = "-" ] || { copy_file "$CLAUDE_HOME/$p" "$saved_dir/$p" && saved=1; }
     state=repo
   fi
   case "$state" in
@@ -42,7 +42,7 @@ while IFS= read -r p; do
 done < <(all_tracked)
 
 if [ ${#installed[@]} -gt 0 ]; then say "installed $(printf '%s\n' "${installed[@]}" | join_lines)"; fi
-[ -d "$saved_dir" ] && say "previous disk copies saved in $saved_dir"
+[ $saved = 1 ] && say "previous disk copies saved in $saved_dir"
 for s in ${skipped[@]+"${skipped[@]}"}; do say "skipped $s"; status=1; done
 [ ${#installed[@]} -eq 0 ] && [ $status = 0 ] && say "nothing to install"
 exit $status
