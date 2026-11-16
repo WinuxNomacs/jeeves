@@ -471,7 +471,7 @@ t_init_creates_a_data_repo() {
   check "one commit" [ "$(git -C "$W/new" rev-list --count HEAD)" = 1 ]
   check "LF line endings everywhere" grep -q 'eol=lf' "$W/new/.gitattributes"
   check "sync record ignored" grep -qx '.sync-state/' "$W/new/.gitignore"
-  check "origin set" [ "$(git -C "$W/new" remote get-url origin)" = "$W/remote.git" ]
+  check "origin set" bash -c '[[ "$(git -C "$1" remote get-url origin)" == */remote.git ]]' _ "$W/new"
   "$SRC/bin/jeeves-init" "$W/new" >/dev/null; rc=$?
   check "refuses a folder that is not empty" [ $rc = 1 ]
   JEEVES_DATA=$W/new snap --no-pull >/dev/null

@@ -17,9 +17,13 @@ already snapshotted the data repo when the plugin is installed.
 - `bin/` — on the Bash tool's PATH while the plugin is enabled, so every name starts with `jeeves-`.
   `jeeves-snapshot` (`~/.claude` → data repo, commits on its `main`), `jeeves-apply` (data repo → `~/.claude`),
   `jeeves-hook-edit` (snapshots after an edit to `~/.claude/CLAUDE.md`), `jeeves-status` (read-only: what is
-  out of sync, with hashes), `jeeves-scan` (secrets in the outgoing commits).
-- `skills/update/SKILL.md` — `/jeeves:update`: sync, or a preference change, then push. It gets the data repo
-  from `${user_config.data_repo}` (substituted into skill text; the Bash tool sees no plugin variables).
+  out of sync, with hashes), `jeeves-scan` (secrets in the outgoing commits), `jeeves-restore` (a host's
+  backup → `~/.claude`), `jeeves-init` (new data repo).
+- `skills/` — `update` (`/jeeves:update`: sync, or a change to a shared file, then push), `setup`, `restore`.
+  They get the data repo from `${user_config.data_repo}` (substituted into skill text; the Bash tool sees no
+  plugin variables).
+- Shared files (`home/`, synced) vs per-device files (`hosts/<host>/`, backup only): the lists are at the top
+  of `lib/lib.sh`.
 - `lib/lib.sh` — shared code: finding the data repo, tracked paths list, hashes, three-way classification.
 - `tests/run.sh` — tests; each runs against a scratch `~/.claude`, data repo and bare remote.
 - This `CLAUDE.md` is for working on the repo; Claude Code does not load a plugin's `CLAUDE.md` as context
@@ -35,7 +39,8 @@ already snapshotted the data repo when the plugin is installed.
 
 ## Rules for the scripts
 
-- Portable bash: macOS bash 3.2, Git Bash, Linux. No GNU-only flags (no `sed -i`, no `\|` in sed), no
+- Portable bash: macOS bash 3.2, Git Bash, Linux. Run the tests under Windows Git Bash too when a change
+  could differ there (from WSL: copy the tree to a `C:` folder and run `bash.exe -lc tests/run.sh`). No GNU-only flags (no `sed -i`, no `\|` in sed), no
   associative arrays, no `set -u`, no `jq`.
 - Hooks must never block a session: hook mode always exits 0 and prints only what needs attention.
 - The scripts themselves never push; they contact the remote only for `fetch` + fast-forward in `snapshot`.

@@ -46,7 +46,9 @@ HOST_FILES="settings.json keybindings.json"
 # Never copied: managed by claude.ai.
 EXCLUDED_PREFIX="skills/synced/"
 
-git_repo() { git -C "$REPO" "$@"; }
+# Files are copied byte for byte, so git must not convert line endings either (Git for Windows sets
+# core.autocrlf=true), and its "LF will be replaced by CRLF" warnings must not reach a hook's message.
+git_repo() { git -C "$REPO" -c core.autocrlf=false -c core.safecrlf=false "$@"; }
 
 # Relative paths of tracked files under the given root, one per line.
 tracked_under() {
