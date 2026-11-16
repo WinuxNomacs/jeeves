@@ -1,11 +1,12 @@
 ---
 name: update
 description: >-
-  Sync or change the user's global Claude Code preferences (~/.claude/CLAUDE.md, settings.json,
-  keybindings.json, agents/, commands/, skills/) through the Jeeves data repo, then push it. Use it when the
-  user asks to change a global preference or rule (pass the request as the argument), when a "jeeves
+  Sync or change the user's global Claude Code preferences shared by all their devices (~/.claude/CLAUDE.md,
+  agents/, commands/, skills/) through the Jeeves data repo, then push it. Use it when the user asks to
+  change a global rule, agent, command or personal skill (pass the request as the argument), when a "jeeves
   snapshot" message reports newer repo files, a conflict or a diverged main, or when the user asks to sync
-  their preferences. Without an argument it syncs; with one it makes that change.
+  their preferences. Without an argument it syncs; with one it makes that change. Not for settings.json or
+  keybindings.json: those are per device, only backed up.
 argument-hint: "[change to make, or nothing to sync]"
 allowed-tools:
   - Bash(jeeves-status)
@@ -28,8 +29,10 @@ Request: $ARGUMENTS
 
 No request above means **sync mode**; a request means **change mode** (a sync first, then the change).
 
-The live files are in `~/.claude`; the data repo keeps copies under `home/` and history in git. The commands
-`jeeves-status`, `jeeves-snapshot`, `jeeves-apply` and `jeeves-scan` are on the Bash PATH.
+The live files are in `~/.claude`. The data repo keeps the shared ones under `home/` (`CLAUDE.md`, `agents/`,
+`commands/`, `skills/` but not `skills/synced/`) and each device's backup of its `settings.json`,
+`keybindings.json` and memories under `hosts/<host>/`, with history in git. The commands `jeeves-status`,
+`jeeves-snapshot`, `jeeves-apply` and `jeeves-scan` are on the Bash PATH.
 
 ## Rules
 
@@ -43,7 +46,7 @@ The live files are in `~/.claude`; the data repo keeps copies under `home/` and 
 - **A failed `jeeves-scan` stops everything:** tell the user what it found (file and line, never the value)
   and ask how to proceed. Never search files, transcripts or the environment for credentials.
 - Edit `home/…` in the data repo, never `~/.claude` directly; `jeeves-apply` installs the result. Never edit
-  `memory/` (a backup, written by snapshots) or `.sync-state/` (written by the scripts), and never copy
+  `hosts/` (backups, written by snapshots) or `.sync-state/` (written by the scripts), and never copy
   credentials, `~/.claude.json`, history or transcripts into the repo.
 
 ## Find the data repo
@@ -67,15 +70,17 @@ change-mode branch of your own from this session; for anything else, stop and as
 ## Sync mode
 
 1. `jeeves-snapshot`: fetches and fast-forwards `main`, records what changed on disk, commits. Then
-   `jeeves-status`.
+   `jeeves-status`. If the snapshot says a file was "not taken" (a name another OS can't hold), tell the
+   user which file and why; renaming it is theirs to decide.
 2. **Diverged `main`:** `git merge --no-ff origin/main -m "Merge origin/main: <what came in>"`. Merge
    conflicting text under `home/` by the rules above (keep both sides' additions; ask before dropping text);
-   a conflict under `memory/` keeps both sides' files. `git add` the result and commit.
+   a conflict under `hosts/` takes this device's side for `hosts/<this host>/` and the incoming side for
+   any other host (each host's folder is written only by that host). `git add` the result and commit.
 3. **Each `conflict` line:** read base, disk (`~/.claude/<path>`) and repo (`home/<path>`). With a base, take
    each side's changes since the base; without one (`none`, a new device), keep everything both sides hold.
    If the changes do not overlap, write the merged text to `home/<path>`, commit
    (`merge(<host>): <path> from disk and repo`), then `jeeves-apply --force` (it saves the disk copy under
-   `.sync-state/overwritten/`). If they overlap, ask first. For JSON files keep the result valid JSON.
+   `.sync-state/overwritten/`). If they overlap, ask first.
 4. `jeeves-apply` installs what is newer in the repo. Then `jeeves-snapshot` again: it must print nothing,
    and `jeeves-status` must list no paths. If not, go back to the step that applies.
 5. If `main` is ahead: `jeeves-scan`, then `git push origin main`. If the push is rejected, `jeeves-snapshot`
@@ -87,7 +92,10 @@ change-mode branch of your own from this session; for anything else, stop and as
 1. Sync first (sync mode, steps 1–4), so the change starts from files that match on disk and in the repo.
 2. `git switch -c pref/<short-name>`, then make the requested change in `home/<path>`. For `CLAUDE.md`, follow
    its own rules on wording and where a rule goes: edit a rule in place rather than adding one that
-   contradicts it. A file goes in `home/` only if it is one of the tracked paths above.
+   contradicts it. A file goes in `home/` only if it is one of the shared paths above; a change to
+   `settings.json` or `keybindings.json` is per device: make it in `~/.claude` (the next snapshot backs it
+   up), not here. Shared files must work on Linux, macOS and Windows: no absolute paths, a skill runs its
+   scripts as `bash <script>` (Windows keeps no executable bit), and file names without `: * ? " < > | \`.
 3. Commit with a message saying what changed and why. `git switch main`, then
    `git merge --no-ff pref/<short-name> -m "Merge branch 'pref/<short-name>': <summary>"`, and
    `git branch -d pref/<short-name>`.

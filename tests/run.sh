@@ -448,7 +448,7 @@ t_restore_copies_a_host_backup() {
   echo g > "$R/hosts/old/projects/-home-u-gone/memory/MEMORY.md"
   git -C "$R" add -A && git -C "$R" commit -qm "old host backup"
   mkdir -p "$W/claude/projects/-home-u-here"
-  check "lists the backups" grep -q "backups: old testhost" <<< "$(restore)"
+  check "lists the backups" grep -q "this host: testhost; backups: old testhost" <<< "$(restore)"
   out=$(restore nosuch); rc=$?
   check "unknown host: exit 1 and names the backups" [ $rc = 1 ] && check "unknown host message" grep -q "no backup for nosuch (backups: old testhost)" <<< "$out"
   out=$(restore old)
@@ -495,6 +495,12 @@ t_plugin_files() {
   check "update skill is named update" grep -q '^name: update$' "$sk"
   check "Claude may start the update skill" bash -c '! grep -q "^disable-model-invocation: true" "$1"' _ "$sk"
   check "update skill gets the data repo from the plugin option" grep -q 'JEEVES_DATA="${user_config.data_repo}"' "$sk"
+  for k in setup restore; do
+    sk=$SRC/skills/$k/SKILL.md
+    check "$k skill is named $k" grep -q "^name: $k\$" "$sk"
+    check "only the user starts the $k skill" grep -q '^disable-model-invocation: true$' "$sk"
+    check "$k skill gets the data repo from the plugin option" grep -q 'JEEVES_DATA="${user_config.data_repo}"' "$sk"
+  done
 }
 
 run_test "snapshot does nothing when disk matches the repo" t_nothing_changed

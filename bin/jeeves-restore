@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Copy a device's backup (hosts/<host>/ in the data repo) onto this machine's ~/.claude.
 #
-#   jeeves-restore                        list the hosts that have a backup
+#   jeeves-restore                        this machine's host name, and the hosts that have a backup
 #   jeeves-restore <host>                 restore its settings.json and keybindings.json
 #   jeeves-restore <host> --memories      also its memories, for projects that exist on this machine
 #                                         (~/.claude/projects/<key>/ is there)
@@ -26,7 +26,7 @@ find_data_repo || { say "$DATA_REPO_PROBLEM"; exit 1; }
 
 hosts=$(cd "$REPO" && ls -d hosts/*/ 2>/dev/null | sed -e 's#^hosts/##' -e 's#/$##' | join_lines)
 if [ -z "$host" ]; then
-  say "backups: ${hosts:-none}"
+  say "this host: $HOST; backups: ${hosts:-none}"
   exit 0
 fi
 case "$host" in */* | . | ..) say "not a host name: $host"; exit 2 ;; esac
