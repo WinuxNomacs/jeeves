@@ -494,7 +494,9 @@ t_plugin_files() {
   check "licence declared in plugin.json" grep -q '"license": "MIT"' "$SRC/.claude-plugin/plugin.json"
   check "version set in plugin.json only, not in marketplace.json" bash -c '! grep -q "\"version\"" "$1"' _ "$SRC/.claude-plugin/marketplace.json"
   check "no CLAUDE.md at the plugin root (shipped to users to no effect)" [ ! -e "$SRC/CLAUDE.md" ]
-  check "the workflow runs only on tags and by hand" bash -c '! grep -Eq "^  (pull_request|schedule)|^  push:\$" "$1" || grep -A1 "^  push:" "$1" | grep -q tags' _ "$SRC/.github/workflows/test.yml"
+  wf=$SRC/.github/workflows/test.yml
+  check "the workflow has no pull-request or schedule trigger" bash -c '! grep -Eq "^  (pull_request|pull_request_target|schedule):" "$1"' _ "$wf"
+  check "the workflow's push trigger is for tags only" bash -c '[ "$(grep -A1 "^  push:" "$1" | tail -1 | sed "s/^ *//" | cut -d: -f1)" = tags ]' _ "$wf"
   for f in "$SRC"/bin/*; do check "$f is executable" [ -x "$f" ]; done
   check "lib.sh is not on the PATH" [ ! -e "$SRC/bin/lib.sh" ]
   sk=$SRC/skills/update/SKILL.md
