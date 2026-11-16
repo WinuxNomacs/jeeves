@@ -49,4 +49,4 @@ Claude may pull from and push to `origin` (`WinuxNomacs/jeeves`, private) whenev
 asking each time: pull before starting work, push `main` after a merge, push branches to back them up. Still
 never force-push, rewrite pushed history, or tag (a tag stays the user's call). Pushing publishes nothing
 beyond the private GitHub repo: there are no workflows. Before adding any workflow, ask (Actions minutes on
-private repos are billed). This changes in phase 4, when the repo becomes a public marketplace.
+private repos are billed). This changes in the Publish phase, when the repo becomes a public marketplace.

@@ -2,9 +2,9 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** 1. `update` skill: sync and change modes, three-way review, push after confirmation
-- **Then:** 2. Generic: setup skill, Windows, machine-specific paths in `settings.json`
-- **Later:** 3. Publish through own GitHub marketplace · 4. macOS device · 5. Per-device overlay (when needed)
+- **Up next:** 1. Generic: setup skill, Windows, machine-specific paths in `settings.json`
+- **Then:** 2. Publish through own GitHub marketplace
+- **Later:** 3. macOS device · 4. Per-device overlay (when needed)
 
 ## Done
 
@@ -19,6 +19,11 @@
   in `jeeves-cmd`; a session's Edit of a (scratch) global CLAUDE.md was committed by the PostToolUse hook and
   shown as a notice; the real one checked live too (2026-11-16, see "Live check of the edit hook" under 1. Split).
   Details below under "1. Split".
+- 2. `update` skill (2026-11-16): `skills/update/SKILL.md` (`/jeeves:update`, sync and change modes),
+  `bin/jeeves-status`, `bin/jeeves-scan`; snapshot messages point to it; 28 tests in `tests/run.sh`. Checked
+  live on RAIVEN: a real sync (nothing to merge, pushed jeeves-cmd `bfa6379..445a809`) and a real change (the
+  global "never push" rule's exception for `/jeeves:update`, pushed `445a809..09be4a3`). Details below under
+  "2. `update` skill".
 
 ---
 
@@ -136,7 +141,7 @@ Design:
 - **Verify:** tests pass in the plugin repo; a new session's SessionStart snapshot runs (seen in `git log` of
   the data repo after a deliberate change); an edit to `~/.claude/CLAUDE.md` is committed at once.
 
-## 1. `update` skill (was 2)
+## 2. `update` skill (done)
 
 Decisions (2026-11-16, with the user):
 - **Push without asking.** Show the diff only when the user asks for it: everything is in git, so nothing is
@@ -169,23 +174,36 @@ Design:
   main; scan flags a planted token and passes a clean diff); `claude plugin validate`; live in a scratch data
   repo and `CLAUDE_HOME` (change mode, then a forced conflict that must stop and ask); one real sync.
 
-## 2. Generic (was 3)
+Built and checked (2026-11-16):
+- The skill reads `${user_config.data_repo}` (substituted into skill text; the Bash tool sees no plugin
+  variables) and works from inside the data repo. `jeeves-status` prints a `datarepo` line for that. The
+  shell's folder is not kept between commands when the data repo is outside the session's folders, so every
+  command starts with `cd <data repo> &&`.
+- Scratch check (by hand, following SKILL.md, two devices): a conflict with additions on both sides merged
+  three-way; then apply, a silent snapshot, scan, push; a planted GitHub token blocked the push and was not
+  printed. **Not checked live:** the skill stopping to ask on overlapping changes (only its text says so);
+  a headless `claude -p` run was not used because it would read the real `data_repo` option.
+- Live on RAIVEN, both through `/jeeves:update` after `/reload-plugins`: sync mode, then change mode (above).
+- Found on the way: `jeeves-apply` reported "previous disk copies saved" on a plain run in the same second as
+  a `--force` run; fixed on its own branch with a test (`088b676`).
+
+## 1. Generic (was 2)
 
 Code and data are split already (phase 1). Setup skill that creates or clones the data repo; sync record
 moves to `${CLAUDE_PLUGIN_DATA}`; Windows (Git Bash, paths, `hostname`, `.gitattributes` with `eol=lf`; the
 edit hook compares POSIX paths, so a `C:\...` path from the hook needs converting there).
 Machine-specific paths in the shared `settings.json` (see "Found while building" under 1. Split): options
-include leaving them out of the shared copy, or a per-device overlay (phase 5) for these keys.
+include leaving them out of the shared copy, or a per-device overlay (phase 4) for these keys.
 
-## 3. Publish (was 4)
+## 2. Publish (was 3)
 
 Own GitHub marketplace; versioned releases; Anthropic directory optional.
 
-## 4. macOS device (was 5)
+## 3. macOS device (was 4)
 
 Install the plugin, clone the data repo, run `tests/run.sh` (user runs it by hand), first sync, resolve any first-sync conflicts.
 
-## 5. Per-device overlay (was 6)
+## 4. Per-device overlay (was 5)
 
 When the first real difference appears: decide host vs platform scope, then add an overlay folder
 (`home.<host>/` or `home.<os>/`) merged by `apply` (needs a JSON merge for `settings.json`).

@@ -49,8 +49,9 @@ The live files are in `~/.claude`; the data repo keeps copies under `home/` and 
 ## Find the data repo
 
 Run `JEEVES_DATA="${user_config.data_repo}" jeeves-status`. If it says no data repo is set, stop and tell the
-user to set the plugin option `data_repo` (`/plugin` or `/config`). Otherwise `cd` to the path on its
-`datarepo` line, and run every later command from there, so the scripts find the repo by themselves.
+user to set the plugin option `data_repo` (`/plugin` or `/config`). Otherwise start every later command
+with `cd <the path on its datarepo line> &&` (the shell may not keep its folder between commands), so the
+scripts and git act on the data repo.
 
 `jeeves-status` prints tab-separated lines:
 - `<state> <path> <disk> <repo> <base>` for each tracked path not in sync. `disk`: only `~/.claude` changed
