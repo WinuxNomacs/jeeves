@@ -490,6 +490,13 @@ t_plugin_files() {
   check "PostToolUse matches Write|Edit" grep -q '"matcher": "Write|Edit"' "$SRC/hooks/hooks.json"
   check "PostToolUse runs the edit hook" grep -q 'bin/jeeves-hook-edit' "$SRC/hooks/hooks.json"
   check "plugin option data_repo declared" grep -q '"data_repo"' "$SRC/.claude-plugin/plugin.json"
+  check "MIT licence file" grep -q '^MIT License$' "$SRC/LICENSE"
+  check "licence declared in plugin.json" grep -q '"license": "MIT"' "$SRC/.claude-plugin/plugin.json"
+  check "version set in plugin.json only, not in marketplace.json" bash -c '! grep -q "\"version\"" "$1"' _ "$SRC/.claude-plugin/marketplace.json"
+  check "no CLAUDE.md at the plugin root (shipped to users to no effect)" [ ! -e "$SRC/CLAUDE.md" ]
+  wf=$SRC/.github/workflows/test.yml
+  check "the workflow has no pull-request or schedule trigger" bash -c '! grep -Eq "^  (pull_request|pull_request_target|schedule):" "$1"' _ "$wf"
+  check "the workflow's push trigger is for tags only" bash -c '[ "$(grep -A1 "^  push:" "$1" | tail -1 | sed "s/^ *//" | cut -d: -f1)" = tags ]' _ "$wf"
   for f in "$SRC"/bin/*; do check "$f is executable" [ -x "$f" ]; done
   check "lib.sh is not on the PATH" [ ! -e "$SRC/bin/lib.sh" ]
   sk=$SRC/skills/update/SKILL.md

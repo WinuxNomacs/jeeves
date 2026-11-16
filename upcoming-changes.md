@@ -290,7 +290,65 @@ Built (2026-11-16, branch `feat/generic`):
 
 ## 1. Publish (was 2)
 
-Own GitHub marketplace; versioned releases; Anthropic directory optional.
+Facts checked (2026-11-16, code.claude.com plugin docs: install, host-marketplace, loading,
+marketplace-reference, manifest-reference, publish, anthropic-marketplaces; claude.com/docs/plugins/submit):
+- Users add the marketplace with `claude plugin marketplace add WinuxNomacs/jeeves` (default branch), or pin
+  `WinuxNomacs/jeeves#<tag>`. **The manifest `version` decides updates:** "If you set `"version": "1.0.0"`
+  and push new commits without changing it, users don't receive them." So every release bumps
+  `plugin.json`'s `version` (and the version is set only there, not also in `marketplace.json`).
+- Auto-update is off by default for third-party marketplaces; users update with
+  `claude plugin update jeeves@jeeves` or enable auto-update in `/plugin` > Marketplaces.
+- Tags are only needed when other plugins declare version ranges on this one (`claude plugin tag` makes
+  `jeeves--v<version>`); a tag is still useful as a release marker and the CI trigger.
+- `bin/`: claude.ai and Cowork don't install plugins with a top-level `bin/`. Jeeves is for Claude Code (local
+  files, hooks), so this is accepted; noted in the README.
+- Directory submission (later): `LICENSE` or `license`, README of 40+ words, no bundled binaries, a security
+  scan per commit, a reviewer publishes each version; the repo must be public before the listing goes live.
+- `actions/checkout` (GitHub, MIT, not archived): latest release v7.0.1 on 2026-07-20, last push 2026-10-17;
+  pinned by commit `3d3c42e5aac5ba805825da76410c181273ba90b1`. The alternative, a `git clone` step of our
+  own, was weighed: checkout is GitHub's first-party action and the pin removes drift.
+
+Decisions (2026-11-16, with the user):
+- **Licence MIT.**
+- **The planning file and history stay public as they are** (host name RAIVEN, user name winux, paths, the
+  private data repo's name and hashes; no secrets, commits use the GitHub noreply address).
+- **Test workflow on a version tag and by hand** (`workflow_dispatch`), on Linux, Windows (Git Bash) and macOS
+  (bash 3.2): no push or pull-request trigger.
+- **Anthropic directory: later, after the macOS phase, and only on the user's direct command** (the user,
+  when making the repo public: "do not publish to anthropic without my direct command").
+- The user made the repo public (2026-11-16). A scan of the whole history (24 commits) found no secrets: only
+  `jeeves-scan`'s own patterns and the tests' fake token.
+
+Design:
+- `LICENSE` (MIT, "Winux Nomacs"); `plugin.json`: `license`, `homepage`; `marketplace.json`: `description`,
+  `$schema` if the validator accepts it; `claude plugin validate --strict` passes for both.
+- **Versioning** (Claude chooses the bump, as for the user's packages): `CHANGELOG.md` from the history
+  (0.1.0 split, update skill; 0.2.0 = Generic). Release `0.2.0` prepared on `release/0.2.0` (version,
+  changelog), merged into `main`; the user tags (`v0.2.0` or `claude plugin tag`'s `jeeves--v0.2.0`) and pushes.
+  1.0.0 after the macOS phase.
+- **Workflow** `.github/workflows/test.yml`: `on: push: tags` + `workflow_dispatch`; matrix ubuntu, windows,
+  macos; `bash tests/run.sh`. On macOS, force `/bin/bash` (3.2) first on PATH, because the runner may have a
+  newer Homebrew bash and the scripts start with `#!/usr/bin/env bash`. Checked by a manual run after the
+  repo is public.
+- **README:** install from GitHub first, updating (`claude plugin update`, auto-update), pinning a tag, the
+  VS Code extension note, Claude Code only (not claude.ai or Cowork), licence.
+- **Plugin `CLAUDE.md`:** the "Pushing" section changes: the repo is public, a push to `main` reaches users
+  only with a version bump, tags stay the user's; the workflow runs on tags and by hand only.
+- **Going public is the user's step** (GitHub settings, or `gh repo edit WinuxNomacs/jeeves --visibility
+  public --accept-visibility-change-consequences`); before it, a last check of tracked files and history
+  for secrets (`jeeves-scan` covers the data repo only; a grep over `git log -p` here).
+- This machine (RAIVEN) and RAIVEN-win keep their `directory` marketplaces (local clones), so plugin edits
+  load in place; only other users install from GitHub.
+
+Built (2026-11-16, branch `feat/publish`): `LICENSE`, `plugin.json` (`homepage`, `license`, descriptions
+of the shared vs per-host split), `marketplace.json` descriptions, `.github/workflows/test.yml`, README
+install section, pushing rules. `CLAUDE.md` moved to `.claude/CLAUDE.md`: at the root it was shipped to
+plugin users to no effect, and `claude plugin validate --strict` failed on it. `tests/run.sh` checks the
+licence, where the version is set, and the workflow's triggers (35 tests).
+
+Verify: `claude plugin validate --strict`; the workflow run by hand on all three systems after going
+public; a fresh install from GitHub in a scratch `CLAUDE_CONFIG_DIR` (marketplace add, install with
+`--config data_repo=…`, the version shown), removed afterwards.
 
 ## 2. macOS device (was 3)
 
