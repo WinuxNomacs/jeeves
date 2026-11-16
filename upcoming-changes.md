@@ -346,11 +346,22 @@ install section, pushing rules. `CLAUDE.md` moved to `.claude/CLAUDE.md`: at the
 plugin users to no effect, and `claude plugin validate --strict` failed on it. `tests/run.sh` checks the
 licence, where the version is set, and the workflow's triggers (35 tests).
 
+Checked (2026-11-16): `claude plugin validate --strict` passes. The workflow, started by hand on `main`
+(run 43981362339): Linux (bash 5.3) and Windows (Git Bash 5.3) 35/35; macOS with `/bin/bash` 3.2.57 failed 2
+tests, both path comparisons in the tests themselves (macOS's `TMPDIR` ends in `/` and BSD `mktemp` keeps the
+`//`); fixed by normalizing the scratch path (`fix/tests-macos-tmpdir`), rerun 43981931017 green on all three.
+A fresh install from GitHub in a scratch `CLAUDE_CONFIG_DIR` (version 0.1.0 then) installed, and its
+scripts created a data repo and snapshotted into it; the scratch folder was removed. Release 0.2.0 prepared
+on `release/0.2.0` (version, `CHANGELOG.md`).
+
 Verify: `claude plugin validate --strict`; the workflow run by hand on all three systems after going
 public; a fresh install from GitHub in a scratch `CLAUDE_CONFIG_DIR` (marketplace add, install with
 `--config data_repo=…`, the version shown), removed afterwards.
 
 ## 2. macOS device (was 3)
+
+The scripts' half is covered: the test workflow runs the suite on macOS with its own bash 3.2 (green since
+run 43981931017). Left: a real Mac with Claude Code, by hand.
 
 Install the plugin, clone the data repo, run `tests/run.sh` (user runs it by hand), first sync, resolve any first-sync conflicts.
 
