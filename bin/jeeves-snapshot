@@ -90,11 +90,11 @@ for p in ${taken[@]+"${taken[@]}"}; do set_base "$p" "$(hash_of "$CLAUDE_HOME/$p
 
 status=0
 if [ ${#pending[@]} -gt 0 ]; then
-  say "the repo has newer $(printf '%s\n' "${pending[@]}" | join_lines); run jeeves-apply to install them"
+  say "the repo has newer $(printf '%s\n' "${pending[@]}" | join_lines); run jeeves-apply to install them, or /jeeves:update"
 fi
 if [ ${#conflicts[@]} -gt 0 ]; then
   say "changed both on disk and in the repo: $(printf '%s\n' "${conflicts[@]}" | join_lines);" \
-      "compare them, then keep the disk copy with 'jeeves-snapshot --force' or the repo copy with 'jeeves-apply --force'"
+      "merge them with /jeeves:update, or keep the disk copy with 'jeeves-snapshot --force' or the repo copy with 'jeeves-apply --force'"
   status=1
 fi
 finish $status
