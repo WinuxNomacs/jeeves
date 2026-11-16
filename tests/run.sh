@@ -6,7 +6,8 @@
 #   tests/run.sh <pattern>  run tests whose name contains <pattern>
 
 SRC=$(cd "$(dirname "$0")/.." && pwd)
-SCRATCH=$(mktemp -d "${TMPDIR:-/tmp}/jeeves-tests.XXXXXX")
+# Normalized as the scripts print paths (macOS's TMPDIR ends in "/", and BSD mktemp keeps the "//").
+SCRATCH=$(cd "$(mktemp -d "${TMPDIR:-/tmp}/jeeves-tests.XXXXXX")" && pwd)
 trap 'rm -rf "${SCRATCH:?}"' EXIT
 filter=$1
 passed=0 failed=0
