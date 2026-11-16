@@ -1,0 +1,12 @@
+{
+  "name": "jeeves",
+  "description": "Jeeves: versioned global Claude Code preferences",
+  "owner": { "name": "Winux Nomacs" },
+  "plugins": [
+    {
+      "name": "jeeves",
+      "source": ".",
+      "description": "Versions your global Claude Code preferences in a git repo of your own"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "name": "jeeves",
+  "displayName": "Jeeves",
+  "version": "0.1.0",
+  "description": "Versions your global Claude Code preferences (~/.claude/CLAUDE.md, settings.json, agents, commands, skills) in a git repo of your own, snapshotting them at session start and after edits to the global CLAUDE.md",
+  "author": { "name": "Winux Nomacs" },
+  "repository": "https://github.com/WinuxNomacs/jeeves",
+  "keywords": ["preferences", "sync", "backup", "claude-md", "git"],
+  "userConfig": {
+    "data_repo": {
+      "type": "directory",
+      "title": "Data repo",
+      "description": "Local clone of the git repo that holds your preferences (home/ and memory/), for example ~/gitrepos/config/jeeves-cmd",
+      "required": true
+    }
+  }
+}

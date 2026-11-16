@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# PostToolUse hook (Write|Edit): snapshot right after Claude edits ~/.claude/CLAUDE.md, so the edit is
+# recorded at once. Reads the hook's JSON from stdin; any other file is ignored. Always exits 0, and
+# reports to the user through a systemMessage only when the snapshot printed something.
+
+CLAUDE_HOME=${CLAUDE_HOME:-$HOME/.claude}
+
+# tool_input.file_path, without jq (portable awk): the first "file_path" string value, with escapes undone
+# for \\, \/ and \" (enough for paths).
+path=$(tr '\n' ' ' | awk '{
+  i = index($0, "\"file_path\""); if (!i) exit
+  s = substr($0, i + 11); sub(/^[ \t]*:[ \t]*"/, "", s)
+  out = ""
+  while (length(s) > 0) {
+    c = substr(s, 1, 1)
+    if (c == "\"") { print out; exit }
+    if (c == "\\") { out = out substr(s, 2, 1); s = substr(s, 3) } else { out = out c; s = substr(s, 2) }
+  }
+}')
+[ -n "$path" ] || exit 0
+
+# Same file? Compare physical paths of the folders, so symlinks and relative forms still match.
+real_dir() { (cd "$1" 2>/dev/null && pwd -P); }
+[ "$(basename "$path")" = CLAUDE.md ] || exit 0
+[ -n "$(real_dir "$CLAUDE_HOME")" ] || exit 0
+[ "$(real_dir "$(dirname "$path")")" = "$(real_dir "$CLAUDE_HOME")" ] || exit 0
+
+out=$("$(dirname "$0")/jeeves-snapshot" --hook --no-pull 2>&1)
+[ -n "$out" ] || exit 0
+
+# JSON string escaping: backslash, double quote, tab, newline.
+json=$(printf '%s' "$out" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/	/\\t/g' | awk 'NR > 1 { printf "\\n" } { printf "%s", $0 }')
+printf '{"systemMessage": "%s"}\n' "$json"
+exit 0
