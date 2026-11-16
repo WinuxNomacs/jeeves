@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+# Record the on-disk ~/.claude preferences in the data repo and commit them on its main.
+#
+#   jeeves-snapshot           pull (fast-forward only), copy changed files into home/, back up memories, commit
+#   jeeves-snapshot --force   also take the disk copy of files changed on both sides (conflicts)
+#   jeeves-snapshot --hook    for the hooks: always exits 0, prints only when something needs attention
+#   jeeves-snapshot --no-pull skip contacting the remote
+#
+# The data repo is found as lib/lib.sh describes (JEEVES_DATA, the plugin option, or the current folder).
+#
+# Never pushes. Memories are copied to memory/<host>/ and are never applied back.
+
+. "$(dirname "$0")/../lib/lib.sh"
+
+hook=0 force=0 pull=1
+for arg in "$@"; do
+  case "$arg" in
+    --hook) hook=1 ;;
+    --force) force=1 ;;
+    --no-pull) pull=0 ;;
+    *) echo "snapshot: unknown option $arg" >&2; exit 2 ;;
+  esac
+done
+
+say() { echo "jeeves snapshot: $*"; }
+finish() { if [ $hook = 1 ]; then exit 0; else exit "$1"; fi; }
+
+find_data_repo || { say "skipped, $DATA_REPO_PROBLEM"; finish 1; }
+
+# Guard: only commit onto a clean main, never in the middle of other work.
+branch=$(git_repo symbolic-ref --short -q HEAD)
+if [ "$branch" != main ]; then
+  say "skipped, $REPO is on '${branch:-detached HEAD}', not main; ~/.claude changes are not recorded yet"
+  finish 1
+fi
+if [ -f "$REPO/.git/MERGE_HEAD" ] || [ -n "$(git_repo status --porcelain)" ]; then
+  say "skipped, $REPO has uncommitted changes; ~/.claude changes are not recorded yet"
+  finish 1
+fi
+
+# Bring in what other devices pushed. Offline or slow is fine: carry on locally.
+if [ $pull = 1 ] && git_repo remote get-url origin >/dev/null 2>&1; then
+  if GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=5" \
+     git_repo fetch -q origin main 2>/dev/null; then
+    if git_repo merge-base --is-ancestor HEAD origin/main; then
+      git_repo merge -q --ff-only origin/main >/dev/null
+    elif ! git_repo merge-base --is-ancestor origin/main HEAD; then
+      say "main and origin/main have diverged; recording locally, merge them before pushing"
+    fi
+  elif [ $hook = 0 ]; then
+    say "could not reach origin, recording locally"
+  fi
+fi
+
+taken=() pending=() conflicts=()
+while IFS= read -r p; do
+  [ -n "$p" ] || continue
+  d=$(hash_of "$CLAUDE_HOME/$p"); r=$(hash_of "$HOME_COPY/$p"); b=$(base_of "$p")
+  state=$(classify "$d" "$r" "$b")
+  [ "$state" = conflict ] && [ $force = 1 ] && state=disk
+  case "$state" in
+    insync) set_base "$p" "$d" ;;
+    disk)
+      if [ "$d" = "-" ]; then rm -f "$HOME_COPY/$p"; else copy_file "$CLAUDE_HOME/$p" "$HOME_COPY/$p"; fi
+      taken+=("$p") ;;
+    repo) pending+=("$p") ;;
+    conflict) conflicts+=("$p") ;;
+  esac
+done < <(all_tracked)
+
+# Memories: mirror this device's memory folders, so deletions show up in history too.
+mem_dest=$REPO/memory/$HOST
+rm -rf "${mem_dest:?}"
+for dir in "$CLAUDE_HOME"/projects/*/memory; do
+  [ -d "$dir" ] || continue
+  [ -n "$(ls -A "$dir")" ] || continue
+  key=$(basename "$(dirname "$dir")")
+  mkdir -p "$mem_dest/$key"
+  cp -pR "$dir"/. "$mem_dest/$key"/
+done
+
+git_repo add -A
+if ! git_repo diff --cached --quiet; then
+  changed=$(git_repo diff --cached --name-only | sed -e 's#^home/##' -e "s#^memory/$HOST/.*#memories#" | sort -u | join_lines)
+  git_repo commit -q -m "snapshot($HOST): $changed" \
+    -m "Recorded by jeeves-snapshot from $CLAUDE_HOME." || { say "commit failed"; finish 1; }
+  say "committed $changed"
+fi
+for p in ${taken[@]+"${taken[@]}"}; do set_base "$p" "$(hash_of "$CLAUDE_HOME/$p")"; done
+
+status=0
+if [ ${#pending[@]} -gt 0 ]; then
+  say "the repo has newer $(printf '%s\n' "${pending[@]}" | join_lines); run jeeves-apply to install them"
+fi
+if [ ${#conflicts[@]} -gt 0 ]; then
+  say "changed both on disk and in the repo: $(printf '%s\n' "${conflicts[@]}" | join_lines);" \
+      "compare them, then keep the disk copy with 'jeeves-snapshot --force' or the repo copy with 'jeeves-apply --force'"
+  status=1
+fi
+finish $status
