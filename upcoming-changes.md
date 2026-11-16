@@ -2,9 +2,9 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** 1. Generic: setup skill, Windows, machine-specific paths in `settings.json`
+- **Up next:** 1. Generic: shared vs per-host files, setup and restore skills, Windows
 - **Then:** 2. Publish through own GitHub marketplace
-- **Later:** 3. macOS device · 4. Per-device overlay (when needed)
+- **Later:** 3. macOS device · 4. Per-device overlay (only if a shared file must differ per host)
 
 ## Done
 
@@ -189,11 +189,68 @@ Built and checked (2026-11-16):
 
 ## 1. Generic (was 2)
 
-Code and data are split already (phase 1). Setup skill that creates or clones the data repo; sync record
-moves to `${CLAUDE_PLUGIN_DATA}`; Windows (Git Bash, paths, `hostname`, `.gitattributes` with `eol=lf`; the
-edit hook compares POSIX paths, so a `C:\...` path from the hook needs converting there).
-Machine-specific paths in the shared `settings.json` (see "Found while building" under 1. Split): options
-include leaving them out of the shared copy, or a per-device overlay (phase 4) for these keys.
+Facts checked (2026-11-16):
+- Plugin docs (code.claude.com: manifest-reference, settings-reference, skills, hooks, setup, loading):
+  `pluginConfigs` (where `data_repo` is stored) is read only from the user's `~/.claude/settings.json` or
+  managed settings, never project or local ones. `${CLAUDE_PLUGIN_DATA}` (`~/.claude/plugins/data/<id>/`)
+  reaches hooks and skill text but not Bash-tool commands, and is deleted when the plugin is uninstalled.
+  On native Windows, hooks and the Bash tool run in Git Bash; a hook's `tool_input.file_path` arrives as
+  `C:\...` with backslashes; `~/.claude` is `C:\Users\<u>\.claude`.
+- This PC (RAIVEN) has a native Windows Claude Code too: `C:\Users\winux\.claude`, with a global
+  `CLAUDE.md` from 2026-11-04 that is a subset of the shared one (it lacks the 4 rules added since), a
+  2-key `settings.json`, only `skills/synced/`. Git for Windows 2.55.0 (bash 5.3) is installed; its system
+  gitconfig sets `core.autocrlf=true`, and its `hostname` also says `RAIVEN`.
+- `tests/run.sh` under Windows Git Bash (run from WSL on a scratch copy in `C:`): 25 of 28 pass. Failing: the
+  three JSON checks (no Python on Windows) and the edit hook's notice, which picks up git's "LF will be
+  replaced by CRLF" warnings.
+
+Decisions (2026-11-16, with the user):
+- **Scope: shared vs per host.** Shared and synced (three-way merge, conflicts, change mode, as now):
+  `CLAUDE.md`, `agents/`, `commands/`, `skills/` (not `skills/synced/`). Per host, backup only, never merged
+  or applied automatically: `settings.json`, `keybindings.json` (modifier keys differ on macOS) and the
+  memories. The goal: back up each machine's profile, and restore a host's backup onto a new machine. This
+  removes the machine-specific paths problem (each host keeps its own `settings.json`) and the JSON merge.
+- **Per-host backup at every session start**, committing only what changed (as the memory backup does now).
+- **Native Windows host name:** `<hostname>-win`, automatically (Git Bash: `uname` MINGW/MSYS/CYGWIN), so
+  WSL and Windows on one PC stay apart; Linux, WSL and macOS keep the plain name; `JEEVES_HOST` overrides.
+- **Live Windows check on this PC's Windows side:** the user installs the plugin in the Windows Claude Code;
+  first sync replaces its older `CLAUDE.md` with the shared one (the old copy saved).
+- **Sync record stays in `.sync-state/`** in the clone (per device already), instead of moving to
+  `${CLAUDE_PLUGIN_DATA}`: Bash-tool commands don't see that variable and uninstalling deletes it.
+
+Design:
+- **Data repo layout:** `home/` holds only the shared files. `hosts/<host>/` mirrors `~/.claude` for the
+  per-host files, so a restore is a plain copy: `hosts/<host>/settings.json`, `keybindings.json`,
+  `projects/<key>/memory/*.md` (replaces `memory/<host>/<key>/`). Migration in jeeves-cmd: `git mv
+  home/settings.json hosts/RAIVEN/settings.json`, `git mv memory/RAIVEN hosts/RAIVEN/projects/...`.
+- **`lib/lib.sh`:** `SHARED_FILES`/`SHARED_DIRS` (synced) and `HOST_FILES` + memories (backed up); host
+  suffix on Windows. `jeeves-snapshot` syncs the shared set as now and copies the host set one way into
+  `hosts/<host>/` (deleting there what was deleted on disk). `jeeves-apply` and `jeeves-status` cover only
+  the shared set.
+- **Names other hosts can't hold:** snapshot refuses a shared file whose name has `: ? * < > | " \`, ends in a
+  dot or space, or differs only in case from another, and says why (it would break on Windows or macOS).
+- **`/jeeves:restore <host>`** (new skill, `disable-model-invocation: true`): copies `hosts/<host>/`'s
+  settings and keybindings into `~/.claude`, saving existing files under `.sync-state/overwritten/`; Claude
+  then fixes paths that can't work here (plugin marketplace folder, `data_repo`) and lists anything else that
+  looks machine-specific. Memories are offered only for projects whose folder exists on this machine.
+- **`/jeeves:setup`** (new skill, `disable-model-invocation: true`): clones the data repo (or creates one:
+  `git init`, `home/`, `.gitignore`, `.gitattributes`; a remote URL is optional, Jeeves creates no GitHub
+  repo), then the first `CLAUDE.md`/skills sync through `/jeeves:update` and the first backup of this host;
+  on a host with no backup yet it offers `/jeeves:restore`.
+- **Windows:** `.gitattributes` (`* text=auto eol=lf`) in both repos; the edit hook converts the path with
+  `cygpath -u` when present; the tests' JSON checks fall back when Python is missing; skills run their
+  scripts as `bash script.sh` (Windows keeps no executable bit), stated in the update skill.
+- **Docs:** README (shared vs per host, setup, restore, Windows), plugin `CLAUDE.md` layout, jeeves-cmd
+  README and `CLAUDE.md`.
+
+Verify:
+- Tests named as sentences: settings and memories go to `hosts/<host>/` and are never applied; a deletion
+  on disk is removed from the host backup; a Windows-invalid or case-colliding name is refused; the host
+  name gets `-win` under a fake MINGW `uname`; the edit hook matches a `C:\...` path; restore saves the files
+  it replaces. Full suite on Linux and under Windows Git Bash.
+- Live: the jeeves-cmd migration on RAIVEN (WSL) through a real snapshot; then the Windows side: the user
+  installs the plugin there, clones jeeves-cmd to `C:\Users\winux\gitrepos\config\jeeves-cmd`, runs
+  `/jeeves:setup` (first sync, backup to `hosts/RAIVEN-win/`); the edit hook on Windows.
 
 ## 2. Publish (was 3)
 
@@ -205,5 +262,6 @@ Install the plugin, clone the data repo, run `tests/run.sh` (user runs it by han
 
 ## 4. Per-device overlay (was 5)
 
-When the first real difference appears: decide host vs platform scope, then add an overlay folder
-(`home.<host>/` or `home.<os>/`) merged by `apply` (needs a JSON merge for `settings.json`).
+Mostly obsolete since Generic made `settings.json` and `keybindings.json` per host. Only needed if a shared
+file (a `CLAUDE.md` rule, a skill) ever has to differ between hosts: then decide host vs platform scope and
+add an overlay folder (`home.<host>/` or `home.<os>/`) merged by `apply`.
