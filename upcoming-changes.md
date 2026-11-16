@@ -2,9 +2,9 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** 1. Publish through own GitHub marketplace
-- **Then:** 2. macOS device
-- **Later:** 3. Per-device overlay (only if a shared file must differ per host)
+- **Up next:** 1. macOS device (a real Mac, by hand; the scripts already pass on macOS in CI)
+- **Later:** 2. Per-device overlay (only if a shared file must differ per host) · Anthropic directory
+  submission (only on the user's direct command)
 
 ## Done
 
@@ -31,6 +31,10 @@
   Windows Git Bash. Checked live: jeeves-cmd moved to the new layout on RAIVEN (`2e54988`); RAIVEN-win set up
   through `/jeeves:setup` (first sync, backup `3466803`); edit hook on Windows (`d44f91b`, `a5f3c08`).
   Details below under "3. Generic".
+- 4. Publish (2026-11-16): the repo is public; MIT `LICENSE`; manifests pass `claude plugin validate
+  --strict` (`CLAUDE.md` moved to `.claude/`); `.github/workflows/test.yml` (tags and by hand; Linux,
+  Windows, macOS bash 3.2, all green); README installs from GitHub; release 0.2.0 merged (`9de7f1e`,
+  `CHANGELOG.md`), to be tagged by the user. Details below under "4. Publish".
 
 ---
 
@@ -288,7 +292,7 @@ Built (2026-11-16, branch `feat/generic`):
 - Not checked live: `/jeeves:restore` (tests only); the overlapping-conflict question (still only in the
   skill's text).
 
-## 1. Publish (was 2)
+## 4. Publish (done)
 
 Facts checked (2026-11-16, code.claude.com plugin docs: install, host-marketplace, loading,
 marketplace-reference, manifest-reference, publish, anthropic-marketplaces; claude.com/docs/plugins/submit):
@@ -358,14 +362,14 @@ Verify: `claude plugin validate --strict`; the workflow run by hand on all three
 public; a fresh install from GitHub in a scratch `CLAUDE_CONFIG_DIR` (marketplace add, install with
 `--config data_repo=…`, the version shown), removed afterwards.
 
-## 2. macOS device (was 3)
+## 1. macOS device (was 2)
 
 The scripts' half is covered: the test workflow runs the suite on macOS with its own bash 3.2 (green since
 run 43981931017). Left: a real Mac with Claude Code, by hand.
 
 Install the plugin, clone the data repo, run `tests/run.sh` (user runs it by hand), first sync, resolve any first-sync conflicts.
 
-## 3. Per-device overlay (was 4)
+## 2. Per-device overlay (was 3)
 
 Mostly obsolete since Generic made `settings.json` and `keybindings.json` per host. Only needed if a shared
 file (a `CLAUDE.md` rule, a skill) ever has to differ between hosts: then decide host vs platform scope and
