@@ -314,7 +314,10 @@ Decisions (2026-11-16, with the user):
   private data repo's name and hashes; no secrets, commits use the GitHub noreply address).
 - **Test workflow on a version tag and by hand** (`workflow_dispatch`), on Linux, Windows (Git Bash) and macOS
   (bash 3.2): no push or pull-request trigger.
-- **Anthropic directory: later, after the macOS phase.**
+- **Anthropic directory: later, after the macOS phase, and only on the user's direct command** (the user,
+  when making the repo public: "do not publish to anthropic without my direct command").
+- The user made the repo public (2026-11-16). A scan of the whole history (24 commits) found no secrets: only
+  `jeeves-scan`'s own patterns and the tests' fake token.
 
 Design:
 - `LICENSE` (MIT, "Winux Nomacs"); `plugin.json`: `license`, `homepage`; `marketplace.json`: `description`,
@@ -336,6 +339,12 @@ Design:
   for secrets (`jeeves-scan` covers the data repo only; a grep over `git log -p` here).
 - This machine (RAIVEN) and RAIVEN-win keep their `directory` marketplaces (local clones), so plugin edits
   load in place; only other users install from GitHub.
+
+Built (2026-11-16, branch `feat/publish`): `LICENSE`, `plugin.json` (`homepage`, `license`, descriptions
+of the shared vs per-host split), `marketplace.json` descriptions, `.github/workflows/test.yml`, README
+install section, pushing rules. `CLAUDE.md` moved to `.claude/CLAUDE.md`: at the root it was shipped to
+plugin users to no effect, and `claude plugin validate --strict` failed on it. `tests/run.sh` checks the
+licence, where the version is set, and the workflow's triggers (35 tests).
 
 Verify: `claude plugin validate --strict`; the workflow run by hand on all three systems after going
 public; a fresh install from GitHub in a scratch `CLAUDE_CONFIG_DIR` (marketplace add, install with
