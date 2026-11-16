@@ -1,0 +1,70 @@
+# Jeeves
+
+A Claude Code plugin that keeps the version history of your global Claude Code preferences
+(`~/.claude/CLAUDE.md`, `settings.json`, `keybindings.json`, `agents/`, `commands/`, `skills/`) in a git repo
+of your own (the **data repo**), shared across your devices.
+
+The live files stay in `~/.claude`. The data repo keeps copies under `home/`. This plugin brings the scripts
+that move the copies, and hooks that run them for you:
+
+| Hook | When | What it runs |
+|---|---|---|
+| SessionStart | every session start | `jeeves-snapshot --hook`: pulls the data repo, records what changed in `~/.claude`, commits on `main` |
+| PostToolUse (`Write\|Edit`) | right after Claude edits `~/.claude/CLAUDE.md` | `jeeves-snapshot --hook --no-pull`, reported as a system message |
+
+In hook mode the scripts print only when something needs attention, and they never block a session.
+
+## Commands
+
+The plugin's `bin/` is on the PATH of Claude's Bash tool, so Claude (or you, by giving the full path) runs:
+
+| Command | Direction | What it does |
+|---|---|---|
+| `jeeves-snapshot` | `~/.claude` → data repo | Fast-forwards `main` from its remote, copies changed files into `home/`, backs up memories, commits on `main`. Never pushes. |
+| `jeeves-apply` | data repo → `~/.claude` | Installs files that changed in the data repo since this device last synced. Never overwrites a file a session edited since then. |
+
+Each device keeps a gitignored record (`.sync-state/` in the data repo) of the file hashes at its last sync.
+This lets the scripts tell "this device changed it" from "the repo changed it". If both changed, they report a
+conflict and change nothing. Settle a conflict with `jeeves-snapshot --force` (keep the disk copy) or
+`jeeves-apply --force` (keep the repo copy; the disk copy is saved under `.sync-state/overwritten/`).
+
+`jeeves-snapshot` only commits onto a clean `main`. While the data repo is on another branch or has
+uncommitted changes, it skips and says so.
+
+## The data repo
+
+A git repo with a `home/` folder (copies of the tracked files) and a `memory/<host>/` folder (a backup of
+each project's `~/.claude/projects/<project>/memory/` on that device, never applied back, because the folder
+names are absolute paths and memories hold machine-specific facts). Never copied: credentials,
+`~/.claude.json`, history, transcripts, caches. Its `.gitignore` should hold `.sync-state/` and `*.sync-tmp`.
+
+The scripts find it, in this order: `$JEEVES_DATA`; the plugin option `data_repo`; the git repo around the
+current folder, if it has a `home/` folder. Hooks see the plugin option; Claude's Bash tool does not, so run
+the commands inside the data repo or export `JEEVES_DATA`.
+
+## Install
+
+From a local clone (edits to the clone take effect on `/reload-plugins`):
+
+```sh
+git clone git@github.com:WinuxNomacs/jeeves.git ~/gitrepos/config/jeeves
+claude plugin marketplace add ~/gitrepos/config/jeeves
+claude plugin install jeeves@jeeves
+```
+
+Or from GitHub (a private repo works with your own git credentials):
+`claude plugin marketplace add WinuxNomacs/jeeves`, then `claude plugin install jeeves@jeeves`.
+
+Then set the data repo path when Claude Code asks for `data_repo`, or later in `/plugin` or `/config`.
+Requirements: git and bash (on Windows, Git Bash).
+
+## Adding a device
+
+Install the plugin, clone your data repo and set `data_repo` to it. The first session's snapshot reports
+any file that differs from the repo as a conflict; choose per file with `--force` on `jeeves-snapshot` or
+`jeeves-apply`.
+
+## Tests
+
+`tests/run.sh` (or `tests/run.sh <part of a test name>`). Each test uses a scratch `~/.claude`, data repo and
+bare remote, so nothing real is touched.
