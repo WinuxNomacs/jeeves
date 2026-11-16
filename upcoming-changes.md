@@ -2,9 +2,9 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** 1. Generic: shared vs per-host files, setup and restore skills, Windows
-- **Then:** 2. Publish through own GitHub marketplace
-- **Later:** 3. macOS device · 4. Per-device overlay (only if a shared file must differ per host)
+- **Up next:** 1. Publish through own GitHub marketplace
+- **Then:** 2. macOS device
+- **Later:** 3. Per-device overlay (only if a shared file must differ per host)
 
 ## Done
 
@@ -24,6 +24,13 @@
   live on RAIVEN: a real sync (nothing to merge, pushed jeeves-cmd `bfa6379..445a809`) and a real change (the
   global "never push" rule's exception for `/jeeves:update`, pushed `445a809..09be4a3`). Details below under
   "2. `update` skill".
+- 3. Generic (2026-11-16): shared files (`CLAUDE.md`, `agents/`, `commands/`, `skills/`) synced through
+  `home/`; `settings.json`, `keybindings.json` and memories backed up per device to `hosts/<host>/`;
+  `jeeves-restore`, `jeeves-init`, skills `setup` and `restore`; Windows (Git Bash, `-win` host, `C:\` paths
+  in the edit hook, `.gitattributes`, no autocrlf). 35 tests in `tests/run.sh`, passing on Linux and under
+  Windows Git Bash. Checked live: jeeves-cmd moved to the new layout on RAIVEN (`2e54988`); RAIVEN-win set up
+  through `/jeeves:setup` (first sync, backup `3466803`); edit hook on Windows (`d44f91b`, `a5f3c08`).
+  Details below under "3. Generic".
 
 ---
 
@@ -89,7 +96,7 @@ None covers snapshot-before-change plus a Claude-reviewed merge of diverging CLA
 - **Split now**, not in phase 3. This repo's history holds preferences and memory backups, so it cannot become
   the plugin repo without rewriting pushed history. So: this repo is renamed on GitHub to
   **`WinuxNomacs/jeeves-cmd`** ("Jeeves Command Center": the data); a **new private `WinuxNomacs/jeeves`**
-  with fresh history holds the plugin code (made public in phase 4).
+  with fresh history holds the plugin code (made public in the Publish phase).
 - **Hooks:** SessionStart snapshot, plus a PostToolUse snapshot after edits to `~/.claude/CLAUDE.md`.
 
 ## 1. Split: plugin repo `jeeves`, data repo `jeeves-cmd` (done)
@@ -111,7 +118,7 @@ Design:
   CLAUDE.md, and this planning file (it describes the plugin, not the data).
 - **Finding the data repo:** `lib.sh` takes `JEEVES_DATA`, else `CLAUDE_PLUGIN_OPTION_DATA_REPO`, else stops
   with a message saying how to set it. `.sync-state/` stays in the data repo for now (moves to
-  `${CLAUDE_PLUGIN_DATA}` in phase 3).
+  `${CLAUDE_PLUGIN_DATA}` in phase 3; in Generic it was kept in the clone instead, see "3. Generic").
 - **Hooks:** SessionStart → `snapshot --hook`. PostToolUse on `Write|Edit` → a small script that reads the path
   from stdin and runs `snapshot --hook --no-pull` only when it is `~/.claude/CLAUDE.md`, reporting through
   `systemMessage`.
@@ -187,7 +194,7 @@ Built and checked (2026-11-16):
 - Found on the way: `jeeves-apply` reported "previous disk copies saved" on a plain run in the same second as
   a `--force` run; fixed on its own branch with a test (`088b676`).
 
-## 1. Generic (was 2)
+## 3. Generic (done)
 
 Facts checked (2026-11-16):
 - Plugin docs (code.claude.com: manifest-reference, settings-reference, skills, hooks, setup, loading):
@@ -267,18 +274,29 @@ Built (2026-11-16, branch `feat/generic`):
 - Live on RAIVEN (WSL): the real snapshot moved jeeves-cmd to the new layout in one commit (`2e54988`,
   settings and memories renamed unchanged into `hosts/RAIVEN/`); a second snapshot was silent; scan clean;
   pushed `09be4a3..2e54988`.
-- Live on RAIVEN-win: pending (the user installs the plugin in the Windows VS Code extension, then
-  `/jeeves:setup`).
+- Live on RAIVEN-win (Windows VS Code extension 2.1.325): the extension has no `/plugin`, so the plugin was
+  installed with the `claude.exe` it ships (`resources\native-binary\`, now in the README). `/jeeves:setup`
+  found the clone, merged the older Windows `CLAUDE.md` (a subset) into the shared version, saved the old
+  copy, pushed the backup `hosts/RAIVEN-win/` (`3466803`). An Edit adding and removing a line in the Windows
+  `~/.claude/CLAUDE.md` was committed by the edit hook each time (`d44f91b`, `a5f3c08`; net change none; not
+  pushed yet, the next sync there pushes them). That session edited the global CLAUDE.md without asking
+  (its permission mode), unlike Linux.
+- Found live and fixed: `~/.claude/skills/.trash/` (Claude Code keeps removed skills there; 473 files on
+  Windows) would have been shared, so `.trash/` under the shared folders is skipped (`52b2617`). Setup did not
+  offer a restore because the session-start snapshot had already backed the new machine up; it now offers one
+  whenever other hosts have backups (`6676ff6`).
+- Not checked live: `/jeeves:restore` (tests only); the overlapping-conflict question (still only in the
+  skill's text).
 
-## 2. Publish (was 3)
+## 1. Publish (was 2)
 
 Own GitHub marketplace; versioned releases; Anthropic directory optional.
 
-## 3. macOS device (was 4)
+## 2. macOS device (was 3)
 
 Install the plugin, clone the data repo, run `tests/run.sh` (user runs it by hand), first sync, resolve any first-sync conflicts.
 
-## 4. Per-device overlay (was 5)
+## 3. Per-device overlay (was 4)
 
 Mostly obsolete since Generic made `settings.json` and `keybindings.json` per host. Only needed if a shared
 file (a `CLAUDE.md` rule, a skill) ever has to differ between hosts: then decide host vs platform scope and
