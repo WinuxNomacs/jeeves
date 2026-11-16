@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
 # Record the on-disk ~/.claude preferences in the data repo and commit them on its main.
 #
-#   jeeves-snapshot           pull (fast-forward only), copy changed files into home/, back up memories, commit
+#   jeeves-snapshot           pull (fast-forward only), copy changed shared files into home/, back up this
+#                             device's settings, keybindings and memories to hosts/<host>/, commit
 #   jeeves-snapshot --force   also take the disk copy of files changed on both sides (conflicts)
 #   jeeves-snapshot --hook    for the hooks: always exits 0, prints only when something needs attention
 #   jeeves-snapshot --no-pull skip contacting the remote
 #
 # The data repo is found as lib/lib.sh describes (JEEVES_DATA, the plugin option, or the current folder).
 #
-# Never pushes. Memories are copied to memory/<host>/ and are never applied back.
+# Never pushes. The hosts/<host>/ backup is only ever written by that host and is never applied back
+# (jeeves-restore copies it onto a machine on request). A shared file whose name another OS can't hold is
+# not taken.
 
 . "$(dirname "$0")/../lib/lib.sh"
 
@@ -52,7 +55,8 @@ if [ $pull = 1 ] && git_repo remote get-url origin >/dev/null 2>&1; then
   fi
 fi
 
-taken=() pending=() conflicts=()
+taken=() pending=() conflicts=() refused=()
+collisions=$(all_tracked | case_collisions)
 while IFS= read -r p; do
   [ -n "$p" ] || continue
   d=$(hash_of "$CLAUDE_HOME/$p"); r=$(hash_of "$HOME_COPY/$p"); b=$(base_of "$p")
@@ -61,6 +65,14 @@ while IFS= read -r p; do
   case "$state" in
     insync) set_base "$p" "$d" ;;
     disk)
+      why=
+      if [ "$d" != "-" ]; then
+        why=$(bad_name "$p")
+        if [ -z "$why" ] && printf '%s\n' "$collisions" | grep -qxF -- "$p"; then
+          why="another file's name differs from it only in case, which collides on Windows and macOS"
+        fi
+      fi
+      if [ -n "$why" ]; then refused+=("$p ($why)"); continue; fi
       if [ "$d" = "-" ]; then rm -f "$HOME_COPY/$p"; else copy_file "$CLAUDE_HOME/$p" "$HOME_COPY/$p"; fi
       taken+=("$p") ;;
     repo) pending+=("$p") ;;
@@ -68,20 +80,27 @@ while IFS= read -r p; do
   esac
 done < <(all_tracked)
 
-# Memories: mirror this device's memory folders, so deletions show up in history too.
-mem_dest=$REPO/memory/$HOST
-rm -rf "${mem_dest:?}"
+# This device's backup: mirror its per-device files and memory folders into hosts/<host>/ (laid out as in
+# ~/.claude), so deletions show up in history too.
+rm -rf "${HOST_DIR:?}"
+for f in $HOST_FILES; do
+  [ -f "$CLAUDE_HOME/$f" ] && copy_file "$CLAUDE_HOME/$f" "$HOST_DIR/$f"
+done
 for dir in "$CLAUDE_HOME"/projects/*/memory; do
   [ -d "$dir" ] || continue
   [ -n "$(ls -A "$dir")" ] || continue
   key=$(basename "$(dirname "$dir")")
-  mkdir -p "$mem_dest/$key"
-  cp -pR "$dir"/. "$mem_dest/$key"/
+  mkdir -p "$HOST_DIR/projects/$key/memory"
+  cp -pR "$dir"/. "$HOST_DIR/projects/$key/memory"/
 done
+# Layout before per-device backups: per-device files were shared in home/, memories in memory/<host>/.
+for f in $HOST_FILES; do rm -f "$HOME_COPY/$f"; set_base "$f" -; done
+rm -rf "${REPO:?}/memory/${HOST:?}"
 
 git_repo add -A
 if ! git_repo diff --cached --quiet; then
-  changed=$(git_repo diff --cached --name-only | sed -e 's#^home/##' -e "s#^memory/$HOST/.*#memories#" | sort -u | join_lines)
+  changed=$(git_repo diff --cached --name-only | sed -e 's#^home/##' -e "s#^hosts/$HOST/projects/.*#memories#" \
+    -e "s#^memory/$HOST/.*#memories#" -e "s#^hosts/$HOST/#backup #" | sort -u | join_lines)
   git_repo commit -q -m "snapshot($HOST): $changed" \
     -m "Recorded by jeeves-snapshot from $CLAUDE_HOME." || { say "commit failed"; finish 1; }
   say "committed $changed"
@@ -89,6 +108,10 @@ fi
 for p in ${taken[@]+"${taken[@]}"}; do set_base "$p" "$(hash_of "$CLAUDE_HOME/$p")"; done
 
 status=0
+if [ ${#refused[@]} -gt 0 ]; then
+  say "not taken, so every device can hold it: $(printf '%s; ' "${refused[@]}" | sed 's/; $//'); rename it in ~/.claude"
+  status=1
+fi
 if [ ${#pending[@]} -gt 0 ]; then
   say "the repo has newer $(printf '%s\n' "${pending[@]}" | join_lines); run jeeves-apply to install them, or /jeeves:update"
 fi

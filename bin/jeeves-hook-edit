@@ -19,6 +19,13 @@ path=$(tr '\n' ' ' | awk '{
 }')
 [ -n "$path" ] || exit 0
 
+# Native Windows sends C:\Users\...: use forward slashes, and the POSIX form (/c/Users/...) when cygpath
+# (Git Bash) is there.
+path=$(printf '%s' "$path" | tr '\\' /)
+case "$path" in
+  [A-Za-z]:/*) command -v cygpath >/dev/null 2>&1 && path=$(cygpath -u "$path") ;;
+esac
+
 # Same file? Compare physical paths of the folders, so symlinks and relative forms still match.
 real_dir() { (cd "$1" 2>/dev/null && pwd -P); }
 [ "$(basename "$path")" = CLAUDE.md ] || exit 0
