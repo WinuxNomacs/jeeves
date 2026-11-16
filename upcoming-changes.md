@@ -2,11 +2,9 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** 1. Split into plugin repo `jeeves` + data repo `jeeves-cmd`; plugin hooks snapshot at session
-  start and after edits to the global CLAUDE.md (no hook exists yet; snapshot is run by hand)
-- **Then:** 2. `update` skill: sync and change modes, three-way review, push after confirmation
-- **Later:** 3. Generic: setup skill, Windows ·
-  4. Publish through own GitHub marketplace · 5. macOS device · 6. Per-device overlay (when needed)
+- **Up next:** 1. `update` skill: sync and change modes, three-way review, push after confirmation
+- **Then:** 2. Generic: setup skill, Windows, machine-specific paths in `settings.json`
+- **Later:** 3. Publish through own GitHub marketplace · 4. macOS device · 5. Per-device overlay (when needed)
 
 ## Done
 
@@ -14,6 +12,12 @@
   (2026-11-16, commit `82dd02f`).
 - Sync scripts, tests and docs: `bin/snapshot`, `bin/apply`, `bin/lib.sh`; tests in `tests/run.sh`
   (15 tests, scratch `~/.claude` + clone + bare remote); README, repo CLAUDE.md (2026-11-16).
+- 1. Split into plugin repo `jeeves` (this repo, fresh history) + data repo `jeeves-cmd` (2026-11-16).
+  Scripts `bin/jeeves-snapshot`, `bin/jeeves-apply`, `bin/jeeves-hook-edit`, shared `lib/lib.sh`; hooks in
+  `hooks/hooks.json`; manifests in `.claude-plugin/`; 22 tests in `tests/run.sh`. Installed on RAIVEN from
+  the local clone. Checked live: a new session's SessionStart hook committed `snapshot(RAIVEN): settings.json`
+  in `jeeves-cmd`; a session's Edit of a (scratch) global CLAUDE.md was committed by the PostToolUse hook and
+  shown as a notice. Details below under "1. Split".
 
 ---
 
@@ -45,9 +49,10 @@
 - Project, plugin and commands: **jeeves** (display name **Jeeves**), invoked as `/jeeves:<skill>`. Checked
   against the 3,731 plugins in the marketplace directory (none named jeeves) and GitHub (a few small,
   unrelated repos).
-- GitHub: this repo renamed `WinuxNomacs/claude` → `WinuxNomacs/jeeves` (the 2016 private repo that held
-  the name became `WinuxNomacs/jeeves-discord`). Local folder moves to `~/gitrepos/config/jeeves` after the
-  session that renamed it.
+- GitHub: the original repo `WinuxNomacs/claude` was renamed `WinuxNomacs/jeeves` (the 2016 private repo that
+  held the name became `WinuxNomacs/jeeves-discord`), then `WinuxNomacs/jeeves-cmd` (the data repo) at the
+  split; `WinuxNomacs/jeeves` is now this plugin repo, with fresh history. This file moved here from
+  `jeeves-cmd` at the split; its earlier history is in that repo.
 
 ## Existing plugins checked (2026-11-16)
 
@@ -86,7 +91,7 @@ None covers snapshot-before-change plus a Claude-reviewed merge of diverging CLA
   with fresh history holds the plugin code (made public in phase 4).
 - **Hooks:** SessionStart snapshot, plus a PostToolUse snapshot after edits to `~/.claude/CLAUDE.md`.
 
-## 1. Split: plugin repo `jeeves`, data repo `jeeves-cmd`
+## 1. Split: plugin repo `jeeves`, data repo `jeeves-cmd` (done)
 
 Facts checked in the Claude Code plugin docs (2026-11-16: manifest-reference, components, hooks, loading,
 marketplace-reference, install):
@@ -115,35 +120,43 @@ Design:
   build the plugin there (tests first, with `JEEVES_DATA`); install it from the local folder; remove the
   scripts here. After the session the user renames this folder to `~/gitrepos/config/jeeves-cmd`; the plugin
   lives in `~/gitrepos/config/jeeves`.
-- **Where it stands (2026-11-16, end of session):** design agreed and merged; nothing built yet.
-  Done: this repo renamed on GitHub to `WinuxNomacs/jeeves-cmd` (remote updated, CLAUDE.md and README
-  updated); new empty private `WinuxNomacs/jeeves` created. Next: (1) the user renames the local folder to
-  `~/gitrepos/config/jeeves-cmd`; (2) clone the plugin repo to `~/gitrepos/config/jeeves`; (3) build.
-  The user may remove the two `gh repo` allow rules from `.claude/settings.local.json`.
+- **Built (2026-11-16, with the user):** scripts renamed `jeeves-snapshot` / `jeeves-apply` because the
+  plugin's `bin/` is on every Bash tool PATH; `lib.sh` moved to `lib/` to stay off it. The data repo is also
+  found from the current folder (the git repo around it, if it has `home/`), since the Bash tool sees no
+  plugin variables. `CLAUDE_PREFS_HOST` became `JEEVES_HOST`. The edit hook parses its JSON with awk (no jq,
+  no GNU sed). Installed with `claude plugin marketplace add <clone>` and
+  `claude plugin install jeeves@jeeves --config data_repo=<path>`.
+- **Found while building:** Claude Code treats `~/.claude/CLAUDE.md` as a sensitive file: a headless session
+  cannot edit it (an interactive one asks first), so the edit hook was checked live against a scratch
+  `CLAUDE_HOME` and data repo. Installing writes absolute, machine-specific paths into `settings.json`
+  (`extraKnownMarketplaces.jeeves.source.path`, `pluginConfigs."jeeves@jeeves".options.data_repo`), which
+  the data repo shares with every device: to settle in phase 2.
 - **Verify:** tests pass in the plugin repo; a new session's SessionStart snapshot runs (seen in `git log` of
   the data repo after a deliberate change); an edit to `~/.claude/CLAUDE.md` is committed at once.
 
-## 2. `update` skill
+## 1. `update` skill (was 2)
 
 Sync mode: snapshot → fetch → for each side's changes since the common ancestor, show the diffs, merge the
 text, ask where they truly conflict → commit → apply → confirm → push. Change mode: "add rule X to my global
 CLAUDE.md" edits `home/`, shows the diff, commits, applies, pushes after confirmation. Secret scan before push.
 
-## 3. Generic
+## 2. Generic (was 3)
 
-Split code (plugin repo) from data (private repo chosen at install via `userConfig`); setup skill that
-creates or clones the data repo; sync record moves to `${CLAUDE_PLUGIN_DATA}`; Windows (Git Bash, paths,
-`hostname`, `.gitattributes` with `eol=lf`).
+Code and data are split already (phase 1). Setup skill that creates or clones the data repo; sync record
+moves to `${CLAUDE_PLUGIN_DATA}`; Windows (Git Bash, paths, `hostname`, `.gitattributes` with `eol=lf`; the
+edit hook compares POSIX paths, so a `C:\...` path from the hook needs converting there).
+Machine-specific paths in the shared `settings.json` (see "Found while building" under 1. Split): options
+include leaving them out of the shared copy, or a per-device overlay (phase 5) for these keys.
 
-## 4. Publish
+## 3. Publish (was 4)
 
 Own GitHub marketplace; versioned releases; Anthropic directory optional.
 
-## 5. macOS device
+## 4. macOS device (was 5)
 
-Clone, run `tests/run.sh` (user runs it by hand), first sync, resolve any first-sync conflicts.
+Install the plugin, clone the data repo, run `tests/run.sh` (user runs it by hand), first sync, resolve any first-sync conflicts.
 
-## 6. Per-device overlay
+## 5. Per-device overlay (was 6)
 
 When the first real difference appears: decide host vs platform scope, then add an overlay folder
 (`home.<host>/` or `home.<os>/`) merged by `apply` (needs a JSON merge for `settings.json`).
