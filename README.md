@@ -80,7 +80,7 @@ A git repo with:
 - Never copied: credentials, `~/.claude.json`, history, transcripts, caches.
 - `.gitignore`: `.sync-state/` and `*.sync-tmp`; `.gitattributes`: `* text=auto eol=lf`.
 
-`<host>` is the machine's host name; on native Windows it gets `-win` (`RAIVEN-win`), so a WSL and a Windows
+`<host>` is the machine's host name; on native Windows it gets `-win` (`mypc-win`), so a WSL and a Windows
 Claude Code on one PC stay apart. `JEEVES_HOST` overrides it. A data repo made before per-device backups
 (with `home/settings.json` and `memory/<host>/`) is moved to this layout by each device's next snapshot.
 
@@ -90,23 +90,36 @@ the commands inside the data repo or export `JEEVES_DATA`.
 
 ## Install
 
-From a local clone (edits to the clone take effect on `/reload-plugins`):
+Requirements: Claude Code (the CLI or an IDE extension; claude.ai and Cowork don't install plugins with a
+`bin/` folder), git and bash. On Windows: Git for Windows, since Claude Code runs hooks and its Bash tool in
+Git Bash.
 
 ```sh
-git clone git@github.com:WinuxNomacs/jeeves.git ~/gitrepos/config/jeeves
-claude plugin marketplace add ~/gitrepos/config/jeeves
+claude plugin marketplace add WinuxNomacs/jeeves
 claude plugin install jeeves@jeeves
 ```
 
-Or from GitHub (a private repo works with your own git credentials):
-`claude plugin marketplace add WinuxNomacs/jeeves`, then `claude plugin install jeeves@jeeves`.
+Claude Code asks for `data_repo`: the folder where your data repo is (or will be) on this machine, for
+example `~/gitrepos/config/jeeves-data`. Then run `/jeeves:setup` (with your data repo's git URL if you
+already have one) in a new session.
 
-Then set the data repo path when Claude Code asks for `data_repo` (or later in `/plugin`), and run
-`/jeeves:setup`. The VS Code extension has no `/plugin` command: run the `claude plugin ...` commands above
-with the `claude` executable the extension ships (on Windows,
+The VS Code extension has no `/plugin` command: run the commands above with the `claude` executable the
+extension ships (on Windows,
 `%USERPROFILE%\.vscode\extensions\anthropic.claude-code-<version>-win32-x64\resources\native-binary\claude.exe`),
-adding `--config data_repo=<path>` to the install, then start a new conversation. Requirements: git and bash; on Windows, Git for Windows (Claude Code runs hooks and its Bash
-tool in Git Bash).
+adding `--config data_repo=<path>` to the install, then start a new conversation.
+
+**Updates:** auto-update is off for third-party marketplaces. Update with
+`claude plugin marketplace update jeeves` and `claude plugin update jeeves@jeeves`, or turn on auto-update in
+`/plugin` > Marketplaces. A new version arrives when `plugin.json`'s `version` changes; see
+[CHANGELOG.md](CHANGELOG.md). To stay on one release, add the marketplace as `WinuxNomacs/jeeves#v<version>`.
+
+**Working on Jeeves:** install from a local clone instead, and edits take effect on `/reload-plugins`:
+
+```sh
+git clone https://github.com/WinuxNomacs/jeeves.git
+claude plugin marketplace add ./jeeves
+claude plugin install jeeves@jeeves
+```
 
 ## Adding a device
 
@@ -118,3 +131,7 @@ merges this machine's shared files with the repo's (keeping what both hold, aski
 
 `tests/run.sh` (or `tests/run.sh <part of a test name>`). Each test uses a scratch `~/.claude`, data repo and
 bare remote, so nothing real is touched.
+
+## License
+
+[MIT](LICENSE)

@@ -26,8 +26,8 @@ already snapshotted the data repo when the plugin is installed.
   of `lib/lib.sh`.
 - `lib/lib.sh` — shared code: finding the data repo, tracked paths list, hashes, three-way classification.
 - `tests/run.sh` — tests; each runs against a scratch `~/.claude`, data repo and bare remote.
-- This `CLAUDE.md` is for working on the repo; Claude Code does not load a plugin's `CLAUDE.md` as context
-  for its users (`claude plugin validate` may warn about it).
+- This file is `.claude/CLAUDE.md`, for working on the repo; Claude Code loads it here as project context.
+  At the root it would be shipped with the plugin to no effect, and `claude plugin validate --strict` fails.
 
 ## Working on the plugin
 
@@ -50,8 +50,14 @@ already snapshotted the data repo when the plugin is installed.
 
 ## Pushing and pulling (overrides the global "never push" rule, for this repo only)
 
-Claude may pull from and push to `origin` (`WinuxNomacs/jeeves`, private) whenever the work needs it, without
-asking each time: pull before starting work, push `main` after a merge, push branches to back them up. Still
-never force-push, rewrite pushed history, or tag (a tag stays the user's call). Pushing publishes nothing
-beyond the private GitHub repo: there are no workflows. Before adding any workflow, ask (Actions minutes on
-private repos are billed). This changes in the Publish phase, when the repo becomes a public marketplace.
+The repo is public (`WinuxNomacs/jeeves`) and is the plugin's marketplace. Claude may pull from `origin` and
+push branches to it whenever the work needs it, and push `main` after a merge whose full test suite passed,
+without asking each time. A push to `main` reaches new installs at once (they take the default branch);
+existing installs get it only when `plugin.json`'s `version` changes, which happens on a `release/X.Y.Z`
+branch (version and `CHANGELOG.md`), merged like any other. Still never force-push, rewrite pushed history,
+or tag: a tag marks a release and starts the test workflow, so it stays the user's call.
+
+The only workflow, `.github/workflows/test.yml`, runs on a pushed tag or by hand (Actions tab, or
+`gh workflow run tests`), never on a push or pull request; Actions minutes are free on a public repo, but ask
+before adding a trigger or a workflow. Never submit the plugin to Anthropic's directory unless the user
+directly asks for it.

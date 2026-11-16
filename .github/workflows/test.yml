@@ -1,0 +1,33 @@
+# Runs tests/run.sh on Linux, Windows (Git Bash) and macOS (its own bash 3.2), for a release tag or by hand.
+# No push or pull-request trigger: start it from the Actions tab, or push a tag.
+name: tests
+
+on:
+  push:
+    tags: ["v*", "jeeves--v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Use the system bash 3.2 on macOS
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/bash32" && ln -sf /bin/bash "$RUNNER_TEMP/bash32/bash"
+          echo "$RUNNER_TEMP/bash32" >> "$GITHUB_PATH"
+      - name: Tests
+        shell: bash
+        run: |
+          echo "bash: $(command -v bash) $(bash -c 'echo $BASH_VERSION')"
+          bash tests/run.sh

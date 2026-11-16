@@ -490,6 +490,11 @@ t_plugin_files() {
   check "PostToolUse matches Write|Edit" grep -q '"matcher": "Write|Edit"' "$SRC/hooks/hooks.json"
   check "PostToolUse runs the edit hook" grep -q 'bin/jeeves-hook-edit' "$SRC/hooks/hooks.json"
   check "plugin option data_repo declared" grep -q '"data_repo"' "$SRC/.claude-plugin/plugin.json"
+  check "MIT licence file" grep -q '^MIT License$' "$SRC/LICENSE"
+  check "licence declared in plugin.json" grep -q '"license": "MIT"' "$SRC/.claude-plugin/plugin.json"
+  check "version set in plugin.json only, not in marketplace.json" bash -c '! grep -q "\"version\"" "$1"' _ "$SRC/.claude-plugin/marketplace.json"
+  check "no CLAUDE.md at the plugin root (shipped to users to no effect)" [ ! -e "$SRC/CLAUDE.md" ]
+  check "the workflow runs only on tags and by hand" bash -c '! grep -Eq "^  (pull_request|schedule)|^  push:\$" "$1" || grep -A1 "^  push:" "$1" | grep -q tags' _ "$SRC/.github/workflows/test.yml"
   for f in "$SRC"/bin/*; do check "$f is executable" [ -x "$f" ]; done
   check "lib.sh is not on the PATH" [ ! -e "$SRC/bin/lib.sh" ]
   sk=$SRC/skills/update/SKILL.md
