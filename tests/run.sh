@@ -153,6 +153,17 @@ t_both_changed_is_conflict() {
   check "previous disk copy saved" grep -rq "disk side" "$R/.sync-state/overwritten"
 }
 
+t_apply_reports_saved_copies_only_when_it_saved() {
+  # A fixed clock puts both runs in the same second, so they share the overwritten/ folder name.
+  mkdir -p "$W/bin"; printf '#!/bin/sh\necho 20260101-000000\n' > "$W/bin/date"; chmod +x "$W/bin/date"
+  snap >/dev/null
+  echo "repo side" > "$R/home/CLAUDE.md"; git -C "$R" commit -qam "repo edit"
+  echo "disk side" > "$W/claude/CLAUDE.md"
+  check "force run says it saved" grep -q "previous disk copies saved" <<< "$(PATH=$W/bin:$PATH apply --force)"
+  out=$(PATH=$W/bin:$PATH apply)
+  check "next run saved nothing and says nothing about it" bash -c '! grep -q "saved" <<< "$1"' _ "$out"
+}
+
 t_snapshot_force_takes_disk() {
   snap >/dev/null
   echo "repo side" > "$R/home/CLAUDE.md"; git -C "$R" commit -qam "repo edit"
@@ -370,6 +381,7 @@ run_test "a file deleted on disk is deleted from the repo copy" t_disk_deletion_
 run_test "apply installs a file changed in the repo" t_apply_installs_repo_change
 run_test "apply refuses a file changed on disk since the last sync" t_apply_refuses_disk_change
 run_test "a file changed on both sides is reported, not merged" t_both_changed_is_conflict
+run_test "apply mentions saved disk copies only on the run that saved them" t_apply_reports_saved_copies_only_when_it_saved
 run_test "snapshot --force keeps the disk copy of a conflict" t_snapshot_force_takes_disk
 run_test "snapshot fast-forwards to another device's push and asks to apply" t_pulls_other_device
 run_test "snapshot still records locally when main has diverged" t_diverged_still_records
