@@ -269,6 +269,78 @@ t_edit_hook_escapes_json() {
   fi
 }
 
+status() { "$SRC/bin/jeeves-status" "$@"; }
+scan() { "$SRC/bin/jeeves-scan" "$@"; }
+
+t_status_lists_out_of_sync_paths() {
+  snap >/dev/null
+  out=$(status)
+  check "in sync: only the repo, branch and main lines" [ "$(printf '%s\n' "$out" | wc -l | tr -d ' ')" = 3 ]
+  check "names the data repo" grep -q "^datarepo	$R$" <<< "$out"
+  check "clean main" grep -q "^branch	main	clean$" <<< "$out"
+  check "even with origin" grep -q "^main	even	0	0$" <<< "$out"
+  b=$(git -C "$R" hash-object home/CLAUDE.md)
+  echo "disk side" > "$W/claude/CLAUDE.md"
+  echo '{"a":2}' > "$R/home/settings.json"
+  echo k > "$W/claude/keybindings.json"; echo other > "$R/home/keybindings.json"
+  git -C "$R" commit -qam "repo edits"
+  out=$(status)
+  d=$(git hash-object "$W/claude/CLAUDE.md")
+  check "disk change with its three hashes" grep -q "^disk	CLAUDE.md	$d	$b	$b$" <<< "$out"
+  check "repo change" grep -q "^repo	settings.json	" <<< "$out"
+  check "never-synced file on both sides is a conflict with no base" grep -q "^conflict	keybindings.json	.*	none$" <<< "$out"
+  check "base is readable from git" [ "$(git -C "$R" cat-file -p "$b")" = "rules v1" ]
+  check "ahead of origin" grep -q "^main	ahead	1	0$" <<< "$out"
+  check "status changed nothing" grep -q "rules v1" "$R/home/CLAUDE.md"
+}
+
+t_status_reports_diverged_and_dirty() {
+  snap >/dev/null
+  git clone -q "$W/remote.git" "$W/other" 2>/dev/null
+  echo x > "$W/other/home/settings.json"
+  git -C "$W/other" commit -qam "laptop" && git -C "$W/other" push -q origin main 2>/dev/null
+  echo y > "$R/home/CLAUDE.md"; git -C "$R" commit -qam "local"
+  git -C "$R" fetch -q origin
+  echo stray > "$R/stray.txt"
+  out=$(status)
+  check "diverged" grep -q "^main	diverged	1	1$" <<< "$out"
+  check "dirty" grep -q "^branch	main	dirty$" <<< "$out"
+}
+
+t_scan_flags_secrets_without_printing_them() {
+  snap >/dev/null
+  tok="sk-ant-api03-$(printf 'x%.0s' 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24)"
+  printf 'line one\nexport ANTHROPIC_API_KEY=%s\n' "$tok" > "$R/home/CLAUDE.md"
+  printf '%s\n' '{"env":{"SERVICE_TOKEN":"abcdefghijklmnop1234"}}' > "$R/home/settings.json"
+  git -C "$R" commit -qam "oops"
+  out=$(scan); rc=$?
+  check "exit status 1" [ $rc = 1 ]
+  check "names file and line" grep -q "possible Anthropic API key at home/CLAUDE.md:2" <<< "$out"
+  check "catches a token assignment" grep -q "value at home/settings.json:1" <<< "$out"
+  check "never prints the secret" bash -c '! grep -Eq "x{10}|abcdefghijklmnop" <<< "$1"' _ "$out"
+}
+
+t_scan_passes_clean_diff() {
+  snap >/dev/null
+  printf 'rules v2\nUse a token budget of 2000 when summarising.\n' > "$R/home/CLAUDE.md"
+  git -C "$R" commit -qam "clean"
+  out=$(scan); rc=$?
+  check "exit status 0" [ $rc = 0 ]
+  check "says nothing found" grep -q "nothing found in 2 added lines" <<< "$out"
+  git -C "$R" push -q origin main 2>/dev/null
+  check "nothing outgoing" grep -q "nothing found in 0 added lines" <<< "$(scan)"
+}
+
+t_snapshot_points_to_update_skill() {
+  snap >/dev/null
+  echo "repo side" > "$R/home/CLAUDE.md"; echo '{"b":1}' > "$R/home/settings.json"
+  git -C "$R" commit -qam "repo edit"
+  echo "disk side" > "$W/claude/CLAUDE.md"
+  out=$(snap)
+  check "newer files mention /jeeves:update" grep -q "run jeeves-apply to install them, or /jeeves:update" <<< "$out"
+  check "conflicts mention /jeeves:update" grep -q "merge them with /jeeves:update" <<< "$out"
+}
+
 t_plugin_files() {
   for f in .claude-plugin/plugin.json .claude-plugin/marketplace.json hooks/hooks.json; do
     if command -v python3 >/dev/null; then
@@ -281,6 +353,11 @@ t_plugin_files() {
   check "plugin option data_repo declared" grep -q '"data_repo"' "$SRC/.claude-plugin/plugin.json"
   for f in "$SRC"/bin/*; do check "$f is executable" [ -x "$f" ]; done
   check "lib.sh is not on the PATH" [ ! -e "$SRC/bin/lib.sh" ]
+  sk=$SRC/skills/update/SKILL.md
+  check "update skill exists" [ -f "$sk" ]
+  check "update skill is named update" grep -q '^name: update$' "$sk"
+  check "Claude may start the update skill" bash -c '! grep -q "^disable-model-invocation: true" "$1"' _ "$sk"
+  check "update skill gets the data repo from the plugin option" grep -q 'JEEVES_DATA="${user_config.data_repo}"' "$sk"
 }
 
 run_test "snapshot does nothing when disk matches the repo" t_nothing_changed
@@ -304,6 +381,11 @@ run_test "without a data repo, the scripts say how to set one and hook mode exit
 run_test "the edit hook snapshots after an edit to the global CLAUDE.md" t_edit_hook_snapshots_claude_md
 run_test "the edit hook ignores edits to other files" t_edit_hook_ignores_other_files
 run_test "the edit hook's systemMessage is valid JSON" t_edit_hook_escapes_json
+run_test "status lists out-of-sync paths with their disk, repo and base hashes" t_status_lists_out_of_sync_paths
+run_test "status reports a diverged main and a dirty data repo" t_status_reports_diverged_and_dirty
+run_test "scan flags secrets in outgoing commits without printing them" t_scan_flags_secrets_without_printing_them
+run_test "scan passes a clean outgoing diff" t_scan_passes_clean_diff
+run_test "snapshot points to /jeeves:update for newer files and conflicts" t_snapshot_points_to_update_skill
 run_test "the manifests and hooks.json are valid and wire up the hooks" t_plugin_files
 
 echo "$passed passed, $failed failed"

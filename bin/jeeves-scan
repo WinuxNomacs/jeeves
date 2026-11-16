@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# Look for secrets in what a push of the data repo's main would send (origin/main..main, or all of main when
+# there is no origin/main yet). Run it before every push.
+#
+#   jeeves-scan   exit 0: nothing found; exit 1: each finding listed as file:line and the kind of secret
+#
+# Only added lines are checked. The matched text itself is never printed, so a finding does not spread the
+# secret further. The data repo is found as lib/lib.sh describes.
+
+. "$(dirname "$0")/../lib/lib.sh"
+
+[ $# = 0 ] || { echo "scan: takes no options" >&2; exit 2; }
+say() { echo "jeeves scan: $*"; }
+find_data_repo || { say "$DATA_REPO_PROBLEM"; exit 1; }
+
+if git_repo rev-parse -q --verify refs/remotes/origin/main >/dev/null; then
+  from=origin/main
+else
+  from=$(git hash-object -t tree /dev/null)
+fi
+
+# Added lines as "<file>\t<line>\t<text>".
+added=$(git_repo diff --no-color --no-ext-diff -U0 "$from" main -- | awk '
+  /^\+\+\+ / { f = substr($0, 7); next }
+  /^@@/ { split($3, a, ","); n = substr(a[1], 2) + 0; next }
+  /^\+/ { print f "\t" n "\t" substr($0, 2); n++ }')
+
+found=0
+look() { # look <kind> <grep flags> <extended regex>
+  local hits
+  hits=$(printf '%s\n' "$added" | cut -f3- | grep -n $2 -e "$3" | cut -d: -f1)
+  for i in $hits; do
+    say "possible $1 at $(printf '%s\n' "$added" | sed -n "${i}p" | cut -f1,2 | tr '\t' ':')"
+    found=1
+  done
+}
+
+if [ -n "$added" ]; then
+  look "private key" -E '-----BEGIN ([A-Z]+ )*PRIVATE KEY'
+  look "Anthropic API key" -E 'sk-ant-[A-Za-z0-9_-]{20,}'
+  look "GitHub token" -E 'gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}'
+  look "AWS access key" -E 'A(KIA|SIA)[0-9A-Z]{16}'
+  look "Slack token" -E 'xox[abprs]-[A-Za-z0-9-]{10,}'
+  look "key, token, secret or password value" -Ei \
+    '(api[_-]?key|access[_-]?key|token|secret|passw(or)?d)["'"'"']?[[:space:]]*[:=][[:space:]]*["'"'"']?[A-Za-z0-9_./+=-]{16,}'
+fi
+
+if [ $found = 1 ]; then
+  say "do not push; remove the secret from the commits first (rewrite only commits not yet pushed)"
+  exit 1
+fi
+lines=0; [ -n "$added" ] && lines=$(printf '%s\n' "$added" | wc -l | tr -d ' ')
+say "nothing found in $lines added lines"
