@@ -95,6 +95,7 @@ t_new_dirs_tracked_synced_excluded() {
   echo a > "$W/claude/agents/reviewer.md"
   echo s > "$W/claude/skills/mine/SKILL.md"
   echo z > "$W/claude/skills/synced/x/SKILL.md"
+  mkdir -p "$W/claude/skills/.trash/123-gone" && echo t > "$W/claude/skills/.trash/123-gone/SKILL.md"
   echo k > "$W/claude/keybindings.json"
   snap >/dev/null
   check "agent copied" [ -f "$R/home/agents/reviewer.md" ]
@@ -103,6 +104,7 @@ t_new_dirs_tracked_synced_excluded() {
   check "keybindings backed up for this host" [ -f "$R/hosts/testhost/keybindings.json" ]
   check "settings backed up for this host" [ -f "$R/hosts/testhost/settings.json" ]
   check "skills/synced not copied" [ ! -e "$R/home/skills/synced" ]
+  check "skills Claude Code removed (skills/.trash) not copied" [ ! -e "$R/home/skills/.trash" ]
 }
 
 t_memories_backed_up_never_applied() {
@@ -507,7 +509,7 @@ run_test "snapshot does nothing when disk matches the repo" t_nothing_changed
 run_test "snapshot commits a changed CLAUDE.md" t_disk_change_committed
 run_test "snapshot skips when the repo has uncommitted changes" t_dirty_repo_skips
 run_test "snapshot skips when the repo is not on main" t_other_branch_skips
-run_test "agents and own skills are shared, skills/synced is not, settings and keybindings are backed up per host" t_new_dirs_tracked_synced_excluded
+run_test "agents and own skills are shared, skills/synced and .trash are not, settings and keybindings are backed up per host" t_new_dirs_tracked_synced_excluded
 run_test "memories go under the host folder and are never applied" t_memories_backed_up_never_applied
 run_test "a file deleted on disk is deleted from the repo copy" t_disk_deletion_recorded
 run_test "apply installs a file changed in the repo" t_apply_installs_repo_change

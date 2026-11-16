@@ -4,7 +4,8 @@ A Claude Code plugin that keeps the version history of your global Claude Code p
 your own (the **data repo**), on Linux, macOS and Windows:
 
 - **Shared** by all your devices and kept in sync: `~/.claude/CLAUDE.md`, `agents/`, `commands/`, `skills/`
-  (not `skills/synced/`, which claude.ai manages). Copies under `home/` in the data repo.
+  (not `skills/synced/`, which claude.ai manages, nor the `.trash/` folders where Claude Code puts what it
+  removed). Copies under `home/` in the data repo.
 - **Backed up per device**, never synced: `settings.json`, `keybindings.json` (they hold paths and key
   bindings that differ per machine) and each project's memories. Copies under `hosts/<host>/`, which you can
   restore onto a new machine with `/jeeves:restore`.
@@ -101,7 +102,10 @@ Or from GitHub (a private repo works with your own git credentials):
 `claude plugin marketplace add WinuxNomacs/jeeves`, then `claude plugin install jeeves@jeeves`.
 
 Then set the data repo path when Claude Code asks for `data_repo` (or later in `/plugin`), and run
-`/jeeves:setup`. Requirements: git and bash; on Windows, Git for Windows (Claude Code runs hooks and its Bash
+`/jeeves:setup`. The VS Code extension has no `/plugin` command: run the `claude plugin ...` commands above
+with the `claude` executable the extension ships (on Windows,
+`%USERPROFILE%\.vscode\extensions\anthropic.claude-code-<version>-win32-x64\resources\native-binary\claude.exe`),
+adding `--config data_repo=<path>` to the install, then start a new conversation. Requirements: git and bash; on Windows, Git for Windows (Claude Code runs hooks and its Bash
 tool in Git Bash).
 
 ## Adding a device

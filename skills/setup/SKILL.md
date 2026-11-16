@@ -37,10 +37,12 @@ again. Never copy credentials, `~/.claude.json`, history or transcripts anywhere
      GitHub repo itself: if the user wants a remote, they create an empty private one and give its URL.
    If a clone fails for lack of access, stop and tell the user; never look for credentials.
 3. **New machine?** Start every later command with `cd <the datarepo path from step 1> &&` (the shell's
-   folder is not kept between commands). Run `jeeves-restore`: it prints this machine's host name and the
-   hosts that have a backup. If this host has none and other hosts do, ask whether to restore one of them
-   onto this machine (its settings and keybindings; memories too, for projects that exist here). If yes,
-   follow `/jeeves:restore <host>` (the restore skill) before going on.
+   folder is not kept between commands). Run `jeeves-restore`: it prints `this host: <name>` and
+   `backups: <hosts>`. If `<name>` is not among the backups, this machine is new to Jeeves: when the list
+   names other hosts, ask the user whether to restore one of them onto this machine (that machine's
+   settings and keybindings; memories too, for projects that exist here), saying that a backup from another
+   OS may hold paths that need fixing. If yes, follow `/jeeves:restore <host>` (the restore skill) before
+   going on. If `<name>` is among the backups, skip this step.
 4. **First sync and backup:** follow `/jeeves:update` (the update skill) with no request: it records this
    machine's files, merges what differs from the shared copies (on a new machine with no sync record, it keeps
    everything both sides hold and asks before dropping text), installs the result, backs up this host under

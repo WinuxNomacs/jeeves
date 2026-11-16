@@ -43,12 +43,18 @@ TRACKED_FILES="CLAUDE.md"
 TRACKED_DIRS="agents commands skills"
 # Per-device files: backed up to hosts/<host>/ (with the memories), never applied automatically.
 HOST_FILES="settings.json keybindings.json"
-# Never copied: managed by claude.ai.
-EXCLUDED_PREFIX="skills/synced/"
+# Never copied: skills/synced/ is managed by claude.ai; .trash/ holds what Claude Code removed.
+EXCLUDED_PREFIXES="skills/synced/ skills/.trash/ agents/.trash/ commands/.trash/"
 
 # Files are copied byte for byte, so git must not convert line endings either (Git for Windows sets
 # core.autocrlf=true), and its "LF will be replaced by CRLF" warnings must not reach a hook's message.
 git_repo() { git -C "$REPO" -c core.autocrlf=false -c core.safecrlf=false "$@"; }
+
+excluded() {
+  local x
+  for x in $EXCLUDED_PREFIXES; do case "$1" in "$x"*) return 0 ;; esac; done
+  return 1
+}
 
 # Relative paths of tracked files under the given root, one per line.
 tracked_under() {
@@ -59,8 +65,7 @@ tracked_under() {
   for d in $TRACKED_DIRS; do
     [ -d "$root/$d" ] || continue
     (cd "$root" && find "$d" -type f) | while IFS= read -r f; do
-      case "$f" in "$EXCLUDED_PREFIX"*) continue ;; esac
-      printf '%s\n' "$f"
+      excluded "$f" || printf '%s\n' "$f"
     done
   done
 }
