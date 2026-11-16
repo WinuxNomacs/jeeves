@@ -17,7 +17,8 @@
   `hooks/hooks.json`; manifests in `.claude-plugin/`; 22 tests in `tests/run.sh`. Installed on RAIVEN from
   the local clone. Checked live: a new session's SessionStart hook committed `snapshot(RAIVEN): settings.json`
   in `jeeves-cmd`; a session's Edit of a (scratch) global CLAUDE.md was committed by the PostToolUse hook and
-  shown as a notice. Details below under "1. Split".
+  shown as a notice; the real one checked live too (2026-11-16, see "Live check of the edit hook" under 1. Split).
+  Details below under "1. Split".
 
 ---
 
@@ -78,11 +79,6 @@ None covers snapshot-before-change plus a Claude-reviewed merge of diverging CLA
 - Windows: hooks run through Git Bash, or PowerShell when Git Bash is missing; Jeeves requires Git Bash.
 - Side-effecting skills use `disable-model-invocation: true` so only the user starts them.
 
-## Open decisions
-
-- **Push:** the skill shows the final diff and asks once before pushing (recommended), or the global
-  "never push" rule is amended so invoking the skill counts as asking.
-
 ## Phase 1 decisions (2026-11-16, with the user)
 
 - **Split now**, not in phase 3. This repo's history holds preferences and memory backups, so it cannot become
@@ -131,14 +127,47 @@ Design:
   `CLAUDE_HOME` and data repo. Installing writes absolute, machine-specific paths into `settings.json`
   (`extraKnownMarketplaces.jeeves.source.path`, `pluginConfigs."jeeves@jeeves".options.data_repo`), which
   the data repo shares with every device: to settle in phase 2.
+- **Live check of the edit hook (2026-11-16, interactive session):** an Edit adding a marker line to the
+  real `~/.claude/CLAUDE.md` was committed at once (`b4b60b6` in jeeves-cmd); the revert too (`bfa6379`),
+  leaving `home/` identical to before. Pushed.
+- **Gap found:** a session started before the plugin was installed loads no hooks. One such session (in
+  another project) edited `~/.claude/CLAUDE.md` with nothing recorded; the next manual `jeeves-snapshot`
+  committed it (`1d81587`). Any snapshot (next session start, or `/jeeves:update`) covers this; no fix needed.
 - **Verify:** tests pass in the plugin repo; a new session's SessionStart snapshot runs (seen in `git log` of
   the data repo after a deliberate change); an edit to `~/.claude/CLAUDE.md` is committed at once.
 
 ## 1. `update` skill (was 2)
 
-Sync mode: snapshot → fetch → for each side's changes since the common ancestor, show the diffs, merge the
-text, ask where they truly conflict → commit → apply → confirm → push. Change mode: "add rule X to my global
-CLAUDE.md" edits `home/`, shows the diff, commits, applies, pushes after confirmation. Secret scan before push.
+Decisions (2026-11-16, with the user):
+- **Push without asking.** Show the diff only when the user asks for it: everything is in git, so nothing is
+  lost and a routine diff is noise. **Always ask when data could be lost:** a merge that would drop or rewrite
+  text one side added (a true conflict), anything that would need a force-push (never done), a rejected
+  non-fast-forward push. A failed secret scan also stops and asks.
+- **Claude may start the skill** (no `disable-model-invocation`): requests to change global preferences go
+  through the data repo instead of a direct edit, and a snapshot reporting newer repo files or a conflict
+  leads to it.
+
+Design:
+- `skills/update/SKILL.md`, invoked `/jeeves:update [request]`: no request means sync mode, a request means
+  change mode.
+- `bin/jeeves-status` (new, read-only): one line per tracked path not in sync,
+  `state<TAB>path<TAB>disk<TAB>repo<TAB>base` (from `classify`/`hash_of`/`base_of` in `lib/lib.sh`; the base
+  is a git blob, read with `git cat-file -p`), plus `main` vs `origin/main` (ahead, behind, diverged).
+- `bin/jeeves-scan` (new, our own, no extra binary on every device): greps the outgoing diff
+  (`origin/main..main`) for private-key headers, `sk-ant-`, `ghp_`/`github_pat_`, `AKIA`, `xox[bp]-`, and
+  key/token/secret/password assignments with long values; exit 1 with the matches.
+- `jeeves-snapshot`'s "newer" and "conflict" messages also suggest `/jeeves:update`.
+- **Sync mode:** `jeeves-snapshot` → if `main` diverged from `origin/main`, `git merge --no-ff origin/main`,
+  Claude merging conflicting `home/` text → per disk-vs-repo conflict, Claude merges base/disk/repo into
+  `home/`, commits, `jeeves-apply --force` (disk copy saved) → `jeeves-apply` → `jeeves-snapshot` (silent) →
+  `jeeves-scan` → push.
+- **Change mode:** branch in the data repo → edit `home/…` → commit → merge `--no-ff` → `jeeves-apply` →
+  `jeeves-snapshot` (silent) → `jeeves-scan` → push. Avoids the sensitive-file prompt of a direct edit.
+- After building: use change mode to add to the global "never push" rule that `/jeeves:update` pushes the
+  Jeeves data repo. Docs: README, plugin `CLAUDE.md`, jeeves-cmd `CLAUDE.md` ("Changing a preference").
+- **Verify:** tests (status lists disk/repo/conflict paths with their hashes; status reports a diverged
+  main; scan flags a planted token and passes a clean diff); `claude plugin validate`; live in a scratch data
+  repo and `CLAUDE_HOME` (change mode, then a forced conflict that must stop and ask); one real sync.
 
 ## 2. Generic (was 3)
 
