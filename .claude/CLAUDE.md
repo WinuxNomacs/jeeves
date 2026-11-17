@@ -20,7 +20,8 @@ already snapshotted the data repo when the plugin is installed.
   out of sync, with hashes), `jeeves-scan` (secrets in the outgoing commits), `jeeves-restore` (a host's
   backup → `~/.claude`), `jeeves-init` (new data repo), `jeeves-cleanup` (folds old history into one root
   commit and force-pushes with a lease; `--auto` runs from the session-start snapshot per `jeeves.conf`).
-- `skills/` — `update` (`/jeeves:update`: sync, or a change to a shared file, then push), `setup`, `restore`,
+- `skills/` — `update` (`/jeeves:update`: when the user runs it, a review of the session for rules to save
+  to the global and project CLAUDE.md; then sync, or a change to a shared file, then push), `setup`, `restore`,
   `cleanup` (`/jeeves:cleanup`: history cleanup and its `jeeves.conf` settings).
   They get the data repo from `${user_config.data_repo}` (substituted into skill text; the Bash tool sees no
   plugin variables).

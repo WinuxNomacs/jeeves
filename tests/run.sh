@@ -667,6 +667,8 @@ t_plugin_files() {
   check "Claude may start the update skill" bash -c '! grep -q "^disable-model-invocation: true" "$1"' _ "$sk"
   check "update skill gets the data repo from the plugin option" grep -q 'JEEVES_DATA="${user_config.data_repo}"' "$sk"
   check "the update skill sends a machine with no data repo to setup, never clones" grep -q 'Never clone or create the data repo here' "$sk"
+  check "the update skill reviews the session only when the user ran it" grep -q '## Session review (only when the user ran it)' "$sk"
+  check "the session review offers a select-all option and follows up on unselected items" bash -c 'grep -q "\"All of these\"" "$1" && grep -q "Follow-up:" "$1"' _ "$sk"
   check "setup always asks about a restore before the first sync" grep -q 'Always ask; never skip this step' "$SRC/skills/setup/SKILL.md"
   for k in setup restore cleanup; do
     sk=$SRC/skills/$k/SKILL.md
