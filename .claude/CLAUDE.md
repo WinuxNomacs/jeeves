@@ -43,6 +43,9 @@ already snapshotted the data repo when the plugin is installed.
 - Installed from this folder as a local marketplace, the plugin loads in place: `/reload-plugins` picks up
   edits. Hook scripts are live as soon as a file is saved, so run `bash -n` on a changed script before saving
   it over the working copy, and keep `main` working.
+- To run a `bin/` script by hand against scratch folders, `export CLAUDE_HOME=<scratch>/.claude
+  JEEVES_DATA=<scratch>/data` (and `JEEVES_HOST=<name>` to act as another host) first; never put `env ...`
+  in a variable and run `$VAR cmd`, which zsh (the macOS shell) does not split.
 - After changing a manifest or `hooks.json`: `claude plugin validate .` and
   `claude plugin validate .claude-plugin/marketplace.json`.
 - Rehearse an upgrade in a scratch `CLAUDE_CONFIG_DIR`: `claude plugin marketplace add WinuxNomacs/jeeves`
