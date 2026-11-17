@@ -5,8 +5,9 @@ description: >-
   agents/, commands/, skills/) through the Jeeves data repo, then push it. Use it when the user asks to
   change a global rule, agent, command or personal skill (pass the request as the argument), when a "jeeves
   snapshot" message reports newer repo files, a conflict or a diverged main, or when the user asks to sync
-  their preferences. Without an argument it syncs; with one it makes that change. Not for settings.json or
-  keybindings.json: those are per device, only backed up.
+  their preferences. Without an argument it syncs; with one it makes that change. When the user runs it, it
+  first reviews the session for what was learned and offers to save it to the global and project CLAUDE.md.
+  Not for settings.json or keybindings.json: those are per device, only backed up.
 argument-hint: "[change to make, or nothing to sync]"
 allowed-tools:
   - Bash(jeeves-status)
@@ -29,6 +30,13 @@ Request: $ARGUMENTS
 
 No request above means **sync mode**; a request means **change mode** (a sync first, then the change).
 
+When the user ran this (typed `/jeeves:update`, with or without a request), it starts with a **session
+review**: what this session taught is collected and offered to the user, then written along with the sync or
+change. When you started this skill yourself (to settle a snapshot notice, say), skip the review.
+
+Order: session review (steps 1–3) → find the data repo → sync or change mode (the selected items written in
+it) → push → report → follow-up on unselected items (review step 5).
+
 The live files are in `~/.claude`. The data repo keeps the shared ones under `home/` (`CLAUDE.md`, `agents/`,
 `commands/`, `skills/` but not `skills/synced/`) and each device's backup of its `settings.json`,
 `keybindings.json` and memories under `hosts/<host>/`, with history in git. The commands `jeeves-status`,
@@ -49,6 +57,45 @@ The live files are in `~/.claude`. The data repo keeps the shared ones under `ho
 - Edit `home/…` in the data repo, never `~/.claude` directly; `jeeves-apply` installs the result. Never edit
   `hosts/` (backups, written by snapshots) or `.sync-state/` (written by the scripts), and never copy
   credentials, `~/.claude.json`, history or transcripts into the repo.
+
+## Session review (only when the user ran it)
+
+1. **Collect.** Note the session's project before any `cd`: `git rev-parse --show-toplevel` in the session's
+   working folder (outside a git repo there is no project part). Read the global rules (`~/.claude/CLAUDE.md`)
+   and the project's own CLAUDE.md (`CLAUDE.md` or `.claude/CLAUDE.md` at its top, whichever exists). Then
+   go through this session, most recent first, for operational knowledge worth keeping: corrections and
+   constraints the user gave, approaches they confirmed, mistakes made and what avoids them, commands, setups
+   and checks that took work to find. Leave out what those files already say, one-off details of the task,
+   and what the code or git history records.
+2. **Sort** each item by where it applies, as the global rules' "What goes where" says:
+   - **Global** (`home/CLAUDE.md` in the data repo): holds in any repository, on any machine.
+   - **Project** (the project's CLAUDE.md): what anyone working in that repo needs. It is committed and may
+     be public: nothing private, no secrets or personal details, nothing true only on this machine.
+   - **Memory**: personal or true only on this machine, or history (what was tried and why it was decided).
+   Word each item as the text it would become, in the file's own style, and say where it goes: preferably
+   revising an existing rule in place (name it), so the file stays short; otherwise new, under which section.
+   If nothing is found, say so in one line and go on to the sync.
+3. **Ask** with AskUserQuestion (`multiSelect: true`), one question per destination, headed "Global",
+   "Project" or "Memory": one option per item (label: a few words; description: the full text and where it
+   goes), and a last option "All of these" (it covers the items of its own question). A question holds at
+   most 4 options, so more than 3 items for one destination are split over several questions; at most 4
+   questions per call, then another call.
+4. **Write** what was selected, during the sync or change below:
+   - Global: in change mode's `pref/` branch of the data repo (with the requested change, if any), even
+     when the request was only a sync.
+   - Project: edit its CLAUDE.md (create `CLAUDE.md` at the top if it has none) and stage only that file, by
+     name. If that file already has uncommitted changes, they are the user's: stop and ask first. On a
+     branch other than the default one, commit there. On the default branch,
+     `git switch -c claude-md/<short-name>`, commit, switch back,
+     `git merge --no-ff claude-md/<short-name> -m "Merge branch 'claude-md/<short-name>': <summary>"`, and
+     delete the branch. Never push the project unless its own CLAUDE.md allows it. If the project is the
+     data repo itself, its CLAUDE.md goes in the same `pref/` branch.
+   - Memory: save as Claude Code's memory instructions say.
+   The report names each item written, one line per destination.
+5. **Follow-up:** after the report, if any items were left unselected, ask (AskUserQuestion,
+   `multiSelect: true`) whether the user wants to discuss any of them further, with an option per item and
+   "No, leave them". Talk the chosen ones through; whatever comes of it is written as in step 4 (another
+   change-mode run for global text).
 
 ## Find the data repo
 

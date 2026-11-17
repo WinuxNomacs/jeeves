@@ -37,6 +37,16 @@ In hook mode the scripts print only when something needs attention, and they nev
 `/jeeves:update always answer in British English`) makes a preference change. Claude also starts it by
 itself when you ask to change a global preference, or when a snapshot reports newer repo files or a conflict.
 
+- **Session review** (only when you run it, not when Claude starts it): first, Claude goes through the
+  session, most recent first, for what it learned (your corrections and constraints, approaches you
+  confirmed, mistakes and how to avoid them, setups that took work). It sorts each item into the global
+  `CLAUDE.md` (holds in any repo), the project's `CLAUDE.md` (anyone working in that repo needs it; nothing
+  private, since it may be public) or memory (personal or this machine only), worded as the rule it would
+  become, revising an existing rule where one covers it. You pick from a list per file, with "All of these";
+  the global ones are written and pushed with the sync, the project ones committed in the project (on your
+  feature branch, or a short branch merged into the default one; never pushed). Afterwards it offers to
+  discuss the ones you left out.
+
 - **Sync:** snapshot, merge another device's diverged `main`, merge files changed both on disk and in the repo
   (three-way, from the version both last shared), install what is newer in the repo, then push.
 - **Change:** a sync, then the change on a branch of the data repo (`home/…`), merged into `main`, installed

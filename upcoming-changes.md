@@ -47,6 +47,9 @@
   allows a force-push only where a repo's CLAUDE.md names the task; `jeeves-cmd`'s CLAUDE.md names the
   cleanup. A dry run on `jeeves-cmd` found nothing to remove yet (its first commit was under a day old).
   Release 0.3.0. Details below under "5. History cleanup".
+- 6. Session review in `/jeeves:update` (2026-11-17, the user's request): `skills/update/SKILL.md`,
+  "Session review"; checks in `tests/run.sh` (the manifests test). Release 0.4.0. Details below under
+  "6. Session review".
 
 ---
 
@@ -469,6 +472,25 @@ only when due. Fake dates with `GIT_COMMITTER_DATE`.
   at least `keep_days`; unset means no automatic cleanup).
 - **E. Rules:** the global rule allows a force-push only where a repo's own CLAUDE.md names the task (the
   data repo's, for the cleanup); GitHub's retention of removed commits is accepted as out of our control.
+
+## 6. Session review (done)
+
+**Request (2026-11-17):** when `/jeeves:update` runs, first assess the session for global and project
+operational knowledge, revise the global CLAUDE.md with the global part and the project's CLAUDE.md with
+the project part, so the global file learns over sessions instead of only when someone notices a lesson
+(as with "stage files by name", found when a `git add -A` swept the user's `.gitignore` edit into a commit).
+
+**Design:** skill text only (no script): collect from the session (most recent first) what the files don't
+already say; sort by the global rules' "What goes where" into global, project and memory; word each item as
+the rule it becomes, revising in place where a rule covers it; ask; write during the sync or change.
+
+**Decisions (2026-11-17, with the user):**
+- **When:** only when the user runs `/jeeves:update`, not when Claude starts the skill itself mid-task.
+- **Confirm:** a selectable list per destination with an "All of these" option (AskUserQuestion holds 4
+  options per question and 4 questions per call, so items are split over questions); afterwards, the
+  unselected items are offered for discussion.
+- **Project commits:** on the current branch when it is not the default one; on the default branch, a short
+  `claude-md/<name>` branch merged back with `--no-ff`; never pushed unless that repo's CLAUDE.md allows it.
 
 ## 1. macOS device
 
