@@ -3,7 +3,7 @@
 ## Phases (current and upcoming)
 
 - **Up next:** 1. History cleanup (from `new.md`, 2026-11-17): `/jeeves:cleanup <days>` by hand, and an
-  automatic cleanup on a schedule. Planned below; open decisions there.
+  automatic cleanup on a schedule. Planned below, decisions recorded.
 - **Then:** 2. macOS device: finished in a Claude Code session on the Mac (this session is closed here and the
   work resumes there; see "2. macOS device" for the handoff). Found and fixed so far: the marketplace's plugin
   source `"."` refused by older Claude Code (0.2.1, `./`); an older Claude Code refuses `userConfig` (README:
@@ -401,7 +401,7 @@ when the phase is built.
      `.sync-state` hashes stay valid.
   4. Check: the new `main`'s tree equals the old `main`'s tree, or stop without changing anything.
   5. The old history is kept locally as a bundle under `.sync-state/` (gitignored) until the next cleanup
-     (open decision B), `main` is moved, `jeeves-scan`, then
+     (decision B), `main` is moved, `jeeves-scan`, then
      `git push --force-with-lease=main:<the origin/main it started from> origin main`.
   6. Nothing older than the cutoff: say so and change nothing.
 - **`/jeeves:cleanup <days>`** (skill, only the user starts it): explains what will be removed (how many
@@ -411,8 +411,8 @@ when the phase is built.
   to `origin/main`, then records disk as usual: everything a device had is on its disk (`~/.claude`), so a
   commit it had not pushed is re-recorded, not lost.
 - **Automatic cleanup:** the settings live in the data repo (one file, e.g. `jeeves.conf`: `keep_days`,
-  `auto_every_days`), so all devices agree and only one needs to run it; open decision A. The last cleanup's
-  date is the root commit's, so no extra state. When due, the session-start hook runs it (open decision C).
+  `auto_every_days`), so all devices agree and only one needs to run it (decision A). The last cleanup's
+  date is the root commit's, so no extra state. When due, the session-start hook runs it and pushes (decision C).
   `auto_every_days` must be ≥ `keep_days` (request (2)); a smaller value is refused with a message.
 - **GitHub caveat:** after the force-push, GitHub no longer shows the old commits, but it may keep them as
   unreachable objects for a while and in any fork; removing them from GitHub for good is a GitHub support
@@ -441,16 +441,16 @@ failing (local main restored); another device resetting after a cleanup, with an
 re-recorded; `auto_every_days` < `keep_days` refused; a malformed config skipped; automatic cleanup runs
 only when due. Fake dates with `GIT_COMMITTER_DATE`.
 
-### Open decisions
+### Decisions (2026-11-17, with the user)
 
-- **A. Where the settings live:** in the data repo, shared by all devices (recommended), or as plugin
-  options per device.
-- **B. A local copy of the removed history:** keep it as a bundle until the next cleanup (recommended), or
-  delete it at once.
-- **C. Automatic cleanup when due:** the session-start hook does it and force-pushes on its own
-  (recommended: that is what "automatically" asks for, guarded as above), or the hook only says it is due and
-  the user runs `/jeeves:cleanup`.
-- **D. Request (2)'s wording:** read as "run every N days, N ≥ the number of days kept". Confirm.
+- **A. Settings in the data repo**, one file shared by all devices (`jeeves.conf`: `keep_days`,
+  `auto_every_days`), so they agree and only one device needs to run the cleanup.
+- **B. Keep the removed history locally** as a bundle under `.sync-state/` (never pushed) until the next
+  cleanup replaces it.
+- **C. Fully automatic:** when due, the session-start hook cleans up and force-pushes with a lease; any
+  failure is undone and reported.
+- **D. Two numbers:** `keep_days` (minimum 1) and `auto_every_days` (how often the automatic cleanup runs,
+  at least `keep_days`; unset means no automatic cleanup).
 
 ## 2. macOS device (was 1)
 
