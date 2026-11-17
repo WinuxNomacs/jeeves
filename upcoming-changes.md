@@ -2,8 +2,9 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** nothing planned.
-- **Later:** 1. Per-device overlay (only if a shared file must differ per host) · Anthropic directory
+- **Up next:** 1. Release procedure (a repo skill) · 2. Encryption tests everywhere (age in CI and on
+  RAIVEN) · 3. Pre-release review of the whole plugin, then the release (the `v1.0.0` tag is on hold)
+- **Later:** 4. Per-device overlay (only if a shared file must differ per host) · Anthropic directory
   submission (only on the user's direct command)
 
 ## Done
@@ -76,7 +77,8 @@
   No code change in the Mac session. Details below under "5. macOS device".
 - Release 1.0.0 (2026-11-17): version and `CHANGELOG.md` only (no code change since 0.7.0, so no upgrade
   rehearsal); full suite and the test workflow run by hand on the release branch (Linux, Windows, macOS).
-  Tags `v0.3.0` to `v0.7.0` were never pushed; the user tags `v1.0.0`.
+  Tags `v0.3.0` to `v0.7.0` were never pushed. The `v1.0.0` tag is on hold (2026-11-17): the release had no
+  code review, so phase 3 reviews first and the release is bumped (1.0.1) if anything changes.
 
 ---
 
@@ -840,7 +842,78 @@ before the macOS phase.
 
 **As built:** the "Voice" section sits before each skill's first section (`lock` gained a "Steps" heading).
 
-## 1. Per-device overlay
+## Release procedure, encryption tests, pre-release review (planned 2026-11-17)
+
+**Request:** plan the procedure that leads up to every release, from what earlier releases needed. The user
+added: every release gets a code review for bugs and for UI and interaction breakdowns that would hurt the
+user's experience, and, since the plugin handles secrets, a security review that the code is secure and
+leaks no secret anywhere.
+
+**Builds on:** the release steps used so far (global "Packages the user owns", this repo's `CLAUDE.md`), the
+test workflow, `tests/run.sh`.
+
+### 1. Release procedure
+
+`.claude/skills/release/SKILL.md`, pointed to from `.claude/CLAUDE.md`. Steps:
+
+1. **Ready?** "Up next" built and merged, `new.md` empty, no reported bug open, `main` = `origin/main`, the
+   data repo synced. List release merges without a tag and give the user the `git tag -a` commands.
+2. **What changed:** diff since the last release, sorted into scripts, hooks, skill text, saved state or
+   data repo layout, docs; this picks the checks below. Version: major for a breaking change to the data
+   repo layout, saved state or commands; minor for a feature; patch for a fix or text.
+3. **Review** (fixes on their own branches, then the checks again):
+   - Bugs and edge cases (empty folders, odd names, diverged `main`, interrupted runs); hooks never block or
+     clutter a session; skill flows: clickable choices with the recommended one first, nothing destructive
+     without a clear yes, messages that say what to do next, no dead ends (no data repo, locked device,
+     refused push).
+   - Security: every path a passphrase or key takes (never on a command line, in the chat, a log, `set -x`,
+     an error message or git config; to key stores on stdin; temp files private and always removed;
+     `JEEVES_AGE_KEY` only where needed); plain text can never reach a commit or a push (required filter,
+     ciphertext cache, what `jeeves-scan` catches); credentials, transcripts and `~/.claude.json` never
+     copied; injection and path traversal through host names, paths, `gh` output.
+   - Public repo: nothing private in the diff (personal paths, host names, emails, data repo content);
+     README covers every feature; the Layout list in `.claude/CLAUDE.md` is complete.
+   - An independent reviewer given the code, not my conclusions, plus my own pass; every finding verified
+     before it is reported.
+4. **Checks, always:** `bash -n` on every script; both manifests validate (`--strict`); the full suite,
+   with the count, encryption tests run (not skipped).
+5. **Checks by what changed:** scripts: Windows Git Bash from a `C:` copy; macOS- or Windows-only code: ask
+   the user for a live run there; code or saved state: the upgrade rehearsal (last release's `bin/` in a
+   worktree, then the new one on its state; the published plugin in a scratch `CLAUDE_CONFIG_DIR`); skill
+   text only: run the skill once against scratch folders. Say which ones were skipped and why.
+6. **`release/X.Y.Z`:** version, `CHANGELOG.md`, Done in this file.
+7. **CI by hand on the release branch:** confirm the branch push succeeded before `gh workflow run tests
+   --ref release/X.Y.Z` (1.0.0: a failed push gave "No ref found"); all three OSes green; read the
+   annotations (runner image changes).
+8. **Merge** `--no-ff`, push `main`, delete the branch.
+9. **After:** the user tags; the tag's run is green; then `claude plugin marketplace update` and
+   `claude plugin update` in the scratch config show the new version's cache folder; clone installs pull.
+
+### 2. Encryption tests everywhere
+
+The 13 encryption tests skip without age 1.3+: RAIVEN's apt has 1.2.1 and the workflow installs none, so
+for 1.0.0 they ran only by hand on the Mac.
+
+- CI: a step that downloads a pinned age release and checks its checksum on all three OSes. Minutes are free
+  here: the repo is public, and GitHub's Actions billing page says standard runners in public repositories
+  are free and "do not reduce the included compute usage" (fetched 2026-11-17).
+- RAIVEN: age 1.3+ from the release download into `~/.local/bin` (user-level; the command shown first).
+- Vet age's current state from its repo and releases first, and record the evidence here.
+
+### 3. Pre-release review and release
+
+Run the procedure on the whole plugin (not only the diff since 0.7.0: no release has had this review),
+fix what it finds, then release (1.0.1 if anything changed, else tag 1.0.0 as merged).
+
+### Decisions (2026-11-17, with the user)
+
+- The procedure is a repo skill.
+- A review for bugs, interaction breakdowns and security is part of every release.
+- Encryption tests: in CI and on RAIVEN.
+- The `v1.0.0` tag waits for the review.
+- The procedure lists untagged releases and gives the commands; tagging stays the user's.
+
+## 4. Per-device overlay
 
 Mostly obsolete since Generic made `settings.json` and `keybindings.json` per host. Only needed if a shared
 file (a `CLAUDE.md` rule, a skill) ever has to differ between hosts: then decide host vs platform scope and
