@@ -133,7 +133,7 @@ public repo; never add a trigger or matrix entry for it.
 git switch main
 git merge --no-ff release/X.Y.Z -m "Merge branch 'release/X.Y.Z': Jeeves X.Y.Z"
 git push origin main
-git branch -d release/X.Y.Z && git push origin --delete release/X.Y.Z
+git push origin --delete release/X.Y.Z && git branch -d release/X.Y.Z   # remote first, or -d refuses
 ```
 
 ## 9. After
