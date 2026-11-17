@@ -2,7 +2,7 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** nothing planned (1.0.0 was to follow the macOS phase: the user's call).
+- **Up next:** nothing planned.
 - **Later:** 1. Per-device overlay (only if a shared file must differ per host) · Anthropic directory
   submission (only on the user's direct command)
 
@@ -74,6 +74,9 @@
   source `"."` refused by older Claude Code (0.2.1), older Claude Code refusing `userConfig` (README),
   setup's restore question never asked (0.2.2), and `jeeves-cmd` lacking the `jeeves-data` topic (added).
   No code change in the Mac session. Details below under "5. macOS device".
+- Release 1.0.0 (2026-11-17): version and `CHANGELOG.md` only (no code change since 0.7.0, so no upgrade
+  rehearsal); full suite and the test workflow run by hand on the release branch (Linux, Windows, macOS).
+  Tags `v0.3.0` to `v0.7.0` were never pushed; the user tags `v1.0.0`.
 
 ---
 

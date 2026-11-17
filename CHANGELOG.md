@@ -2,6 +2,12 @@
 
 A new version reaches installed copies only when `version` in `.claude-plugin/plugin.json` changes.
 
+## 1.0.0 (2026-11-17)
+
+- **First stable release.** Every feature is now checked on Linux, Windows (Git Bash) and macOS (bash 3.2):
+  sync, the edit hook, restore, history cleanup, encryption with the macOS Keychain and dialog, and the
+  `/jeeves:setup` walk-through on a fresh machine. No change in behaviour since 0.7.0.
+
 ## 0.7.0 (2026-11-17)
 
 - **Jeeves speaks as Jeeves.** Every `/jeeves:` command answers as a wise and gently whimsical Gilded Age
