@@ -2,8 +2,7 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** 1. Encryption tests everywhere (age in CI and on RAIVEN) · 2. Pre-release review of the
-  whole plugin, then the release (the `v1.0.0` tag is on hold)
+- **Up next:** 1. Pre-release review of the whole plugin, then the release (the `v1.0.0` tag is on hold)
 - **Later:** 4. Per-device overlay (only if a shared file must differ per host) · Anthropic directory
   submission (only on the user's direct command)
 
@@ -82,6 +81,9 @@
 - 6. Release procedure (2026-11-17): `.claude/skills/release/SKILL.md` (`/release`), pointed to from
   `.claude/CLAUDE.md`; it includes the review for bugs, interaction breakdowns and secret leaks, and lists
   untagged release merges. Details below under "Release procedure (done)".
+- 7. Encryption tests everywhere (2026-11-17): the workflow installs age 1.3.2 pinned by SHA-256 and fails
+  if the encryption tests skip (run by hand on `ci/age`: 63 passed on Linux, Windows and macOS); age 1.3.2
+  in `~/.local/bin` on RAIVEN (63 passed). Details below under "Encryption tests everywhere (done)".
 
 ---
 
@@ -895,7 +897,7 @@ Layout). The user tags when they say so; then Claude runs the tag command for th
 9. **After:** the user tags; the tag's run is green; then `claude plugin marketplace update` and
    `claude plugin update` in the scratch config show the new version's cache folder; clone installs pull.
 
-### 1. Encryption tests everywhere
+### Encryption tests everywhere (done)
 
 The 13 encryption tests skip without age 1.3+: RAIVEN's apt has 1.2.1 and the workflow installs none, so
 for 1.0.0 they ran only by hand on the Mac.
@@ -906,7 +908,21 @@ for 1.0.0 they ran only by hand on the Mac.
 - RAIVEN: age 1.3+ from the release download into `~/.local/bin` (user-level; the command shown first).
 - Vet age's current state from its repo and releases first, and record the evidence here.
 
-### 2. Pre-release review and release
+**age checked 2026-11-17** (GitHub API on `FiloSottile/age`): BSD-3-Clause, not archived; latest release
+v1.3.2 (2026-08-29; v1.3.0 and v1.3.1 in 2025-12), commits up to the release day; one main maintainer
+(Filippo Valsorda, 333 commits; the next contributor 6), issues answered into 2026-11; one advisory,
+GHSA-32gq-x56h-299c (plugin names could run arbitrary binaries), fixed in 1.2.1. Release archives hold
+`age`, `age-keygen` and `age-plugin-batchpass` (plus the pq and tag plugins), with no dependency to
+install; each comes with a Sigsum `.proof`. Pinned by SHA-256, each matching GitHub's asset digest:
+linux-amd64 `cbe24006...`, darwin-arm64 `e2020b07...`, windows-amd64 `f48d8f8f...`. Building our own
+is not an option (the plugin already depends on age for encryption).
+
+**As built:** the workflow's "Install age" step downloads v1.3.2 for the runner's OS, checks the SHA-256,
+and puts it on the PATH; the "Tests" step fails if the encryption tests were skipped. To upgrade age, change
+the version and the three hashes (from the release's asset digests). RAIVEN: age 1.3.2 (`age`,
+`age-keygen`, `age-plugin-batchpass`) in `~/.local/bin` from the same verified archive; 63 passed there.
+
+### 1. Pre-release review and release
 
 Run the procedure on the whole plugin (not only the diff since 0.7.0: no release has had this review),
 fix what it finds, then release (1.0.1 if anything changed, else tag 1.0.0 as merged).

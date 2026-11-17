@@ -75,7 +75,8 @@ already snapshotted the data repo when the plugin is installed.
 - Encryption: a passphrase never goes through the chat or a command line (a dialog, or `--terminal` in the
   user's own terminal; to age only as `AGE_PASSPHRASE` of that one process); the key goes to stores on
   stdin. Plain text must never reach a commit: the filter is required, a failure stops git, and
-  `jeeves-scan` checks what a push sends. Tests for it need age 1.3+ on the PATH (skipped without it); for
+  `jeeves-scan` checks what a push sends. Tests for it need age 1.3+ on the PATH (skipped without it; the workflow installs a pinned age and fails
+  if they are skipped); for
   Windows, unzip the release's Windows archive next to the copied tree and put it on the PATH.
 - Tests: `tests/run.sh` (or `tests/run.sh <a word from the test's name>`; check how many ran). To see a new
   check fail on the old code, put back only the file under test (`git show HEAD:<file> > <file>`), never
