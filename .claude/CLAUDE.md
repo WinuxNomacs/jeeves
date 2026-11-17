@@ -19,16 +19,21 @@ already snapshotted the data repo when the plugin is installed.
   `jeeves-hook-edit` (snapshots after an edit to `~/.claude/CLAUDE.md`), `jeeves-status` (read-only: what is
   out of sync, with hashes), `jeeves-scan` (secrets in the outgoing commits), `jeeves-restore` (a host's
   backup → `~/.claude`), `jeeves-init` (new data repo), `jeeves-check` (read-only facts for setup: tools,
-  GitHub sign-in, data repo folder), `jeeves-github` (find or create the data repo on GitHub through `gh`), `jeeves-cleanup` (folds old history into one root
-  commit and force-pushes with a lease; `--auto` runs from the session-start snapshot per `jeeves.conf`).
+  GitHub sign-in, age, data repo folder), `jeeves-github` (find or create the data repo on GitHub through
+  `gh`), `jeeves-cleanup` (folds old history into one root commit and force-pushes with a lease; `--auto`
+  runs from the session-start snapshot per `jeeves.conf`; `--all` after encrypting), `jeeves-encrypt`
+  (encryption on, unlock, lock, passphrase), `jeeves-crypt` (git's filter, textconv and merge driver for an
+  encrypted data repo; git runs it once per file, so it sources only `lib/crypt.sh`).
 - `skills/` — `update` (`/jeeves:update`: when the user runs it, a review of the session for rules to save
   to the global and project CLAUDE.md; then sync, or a change to a shared file, then push), `setup`, `restore`,
-  `cleanup` (`/jeeves:cleanup`: history cleanup and its `jeeves.conf` settings).
+  `cleanup` (`/jeeves:cleanup`: history cleanup and its `jeeves.conf` settings), `encrypt`, `unlock`, `lock`.
   They get the data repo from `${user_config.data_repo}` (substituted into skill text; the Bash tool sees no
   plugin variables).
 - Shared files (`home/`, synced) vs per-device files (`hosts/<host>/`, backup only): the lists are at the top
   of `lib/lib.sh`.
 - `lib/lib.sh` — shared code: finding the data repo, tracked paths list, hashes, three-way classification.
+  `lib/crypt.sh` — encryption: the key stores (Keychain, Windows Credential Manager through PowerShell,
+  `secret-tool`, a key file), the passphrase dialogs, age helpers.
 - `tests/run.sh` — tests; each runs against a scratch `~/.claude`, data repo and bare remote.
 - This file is `.claude/CLAUDE.md`, for working on the repo; Claude Code loads it here as project context.
   At the root it would be shipped with the plugin to no effect, and `claude plugin validate --strict` fails.
@@ -60,6 +65,11 @@ already snapshotted the data repo when the plugin is installed.
   back if the push fails. Otherwise they contact the remote only for `fetch` + fast-forward in `snapshot`,
   and only the `update` and `cleanup` skills push.
 - Never copy secrets: `.credentials.json`, `~/.claude.json`, transcripts, history.
+- Encryption: a passphrase never goes through the chat or a command line (a dialog, or `--terminal` in the
+  user's own terminal; to age only as `AGE_PASSPHRASE` of that one process); the key goes to stores on
+  stdin. Plain text must never reach a commit: the filter is required, a failure stops git, and
+  `jeeves-scan` checks what a push sends. Tests for it need age 1.3+ on the PATH (skipped without it); for
+  Windows, unzip the release's Windows archive next to the copied tree and put it on the PATH.
 - Tests: `tests/run.sh` (or `tests/run.sh <a word from the test's name>`; check how many ran). To see a new
   check fail on the old code, put back only the file under test (`git show HEAD:<file> > <file>`), never
   `git stash`, which stashes the tests too.

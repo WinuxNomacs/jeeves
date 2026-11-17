@@ -11,6 +11,8 @@ your own (the **data repo**), on Linux, macOS and Windows:
 - **Backed up per device**, never synced: `settings.json`, `keybindings.json` (they hold paths and key
   bindings that differ per machine) and each project's memories. Copies under `hosts/<host>/`, which you can
   restore onto a new machine with `/jeeves:restore`.
+- **Encrypted** if you want: with a passphrase, GitHub holds only encrypted copies, while the files on your
+  devices stay plain. Each device asks for the passphrase once.
 
 The live files stay in `~/.claude`. This plugin brings the scripts that move the copies, and hooks that run
 them for you:
@@ -26,9 +28,11 @@ In hook mode the scripts print only when something needs attention, and they nev
 
 | Skill | Started by | What it does |
 |---|---|---|
-| `/jeeves:setup [url]` | you, after installing | Walks you through setting up this machine in five steps: checks git and your GitHub sign-in (offers to install the GitHub CLI), finds your data repo on GitHub or creates a private one, offers to restore another device's backup, then runs the first sync and backup. |
+| `/jeeves:setup [url]` | you, after installing | Walks you through setting up this machine in five steps: checks git and your GitHub sign-in (offers to install the GitHub CLI), finds your data repo on GitHub or creates a private one (offering to encrypt it), unlocks an encrypted one, offers to restore another device's backup, then runs the first sync and backup. |
 | `/jeeves:update [change]` | you, or Claude | Syncs the shared files and pushes; with a change, makes it. See below. |
 | `/jeeves:cleanup <days>` | you | Removes history older than that many days (1 or more), keeping every file, after a fresh backup and your confirmation; `/jeeves:cleanup auto <every> [<keep>]` or `off` sets the automatic cleanup. See below. |
+| `/jeeves:encrypt [passphrase]` | you | Encrypts the data repo with a passphrase and removes the plain history from GitHub; with `passphrase`, changes the passphrase. See below. |
+| `/jeeves:unlock` / `/jeeves:lock` | you | Unlocks this device with the passphrase (once; the key then stays in its credential store), or removes the key from it. |
 | `/jeeves:restore <host>` | you | Copies a device's backed-up `settings.json`, `keybindings.json` (and on request memories) onto this machine, then fixes paths that only worked there (`data_repo`, a local marketplace folder) and lists other machine-specific values. Replaced files are saved first. |
 
 ### The `update` skill
@@ -79,6 +83,32 @@ file changes, on disk or in the repo.
 - GitHub may keep removed commits for a while, and forks keep theirs; that is outside Jeeves. A secret that
   was ever pushed must be revoked.
 
+### Encryption
+
+`/jeeves:encrypt` encrypts everything under `home/` and `hosts/` with [age](https://age-encryption.org)
+(1.3.0 or later), so a leaked GitHub token or a repo made public by mistake shows only encrypted files. The
+data repo's folder and `~/.claude` on each device stay plain, as they must for Claude Code to read them.
+Still visible on GitHub: file names (including the project paths of memories), sizes and commit messages.
+
+- **The key** is an age key made for your data repo. `identity.age` in the repo holds it, encrypted with your
+  passphrase; `recipient` holds its public half, which is all that encrypting needs.
+- **Your passphrase** is asked for in a window of the system (macOS dialog, Windows credential prompt, zenity
+  or kdialog on Linux; elsewhere, Jeeves gives you a command for your own terminal), never in the chat,
+  which is saved in transcripts. It is never stored. Losing it on every device means the data on GitHub can't
+  be read; a device that is still unlocked can set a new one (`/jeeves:encrypt passphrase`). Generating it
+  with a password manager is recommended.
+- **Each device unlocks once** (`/jeeves:unlock`, or during `/jeeves:setup`): the key then stays in its
+  credential store (macOS Keychain, Windows Credential Manager, a Linux Secret Service through
+  `secret-tool`; where there is none, a file only you can read, if you choose it). Jeeves reads it from there
+  at most once per command, so it works without asking again. A locked device says so at session start and
+  doesn't sync; `/jeeves:lock` removes the key.
+- **Turning it on** folds all earlier history into one encrypted commit and force-pushes it with a lease, as
+  the history cleanup does, so no plain copy stays in the history on GitHub (GitHub may keep unreachable
+  copies for a while). A new data repo encrypted during setup never holds plain text at all.
+- git does the work through a filter, a diff driver and a merge driver (`jeeves-crypt`, set up in the data
+  repo's `.git/config`), so syncing, merging and `git log -p` work as before. `jeeves-scan` refuses a push
+  that would send a file under `home/` or `hosts/` unencrypted.
+
 ## Commands
 
 The plugin's `bin/` is on the PATH of Claude's Bash tool, so Claude (or you, by giving the full path) runs:
@@ -88,8 +118,9 @@ The plugin's `bin/` is on the PATH of Claude's Bash tool, so Claude (or you, by 
 | `jeeves-snapshot` | `~/.claude` → data repo | Fast-forwards `main` from its remote, copies changed shared files into `home/`, mirrors this device's settings, keybindings and memories into `hosts/<host>/`, commits on `main`. Never pushes. |
 | `jeeves-apply` | data repo → `~/.claude` | Installs shared files that changed in the data repo since this device last synced. Never overwrites a file a session edited since then. |
 | `jeeves-restore [<host> [--memories]]` | data repo → `~/.claude` | Copies a device's backup onto this machine, saving replaced files under `.sync-state/overwritten/`. Without a host, prints this machine's host name and the hosts with a backup. |
-| `jeeves-cleanup <days>` | data repo → origin | Folds the history older than `<days>` days into one root commit (same files) and force-pushes `main` with a lease; `--dry-run <days>` only says what it would do; `--auto` is what the session-start hook runs. |
-| `jeeves-check` | (read-only) | What setup needs to know: OS, git, the GitHub CLI and sign-in, an SSH key GitHub accepts, how to install the CLI here, the data repo folder's state. |
+| `jeeves-cleanup <days>` | data repo → origin | Folds the history older than `<days>` days into one root commit (same files) and force-pushes `main` with a lease; `--dry-run <days>` only says what it would do; `--all` folds all of it (after encrypting); `--auto` is what the session-start hook runs. |
+| `jeeves-check` | (read-only) | What setup needs to know: OS, git, the GitHub CLI and sign-in, an SSH key GitHub accepts, how to install the CLI and age here, the key store, the data repo folder's state. |
+| `jeeves-encrypt status` / `on` / `unlock` / `lock` / `passphrase` | data repo, key store | Encryption: its state on this device; turn it on; put the key in this device's credential store, or remove it; set a new passphrase. Asks for the passphrase in a dialog (`--terminal` in your own terminal). |
 | `jeeves-github find` / `create <name>` | GitHub | Lists your data repos on GitHub (topic `jeeves-data`, or named `jeeves-data`), or creates a private one with that topic, through the GitHub CLI. |
 | `jeeves-init <folder> [<url>]` | (new repo) | Creates an empty data repo (`.gitignore`, `.gitattributes`, README), optionally with a remote. |
 | `jeeves-status` | (read-only) | Lists each path out of sync (`disk`, `repo` or `conflict`) with its disk, repo and last-synced hashes, and how `main` stands against `origin/main`. |
@@ -116,7 +147,9 @@ A git repo with:
   and only for projects that exist on the new machine, because their folder names are absolute paths.
 - Never copied: credentials, `~/.claude.json`, history, transcripts, caches.
 - `jeeves.conf` (optional): the automatic history cleanup's settings.
-- `.gitignore`: `.sync-state/` and `*.sync-tmp`; `.gitattributes`: `* text=auto eol=lf`.
+- `.gitignore`: `.sync-state/` and `*.sync-tmp`; `.gitattributes`: `* text=auto eol=lf` (and, when
+  encrypted, the filter for `home/` and `hosts/`).
+- When encrypted: `recipient` (the public key) and `identity.age` (the key, encrypted with your passphrase).
 
 `<host>` is the machine's host name; on native Windows it gets `-win` (`mypc-win`), so a WSL and a Windows
 Claude Code on one PC stay apart. `JEEVES_HOST` overrides it. A data repo made before per-device backups
@@ -164,14 +197,15 @@ claude plugin install jeeves@jeeves
 ## Adding a device
 
 Install the plugin and run `/jeeves:setup`. Signed in to GitHub with the GitHub CLI, it finds your data
-repo by itself (otherwise give its URL: `/jeeves:setup <url>`), clones it, offers to restore another device's
-settings, and merges this machine's shared files with the repo's (keeping what both hold, asking before
+repo by itself (otherwise give its URL: `/jeeves:setup <url>`), clones it, asks for the passphrase if it is
+encrypted, offers to restore another device's settings, and merges this machine's shared files with the repo's (keeping what both hold, asking before
 dropping text).
 
 ## Tests
 
 `tests/run.sh` (or `tests/run.sh <part of a test name>`). Each test uses a scratch `~/.claude`, data repo and
-bare remote, so nothing real is touched.
+bare remote, so nothing real is touched. The encryption tests need age 1.3.0 or later on the PATH and are
+skipped without it.
 
 ## License
 
