@@ -2,6 +2,14 @@
 
 A new version reaches installed copies only when `version` in `.claude-plugin/plugin.json` changes.
 
+## 0.4.0 (2026-11-17)
+
+- **Session review in `/jeeves:update`.** When you run it, Claude first goes through the session for what it
+  learned and lists the rules it would save, per destination (global `CLAUDE.md`, the project's `CLAUDE.md`,
+  memory), with "All of these"; it writes what you pick (global with the sync and push, the project's
+  committed in the project, never pushed) and then offers to discuss the ones you left out. Not when Claude
+  starts the skill by itself.
+
 ## 0.3.0 (2026-11-17)
 
 - **History cleanup.** `/jeeves:cleanup <days>` folds the data repo's commits older than that many days into
