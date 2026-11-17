@@ -2,6 +2,21 @@
 
 A new version reaches installed copies only when `version` in `.claude-plugin/plugin.json` changes.
 
+## 0.6.0 (2026-11-17)
+
+- **Encryption with a passphrase.** `/jeeves:encrypt` encrypts the data repo's `home/` and `hosts/` with
+  age (1.3.0 or later), so GitHub holds only encrypted files, and folds the earlier plain history into one
+  encrypted commit. The files on your devices stay plain. The passphrase is asked for in a window of the
+  system, never in the chat, and is never stored; each device unlocks once (`/jeeves:unlock`) and then keeps
+  the key in its credential store (macOS Keychain, Windows Credential Manager, a Linux Secret Service, or a
+  key file if you choose). `/jeeves:lock` removes it; `/jeeves:encrypt passphrase` changes the passphrase.
+- `/jeeves:setup` offers encryption for a new data repo (before anything is pushed) and unlocks an encrypted
+  one it clones.
+- New commands `jeeves-encrypt` and `jeeves-crypt` (git's filter for an encrypted data repo);
+  `jeeves-cleanup --all`; `jeeves-check` reports age and the key store; `jeeves-scan` refuses a file that
+  would be pushed unencrypted.
+- A snapshot whose `git add` fails now records nothing (it used to mark the files as synced).
+
 ## 0.5.0 (2026-11-17)
 
 - **Guided setup.** `/jeeves:setup` walks you through five steps: tools, GitHub access (it offers to install
