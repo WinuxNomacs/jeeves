@@ -9,7 +9,11 @@
   (0.2.1, `./`); an older Claude Code refuses `userConfig` (README: update first); setup's restore question
   never asked (0.2.2). Left: the edit hook (a direct edit, not through `/jeeves:update`), the restored
   settings' paths, the history cleanup on macOS, encryption on macOS.
-- **Later:** 2. Per-device overlay (only if a shared file must differ per host) · Anthropic directory
+- **Then:** 2. Cleanup warning (from `new.md`): the manual cleanup's confirmation says plainly that the
+  folded commits will be gone. 3. Butler persona and reply conventions (from `new.md`, to discuss first):
+  Jeeves answers as a wise and whimsical Gilded Age English butler, gives data meant for another program as
+  a one-click copy block, and offers clickable answer options.
+- **Later:** 4. Per-device overlay (only if a shared file must differ per host) · Anthropic directory
   submission (only on the user's direct command)
 
 ## Done
@@ -743,7 +747,54 @@ and its last backup stays in `hosts/RAIVEN-win/`. WSL and native Windows on one 
 Credential Manager entry for the key, so `/jeeves:lock` on one locks both. The user tags releases (or asks Claude to, for one tag at a time; this repo's tags are
 annotated: `git tag -a`); nothing goes to Anthropic's directory without the user's direct command.
 
-## 2. Per-device overlay
+## 2. Cleanup warning (planned 2026-11-17, from `new.md`)
+
+**Request:** "When cleanup is ran manually, double check with the user before moving forward so they
+understand that commits older than the given number of days will be gone forever."
+
+**Already built:** `/jeeves:cleanup <days>` runs a dry run and asks with AskUserQuestion, naming how many
+commits are folded and up to which date (`skills/cleanup/SKILL.md` step 3); it never runs without that yes.
+What is missing is saying what "fold" costs. The accurate wording: those commits are removed from GitHub and
+from every device; this device keeps them in `.sync-state/history-before-cleanup.bundle` only until the next
+cleanup replaces it, and after that they are gone for good (GitHub may keep unreachable copies for a while,
+outside Jeeves' control). The files themselves do not change.
+
+**Proposed:** reword step 3's question (and the README) so the answer options say it: "Yes, remove them
+permanently" / "No, keep them". Same for `/jeeves:encrypt`'s fold. Text-only change: no rehearsal needed.
+
+## 3. Butler persona and reply conventions (planned 2026-11-17, from `new.md`; to discuss)
+
+**Requests:**
+- "Can the Jeeves plugin imitate a persona so that its responses are always that of a wise & whimsical
+  gilded age english butler? Let's discuss this more."
+- "Make it so that Jeeves always provides data that is destined for another program a single click copy
+  block to make it easier for the user to interact with it."
+- "Make it so that Jeeves always presents clickable response options to make it easier for touch
+  screen/mouse users. Offer the obvious suggestions where possible for them to choose with a mouse/tap if
+  they desire. They can always type out a full response via Other if they so choose."
+
+**What a plugin can do (Claude Code docs, plugins reference and components pages, read 2026-11-17):**
+- **Output style:** `output-styles/<name>.md` in the plugin, listed in `/output-style` as `jeeves:<name>`;
+  the user picks it (the docs describe no way for a plugin to turn it on by itself). It changes how every
+  reply is phrased; `keep-coding-instructions: true` keeps Claude Code's software-engineering instructions.
+- **SessionStart hook:** Jeeves already has one; it could add the persona's instructions to every session
+  (always on while the plugin is enabled, unless a plugin option turns it off). To check: how a hook adds
+  context (`additionalContext` in its JSON output) and how strongly that holds over a long session.
+- **Only in Jeeves' own skills:** the persona in `/jeeves:*` replies only.
+- **The two conventions:** a copy block is a fenced code block (the VS Code extension shows a copy button
+  on them; the terminal: to check). Clickable options are the AskUserQuestion tool (up to 4 options plus
+  "Other"). Both could instead be rules in the user's global CLAUDE.md (synced by Jeeves), which would apply
+  with or without the persona.
+
+**Open decisions:**
+- P1. Scope: every reply in every session, or Jeeves' own skills only?
+- P2. Mechanism: an output style the user selects, or always on through the SessionStart hook (with an
+  option to turn it off)?
+- P3. The conventions: part of the persona, or global CLAUDE.md rules for every session?
+- P4. Tone limits: never at the cost of the global style rules (concise, no emojis, accuracy first)?
+  Whimsy in greetings and asides only, never inside code, commands, commit messages or files?
+
+## 4. Per-device overlay
 
 Mostly obsolete since Generic made `settings.json` and `keybindings.json` per host. Only needed if a shared
 file (a `CLAUDE.md` rule, a skill) ever has to differ between hosts: then decide host vs platform scope and
