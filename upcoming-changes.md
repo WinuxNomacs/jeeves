@@ -7,8 +7,9 @@
   including a live `/jeeves:setup` walk-through (not run live yet) and encryption with the Keychain and the
   macOS dialog. Found and fixed so far: the marketplace's plugin source `"."` refused by older Claude Code
   (0.2.1, `./`); an older Claude Code refuses `userConfig` (README: update first); setup's restore question
-  never asked (0.2.2). Left: the edit hook (a direct edit, not through `/jeeves:update`), the restored
-  settings' paths, the history cleanup on macOS, encryption on macOS.
+  never asked (0.2.2). Checked on the Mac (2026-11-17, nothing to fix): the suite, the restored settings'
+  paths, the history cleanup, encryption with the Keychain and the dialog. Left: the edit hook (a direct
+  edit, not through `/jeeves:update`), the live `/jeeves:setup` walk-through.
 - **Later:** 2. Per-device overlay (only if a shared file must differ per host) · Anthropic directory
   submission (only on the user's direct command)
 
@@ -740,6 +741,24 @@ The Mac session then:
   download into `~/.local/bin`. Every device that still syncs must run 0.6.0 or later before encrypting;
 - fixes what it finds on a branch, merges, pushes `main` (allowed by `.claude/CLAUDE.md`), and moves this
   phase to Done.
+
+Checked in the Mac session (2026-11-17; macOS 26.6 arm64, `/bin/bash` 3.2.57, git 2.56.0, Claude Code
+2.1.311). Handoff step 2 had not been done, so the plugin was installed from the local clone here.
+- `tests/run.sh`: 50 passed without age; after `brew install age` (1.3.2, the bottle includes
+  `age-plugin-batchpass`) 63 passed, 0 failed.
+- Restored settings: the Mac's only backup (`4c9680b`) predates the earlier restore, and the uninstall
+  rewrote `settings.json`, so it was rehearsed on a scratch `~/.claude`: `jeeves-restore RAIVEN` wrote
+  RAIVEN's `/home/winux/...` marketplace path and `data_repo`; the restore skill's step 4 pointed both at
+  existing Mac folders, valid JSON, nothing else machine-specific.
+- History cleanup: `jeeves-cleanup --dry-run 1` first refused (the clone was 15 commits behind
+  `origin/main`: correct); after a fast-forward, "would fold the 30 commits up to 2026-11-16 15:23 into
+  one, and keep the 30 newer ones". No real cleanup (not asked).
+- Encryption on a scratch data repo: `on` (macOS dialog twice, key in the Keychain under service `jeeves`,
+  account the public key; the commit holds age ciphertext), `lock` (entry gone; status refuses with "run
+  /jeeves:unlock"), `unlock` (dialog once, entry back), and Cancel in the dialog ("cancelled; nothing
+  changed", exit 1, still locked). No scratch Keychain entry left.
+- The Mac's `~/.claude/CLAUDE.md` was behind the shared one (RAIVEN's later rules); `jeeves-apply`
+  installed it.
 
 Facts the Mac session needs (from RAIVEN's memory, which does not travel): the data repo is
 `WinuxNomacs/jeeves-cmd` (private), hosts so far `RAIVEN` (Linux, WSL), `RAIVEN-win` (Windows, same PC),
