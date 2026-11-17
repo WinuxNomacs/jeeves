@@ -26,8 +26,31 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/bash32" && ln -sf /bin/bash "$RUNNER_TEMP/bash32/bash"
           echo "$RUNNER_TEMP/bash32" >> "$GITHUB_PATH"
+      # age 1.3.2 for the encryption tests, pinned by the SHA-256 of each release archive (checked
+      # 2026-11-17 against GitHub's asset digests). Its archives include age-plugin-batchpass.
+      - name: Install age
+        shell: bash
+        run: |
+          case "$RUNNER_OS" in
+            Linux)   a=linux-amd64.tar.gz;  sum=cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed26ac10 ;;
+            macOS)   a=darwin-arm64.tar.gz; sum=e2020b073c44f692685a24d6abc378817eb81ffaaf49fd0531ef8565f767f2f5 ;;
+            Windows) a=windows-amd64.zip;   sum=f48d8f8f9ebe903ab5027ed067652f2cc1db94bc206976430133b905dcd8e8c7 ;;
+          esac
+          cd "$RUNNER_TEMP"
+          curl -fsSL --retry 3 -o "age-$a" "https://github.com/FiloSottile/age/releases/download/v1.3.2/age-v1.3.2-$a"
+          if command -v sha256sum >/dev/null; then got=$(sha256sum "age-$a"); else got=$(shasum -a 256 "age-$a"); fi
+          got=${got%% *}
+          [ "$got" = "$sum" ] || { echo "::error::age-v1.3.2-$a has SHA-256 $got, expected $sum"; exit 1; }
+          case "$a" in *.zip) unzip -q "age-$a" ;; *) tar xzf "age-$a" ;; esac
+          echo "$RUNNER_TEMP/age" >> "$GITHUB_PATH"
       - name: Tests
         shell: bash
         run: |
           echo "bash: $(command -v bash) $(bash -c 'echo $BASH_VERSION')"
-          bash tests/run.sh
+          echo "age: $(command -v age) $(age --version)"
+          bash tests/run.sh 2>&1 | tee "$RUNNER_TEMP/tests.log"
+          rc=${PIPESTATUS[0]}
+          if grep -q "^skip encryption tests" "$RUNNER_TEMP/tests.log"; then
+            echo "::error::the encryption tests were skipped"; exit 1
+          fi
+          exit "$rc"
