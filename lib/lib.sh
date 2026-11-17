@@ -2,6 +2,8 @@
 # Portable bash: works on bash 3.2 (macOS), Git Bash (Windows) and Linux. No GNU-only flags,
 # no associative arrays, no `set -u` (empty arrays break it on bash < 4.4).
 
+. "$(dirname "${BASH_SOURCE[0]}")/crypt.sh"
+
 CLAUDE_HOME=${CLAUDE_HOME:-$HOME/.claude}
 # This device's name in the data repo. Native Windows (Git Bash) gets "-win", so it stays apart from a WSL
 # on the same PC, which reports the same host name.
@@ -16,7 +18,8 @@ fi
 # then the git repo around the current folder if it has a home/ folder (Claude's Bash tool sees no
 # plugin variables, but runs inside the data repo when working on it), then DEFAULT_DATA_REPO (the
 # option's default, which an install without --config may leave unset).
-# Returns 1 with DATA_REPO_PROBLEM set when none is found.
+# Returns 1 with DATA_REPO_PROBLEM set when none is found, or when it is encrypted and this device is locked
+# (unless ALLOW_LOCKED=1).
 DEFAULT_DATA_REPO=$HOME/jeeves-data
 
 # A path with a leading ~/ (as plugin options are written) made absolute.
@@ -46,6 +49,47 @@ find_data_repo() {
   STATE_DIR=$REPO/.sync-state
   STATE_FILE=$STATE_DIR/hashes
   HOST_DIR=$REPO/hosts/$HOST
+  CRYPT_DIR=$REPO/.git/jeeves CRYPT_TOP=$REPO
+  if encrypted || unlocked; then crypt_setup; fi
+  if encrypted && ! unlocked && [ "$ALLOW_LOCKED" != 1 ]; then
+    DATA_REPO_PROBLEM="the data repo is encrypted and this device is locked: run /jeeves:unlock"
+    return 1
+  fi
+  return 0
+}
+
+# ---- Encryption (lib/crypt.sh has the rest) ----
+
+# The data repo's working tree is encrypted (has a recipient).
+encrypted() { [ -s "$REPO/recipient" ]; }
+# This device holds the key (the marker names the recipient, or encryption is coming from origin).
+unlocked() { [ -s "$CRYPT_DIR/unlocked" ] && { ! encrypted || [ "$(cat "$CRYPT_DIR/unlocked")" = "$(cat "$REPO/recipient")" ]; }; }
+# The given commit holds an encrypted data repo.
+encrypted_at() { git_repo cat-file -e "$1:recipient" 2>/dev/null; }
+# Read the key once for this script and the git commands it runs; 1 when the store has none.
+load_key() {
+  [ -n "$JEEVES_AGE_KEY" ] && return 0
+  JEEVES_AGE_KEY=$(store_get "$(cat "$CRYPT_DIR/unlocked" 2>/dev/null)") || { JEEVES_AGE_KEY=; return 1; }
+  export JEEVES_AGE_KEY
+}
+
+# Point git at this plugin's jeeves-crypt (the path changes with each plugin version). git compares only size
+# and whole-second mtime: the snapshot rewrites hosts/ with the same times, and a full check would run the
+# filter on every file.
+crypt_setup() {
+  local bin want have
+  bin=$(cd "$(dirname "${BASH_SOURCE[0]}")/../bin" && pwd)/jeeves-crypt
+  want="filter.jeeves.clean \"$bin\" clean %f
+filter.jeeves.smudge \"$bin\" smudge %f
+filter.jeeves.required true
+diff.jeeves.textconv \"$bin\" textconv
+merge.jeeves.name Jeeves (encrypted)
+merge.jeeves.driver \"$bin\" merge %O %A %B %L
+core.checkstat minimal
+core.trustctime false"
+  have=$(git -C "$REPO" config --get-regexp '^(filter|diff|merge)\.jeeves\.|^core\.(checkstat|trustctime)$')
+  [ "$(printf '%s\n' "$have" | sort)" = "$(printf '%s\n' "$want" | sort)" ] && return 0
+  printf '%s\n' "$want" | while read -r k v; do git -C "$REPO" config "$k" "$v"; done
 }
 
 # Shared files and folders under ~/.claude: synced between all devices through home/. Folders are walked
@@ -97,9 +141,13 @@ base_of() {
   awk -F'\t' -v p="$1" '$2 == p { print $1 }' "$STATE_FILE"
 }
 
-# Record (or with "-", forget) the synced hash of a path.
+# Record (or with "-", forget) the synced hash of a path. With the file holding that version, its content
+# goes into git's objects too (unreachable, so never pushed), so `git cat-file -p <base>` reads it even when
+# git stores the file encrypted.
 set_base() {
   local path=$1 hash=$2 tmp
+  [ "$(base_of "$path")" = "$hash" ] && return 0
+  [ -n "$3" ] && [ "$hash" != "-" ] && git -C "$REPO" hash-object -w --no-filters -- "$3" >/dev/null
   mkdir -p "$STATE_DIR"
   tmp=$STATE_FILE.tmp
   { [ -f "$STATE_FILE" ] && awk -F'\t' -v p="$path" '$2 != p' "$STATE_FILE"

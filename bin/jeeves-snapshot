@@ -41,6 +41,11 @@ if [ -f "$REPO/.git/MERGE_HEAD" ] || [ -n "$(git_repo status --porcelain)" ]; th
   finish 1
 fi
 
+if encrypted && [ -z "$(age_version)" ]; then
+  say "skipped, the data repo is encrypted and age is not installed here (/jeeves:setup offers to install it)"
+  finish 1
+fi
+
 # Another device cleaned up the history (jeeves-cleanup): origin/main shares no commit with main. Keep this
 # device's old history in a bundle and take the new one. Files this device changed in commits it never
 # pushed get, as their last synced version, the one it last shared with origin, so the disk loop below
@@ -51,8 +56,14 @@ switch_to_cleaned_history() {
   git_repo bundle create "$STATE_DIR/$CLEANUP_BUNDLE_NAME" main >/dev/null 2>&1
   if [ -n "$last_origin" ] && git_repo cat-file -e "$last_origin^{commit}" 2>/dev/null; then
     git_repo diff --name-only "$last_origin" HEAD -- home/ | sed 's#^home/##' | while IFS= read -r p; do
-      set_base "$p" "$(git_repo rev-parse -q --verify "$last_origin:home/$p" || echo -)"
+      if git_repo cat-file -e "$last_origin:home/$p" 2>/dev/null; then
+        git_repo cat-file --filters "$last_origin:home/$p" > "$STATE_DIR/base.sync-tmp" &&
+          set_base "$p" "$(hash_of "$STATE_DIR/base.sync-tmp")" "$STATE_DIR/base.sync-tmp"
+      else
+        set_base "$p" -
+      fi
     done
+    rm -f "$STATE_DIR/base.sync-tmp"
   else
     # Nothing known as shared: every file that differs from the repo becomes a conflict to merge.
     all_tracked | while IFS= read -r p; do set_base "$p" -; done
@@ -67,7 +78,13 @@ switch_to_cleaned_history() {
 last_origin=$(git_repo rev-parse -q --verify refs/remotes/origin/main)
 if [ $pull = 1 ] && git_repo remote get-url origin >/dev/null 2>&1; then
   if remote_git fetch -q origin main 2>/dev/null; then
-    if ! git_repo merge-base HEAD origin/main >/dev/null 2>&1 && cleaned_root origin/main; then
+    if [ "$(git_repo rev-parse HEAD)" = "$(git_repo rev-parse origin/main)" ]; then
+      :
+    elif encrypted_at origin/main && ! unlocked; then
+      say "another device encrypted the data repo; this device is locked, so its changes are not taken: run /jeeves:unlock"
+    elif encrypted_at origin/main && ! load_key; then
+      say "the data repo's key is not in this device's key store, so other devices' changes are not taken: run /jeeves:unlock"
+    elif ! git_repo merge-base HEAD origin/main >/dev/null 2>&1 && cleaned_root origin/main; then
       switch_to_cleaned_history
     elif git_repo merge-base --is-ancestor HEAD origin/main; then
       git_repo merge -q --ff-only origin/main >/dev/null
@@ -87,7 +104,7 @@ while IFS= read -r p; do
   state=$(classify "$d" "$r" "$b")
   [ "$state" = conflict ] && [ $force = 1 ] && state=disk
   case "$state" in
-    insync) set_base "$p" "$d" ;;
+    insync) set_base "$p" "$d" "$CLAUDE_HOME/$p" ;;
     disk)
       why=
       if [ "$d" != "-" ]; then
@@ -121,7 +138,13 @@ done
 for f in $HOST_FILES; do rm -f "$HOME_COPY/$f"; set_base "$f" -; done
 rm -rf "${REPO:?}/memory/${HOST:?}"
 
-git_repo add -A
+if ! err=$(git_repo add -A 2>&1); then
+  # Encryption failed (the filter is required), or git could not read a file: record nothing, so the next
+  # snapshot tries again.
+  git_repo reset -q
+  say "could not record the changes: $(printf '%s' "$err" | grep -v '^warning' | head -2 | join_lines)"
+  finish 1
+fi
 if ! git_repo diff --cached --quiet; then
   changed=$(git_repo diff --cached --name-only | sed -e 's#^home/##' -e "s#^hosts/$HOST/projects/.*#memories#" \
     -e "s#^memory/$HOST/.*#memories#" -e "s#^hosts/$HOST/#backup #" | sort -u | join_lines)
@@ -129,7 +152,7 @@ if ! git_repo diff --cached --quiet; then
     -m "Recorded by jeeves-snapshot from $CLAUDE_HOME." || { say "commit failed"; finish 1; }
   say "committed $changed"
 fi
-for p in ${taken[@]+"${taken[@]}"}; do set_base "$p" "$(hash_of "$CLAUDE_HOME/$p")"; done
+for p in ${taken[@]+"${taken[@]}"}; do set_base "$p" "$(hash_of "$CLAUDE_HOME/$p")" "$CLAUDE_HOME/$p"; done
 
 status=0
 if [ ${#refused[@]} -gt 0 ]; then

@@ -5,6 +5,8 @@
 #
 #   jeeves-cleanup <days>            clean up (days: 1 or more), after a fresh snapshot
 #   jeeves-cleanup --dry-run <days>  say what would be removed, change nothing
+#   jeeves-cleanup --all             fold all history into one commit (after turning encryption on, so no
+#                                    plain copy stays in the history on the remote)
 #   jeeves-cleanup --auto            for the session-start hook, after its snapshot: clean up when jeeves.conf
 #                                    says one is due; always exits 0, prints only what needs attention
 #
@@ -20,10 +22,11 @@
 
 . "$(dirname "$0")/../lib/lib.sh"
 
-usage() { echo "usage: jeeves-cleanup <days> | --dry-run <days> | --auto" >&2; exit 2; }
-mode=run days=
+usage() { echo "usage: jeeves-cleanup <days> | --dry-run <days> | --all | --auto" >&2; exit 2; }
+mode=run days= all=0
 case "$1" in
   --auto) mode=auto; [ $# = 1 ] || usage ;;
+  --all) all=1; [ $# = 1 ] || usage ;;
   --dry-run) mode=dry; days=$2; [ $# = 2 ] || usage ;;
   -*) usage ;;
   *) days=$1; [ $# = 1 ] || usage ;;
@@ -57,7 +60,7 @@ if [ $mode = auto ]; then
   first=$(git_repo rev-list --first-parent main 2>/dev/null | tail -1)
   [ -n "$first" ] || exit 0
   [ $((now - $(git_repo log -1 --format=%ct "$first"))) -ge $((every * 86400)) ] || exit 0
-else
+elif [ $all = 0 ]; then
   days=$(count "$days") || { say "the days to keep must be a whole number of 1 or more"; exit 2; }
 fi
 
@@ -82,10 +85,15 @@ if git_repo remote get-url origin >/dev/null 2>&1; then
 fi
 
 # The newest commit on main's first line of history that is older than the cutoff becomes the new root.
-cutoff=$((now - days * 86400))
-base=$(git_repo log --first-parent --format='%H %ct' main | awk -v c="$cutoff" '$2 <= c { print $1; exit }')
+if [ $all = 1 ]; then
+  base=$(git_repo rev-parse main) kept_what="keeping no history"
+else
+  cutoff=$((now - days * 86400))
+  base=$(git_repo log --first-parent --format='%H %ct' main | awk -v c="$cutoff" '$2 <= c { print $1; exit }')
+  kept_what="keeping $days days"
+fi
 if [ -z "$base" ] || [ -z "$(git_repo rev-list --parents -n 1 "$base" | cut -s -d' ' -f2-)" ]; then
-  [ $mode = auto ] || say "nothing older than $days days to remove"
+  if [ $all = 1 ]; then say "the history is already one commit"; else [ $mode = auto ] || say "nothing older than $days days to remove"; fi
   finish 0
 fi
 folded=$(git_repo rev-list --count "$base")
@@ -103,7 +111,7 @@ cleanup_tmp() { rm -f "$map" "$bundle.sync-tmp"; }
 fail() { cleanup_tmp; say "$*; nothing changed"; finish 1; }
 
 root=$(printf '%s\n\n%s\n' "$CLEANUP_MARK history up to $when folded into this commit" \
-  "jeeves-cleanup removed the $folded commits up to $when (keeping $days days); this commit holds the files as they were then." |
+  "jeeves-cleanup removed the $folded commits up to $when ($kept_what); this commit holds the files as they were then." |
   GIT_AUTHOR_DATE="$now +0000" GIT_COMMITTER_DATE="$now +0000" git_repo commit-tree "$base^{tree}") ||
   fail "could not write the new first commit"
 

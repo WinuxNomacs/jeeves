@@ -788,6 +788,197 @@ t_plugin_files() {
   done
 }
 
+# ---- Encryption (needs age 1.3 or later with age-plugin-batchpass on the PATH; skipped without it) ----
+
+PASS="correct horse battery staple"
+# This device encrypts: a key file store, and a dialog stand-in that answers $PASS (or what $W/answers says,
+# one line per question).
+crypt_env() {
+  export JEEVES_KEYSTORE=file JEEVES_KEY_DIR=$W/keys JEEVES_ASKPASS=$W/askpass
+  cat > "$W/askpass" <<END
+#!/bin/sh
+f="$W/answers"
+if [ -s "\$f" ]; then line=\$(head -1 "\$f"); sed 1d "\$f" > "\$f.t"; mv "\$f.t" "\$f"
+  case "\$line" in cancel) exit 1 ;; nodialog) exit 3 ;; esac; echo "\$line"
+else echo "$PASS"; fi
+END
+  chmod +x "$W/askpass"
+}
+encrypt() { "$SRC/bin/jeeves-encrypt" "$@"; }
+is_encrypted_blob() { [ "$(git -C "$1" cat-file -p "$2" | head -c 21)" = "age-encryption.org/v1" ]; }
+# Device B: its own ~/.claude, key store and a clone of the remote. Run a command as B with: as_b <cmd>.
+as_b() { JEEVES_HOST=hostb CLAUDE_HOME=$W/claudeB JEEVES_DATA=$W/repoB JEEVES_KEY_DIR=$W/keysB "$@"; }
+device_b() { mkdir -p "$W/claudeB"; git clone -q "$W/remote.git" "$W/repoB" 2>/dev/null; }
+
+t_encrypt_on_keeps_files_encrypted_in_git_and_plain_in_the_working_tree() {
+  crypt_env; snap >/dev/null; n=$(commits)
+  out=$(encrypt on); rc=$?
+  check "encrypt on succeeds" [ $rc = 0 ]
+  check "says how many files it encrypted" grep -q "encrypted 3 files and committed" <<< "$out"
+  check "one commit" [ "$(commits)" = $((n + 1)) ]
+  check "CLAUDE.md stored encrypted" is_encrypted_blob "$R" HEAD:home/CLAUDE.md
+  check "the host backup stored encrypted" is_encrypted_blob "$R" HEAD:hosts/testhost/settings.json
+  check "the working tree is plain" grep -qx "rules v1" "$R/home/CLAUDE.md"
+  check "recipient and identity.age committed" bash -c 'git -C "$1" cat-file -e HEAD:recipient && git -C "$1" cat-file -e HEAD:identity.age' _ "$R"
+  check "identity.age is passphrase-encrypted" git -C "$R" grep -q "BEGIN AGE ENCRYPTED FILE" HEAD -- identity.age
+  check "the key is in the store" grep -q "^AGE-SECRET-KEY-" "$W/keys/$(cat "$R/recipient")"
+  check "the passphrase is stored nowhere" bash -c '! grep -rqF "$1" "$2/.git" "$2/identity.age" "$3"' _ "$PASS" "$R" "$W/keys"
+  check "the data repo is clean" [ -z "$(git -C "$R" status --porcelain)" ]
+  check "a snapshot then has nothing to do" [ -z "$(snap)" ]
+  check "scan passes" "$SRC/bin/jeeves-scan" >/dev/null
+  check "status says unlocked" grep -q "^encryption	unlocked" <<< "$(encrypt status)"
+  echo "rules v2" > "$W/claude/CLAUDE.md"; snap >/dev/null
+  check "a later change is stored encrypted" is_encrypted_blob "$R" HEAD:home/CLAUDE.md
+  check "git log -p shows the plain text" grep -q "^+rules v2" <<< "$(git -C "$R" log -1 -p)"
+}
+
+t_encrypt_on_refuses_a_short_or_mismatched_passphrase_or_a_cancel() {
+  crypt_env; snap >/dev/null; n=$(commits)
+  echo "short" > "$W/answers"
+  check "a short passphrase is refused" grep -q "shorter than 12" <<< "$(encrypt on 2>&1)"
+  printf '%s\n' "$PASS" "something else entirely" > "$W/answers"
+  check "two different passphrases are refused" grep -q "differ" <<< "$(encrypt on 2>&1)"
+  echo cancel > "$W/answers"
+  check "a cancelled dialog changes nothing" grep -q "cancelled" <<< "$(encrypt on 2>&1)"
+  echo nodialog > "$W/answers"
+  out=$(encrypt on 2>&1); rc=$?
+  check "no dialog: exit 3" [ $rc = 3 ]
+  check "no dialog: says what to run in a terminal" grep -q "jeeves-encrypt\" on --terminal" <<< "$out"
+  check "no commit" [ "$(commits)" = "$n" ]
+  check "no recipient" [ ! -e "$R/recipient" ]
+  check "no key stored" [ -z "$(ls "$W/keys" 2>/dev/null)" ]
+}
+
+t_a_locked_clone_refuses_to_sync_until_unlocked() {
+  crypt_env; snap >/dev/null; encrypt on >/dev/null; git -C "$R" push -q origin main 2>/dev/null
+  device_b; echo "rules v1" > "$W/claudeB/CLAUDE.md"
+  out=$(as_b snap); rc=$?
+  check "snapshot says locked" grep -q "locked: run /jeeves:unlock" <<< "$out"
+  check "snapshot exits 1" [ $rc = 1 ]
+  as_b snap --hook >/dev/null; check "hook mode exits 0" [ $? = 0 ]
+  check "apply refuses" grep -q "locked" <<< "$(as_b apply)"
+  check "the encrypted files were not installed" grep -qx "rules v1" "$W/claudeB/CLAUDE.md"
+  echo "a wrong passphrase" > "$W/answers"
+  out=$(as_b encrypt unlock); rc=$?
+  check "a wrong passphrase is refused" grep -q "wrong passphrase" <<< "$out"
+  check "still locked" grep -q "^encryption	locked" <<< "$(as_b encrypt status)"
+  check "unlock succeeds" grep -q "unlocked" <<< "$(as_b encrypt unlock)"
+  check "the clone's files are now plain" grep -qx "rules v1" "$W/repoB/home/CLAUDE.md"
+  check "the clone is clean" [ -z "$(git -C "$W/repoB" status --porcelain)" ]
+  check "the agent is offered for install" grep -q "agents/a.md" <<< "$(as_b snap)"
+  as_b apply >/dev/null
+  check "apply installs the plain agent" grep -qx "agent v1" "$W/claudeB/agents/a.md"
+}
+
+t_a_locked_device_does_not_take_another_devices_encryption() {
+  crypt_env; snap >/dev/null; device_b; echo "rules v1" > "$W/claudeB/CLAUDE.md"; as_b snap >/dev/null
+  encrypt on >/dev/null; git -C "$R" push -q origin main 2>/dev/null
+  before=$(git -C "$W/repoB" rev-parse HEAD)
+  out=$(as_b snap)
+  check "says another device encrypted it" grep -q "another device encrypted the data repo" <<< "$out"
+  check "B's main did not move" [ "$(git -C "$W/repoB" rev-parse HEAD)" = "$before" ]
+  check "B's files are still plain" grep -qx "rules v1" "$W/repoB/home/CLAUDE.md"
+  as_b encrypt unlock >/dev/null
+  as_b snap >/dev/null
+  check "after unlocking, B takes it" [ -s "$W/repoB/recipient" ]
+  check "and its files are plain" grep -qx "rules v1" "$W/repoB/home/CLAUDE.md"
+  check "and clean" [ -z "$(git -C "$W/repoB" status --porcelain)" ]
+}
+
+t_a_key_missing_from_the_store_stops_the_pull_and_says_so() {
+  crypt_env; snap >/dev/null; encrypt on >/dev/null; git -C "$R" push -q origin main 2>/dev/null
+  device_b; as_b encrypt unlock >/dev/null
+  echo "rules v2" > "$W/claude/CLAUDE.md"; snap >/dev/null; git -C "$R" push -q origin main 2>/dev/null
+  rm -f "$W/keysB"/*
+  before=$(git -C "$W/repoB" rev-parse HEAD)
+  check "says the key is not in the store" grep -q "not in this device's key store" <<< "$(as_b snap)"
+  check "main did not move" [ "$(git -C "$W/repoB" rev-parse HEAD)" = "$before" ]
+}
+
+t_a_failing_encryption_never_commits_plain_text() {
+  crypt_env; snap >/dev/null; encrypt on >/dev/null; n=$(commits)
+  printf '#!/bin/sh\n[ "$1" = --version ] && echo v1.3.2\nexit 1\n' > "$W/broken-age"; chmod +x "$W/broken-age"
+  echo "rules v2" > "$W/claude/CLAUDE.md"
+  out=$(JEEVES_AGE=$W/broken-age snap); rc=$?
+  check "says it could not record" grep -q "could not record" <<< "$out"
+  check "exit 1" [ $rc = 1 ]
+  check "no commit" [ "$(commits)" = "$n" ]
+  check "no plain text in any commit" bash -c '! git -C "$1" log -p --no-textconv --all | grep -q "rules v2"' _ "$R"
+  out=$(PATH=/usr/bin:/bin JEEVES_AGE=/nonexistent/age snap)
+  check "without age, snapshot says so before copying anything" grep -q "age is not installed" <<< "$out"
+}
+
+t_merges_of_encrypted_files_combine_both_sides_and_show_conflicts_in_plain_text() {
+  crypt_env; snap >/dev/null; encrypt on >/dev/null
+  printf 'one\ntwo\nthree\n' > "$R/home/agents/m.md"; git -C "$R" add home/agents/m.md; git -C "$R" commit -qm base
+  git -C "$R" switch -qc side; printf 'one\ntwo\nthree\nfour\n' > "$R/home/agents/m.md"; git -C "$R" commit -qam side
+  git -C "$R" switch -q main; printf 'zero\none\ntwo\nthree\n' > "$R/home/agents/m.md"; git -C "$R" commit -qam main
+  git -C "$R" -c core.autocrlf=false merge -q --no-ff side -m merged
+  check "both sides' additions kept" [ "$(cat "$R/home/agents/m.md")" = "$(printf 'zero\none\ntwo\nthree\nfour')" ]
+  check "the merge result is stored encrypted" is_encrypted_blob "$R" HEAD:home/agents/m.md
+  git -C "$R" switch -qc other HEAD~1; echo X1 > "$R/home/agents/m.md"; git -C "$R" commit -qam x1
+  git -C "$R" switch -q main; echo X2 > "$R/home/agents/m.md"; git -C "$R" commit -qam x2
+  git -C "$R" -c core.autocrlf=false merge -q other -m conflict >/dev/null 2>&1
+  check "a true conflict stops the merge" [ -f "$R/.git/MERGE_HEAD" ]
+  check "the conflict markers are plain text" grep -q "^<<<<<<< ours" "$R/home/agents/m.md"
+  git -C "$R" merge --abort
+}
+
+t_scan_refuses_a_file_that_would_be_pushed_unencrypted() {
+  crypt_env; snap >/dev/null; encrypt on >/dev/null; git -C "$R" push -q origin main 2>/dev/null
+  echo plain > "$R/home/agents/p.md"
+  git -C "$R" -c filter.jeeves.clean=cat add home/agents/p.md; git -C "$R" commit -qm plain
+  out=$("$SRC/bin/jeeves-scan"); rc=$?
+  check "names the file" grep -q "not encrypted: home/agents/p.md" <<< "$out"
+  check "exit 1" [ $rc = 1 ]
+}
+
+t_cleanup_all_leaves_one_encrypted_commit_and_another_device_follows() {
+  crypt_env; snap >/dev/null; git -C "$R" push -q origin main 2>/dev/null
+  device_b; echo "rules v1" > "$W/claudeB/CLAUDE.md"; as_b snap >/dev/null; as_b apply >/dev/null
+  encrypt on >/dev/null
+  out=$("$SRC/bin/jeeves-cleanup" --all); rc=$?
+  check "cleanup --all succeeds" [ $rc = 0 ]
+  check "one commit left" [ "$(git -C "$R" rev-list --count HEAD)" = 1 ]
+  check "pushed" [ "$(git -C "$W/remote.git" rev-parse main)" = "$(git -C "$R" rev-parse HEAD)" ]
+  check "no plain copy of CLAUDE.md is left on the remote" bash -c '! git -C "$1" log -p --no-textconv --all | grep -q "^+rules v1"' _ "$W/remote.git"
+  check "a second --all has nothing to do" grep -q "already one commit" <<< "$("$SRC/bin/jeeves-cleanup" --all)"
+  as_b encrypt unlock >/dev/null
+  out=$(as_b snap)
+  check "B switches to the new history" grep -q "switched to it" <<< "$out"
+  check "B's files are plain and the same" grep -qx "rules v1" "$W/repoB/home/CLAUDE.md"
+  check "B is clean" [ -z "$(git -C "$W/repoB" status --porcelain)" ]
+}
+
+t_a_new_passphrase_opens_the_key_and_the_old_one_no_longer_does() {
+  crypt_env; snap >/dev/null; encrypt on >/dev/null
+  rec=$(cat "$R/recipient")
+  NEW="a much better passphrase than before"
+  printf '%s\n' "$NEW" "$NEW" > "$W/answers"
+  check "says set" grep -q "new passphrase set" <<< "$(encrypt passphrase)"
+  check "the recipient is unchanged" [ "$(cat "$R/recipient")" = "$rec" ]
+  check "the new passphrase opens identity.age" bash -c 'AGE_PASSPHRASE=$1 age -d -j batchpass "$2" | grep -q AGE-SECRET-KEY' _ "$NEW" "$R/identity.age"
+  check "the old one no longer does" bash -c '! AGE_PASSPHRASE=$1 age -d -j batchpass "$2" >/dev/null 2>&1' _ "$PASS" "$R/identity.age"
+}
+
+t_lock_removes_the_key_and_the_scripts_then_refuse() {
+  crypt_env; snap >/dev/null; encrypt on >/dev/null
+  check "says locked" grep -q "locked" <<< "$(encrypt lock)"
+  check "the key is gone from the store" [ -z "$(ls "$W/keys")" ]
+  check "status says locked" grep -q "^encryption	locked" <<< "$(encrypt status)"
+  check "snapshot refuses" grep -q "locked: run /jeeves:unlock" <<< "$(snap)"
+}
+
+t_the_base_of_an_encrypted_file_stays_readable() {
+  crypt_env; snap >/dev/null; encrypt on >/dev/null
+  echo "rules only ever stored encrypted" > "$W/claude/CLAUDE.md"; snap >/dev/null
+  echo "rules disk" > "$W/claude/CLAUDE.md"
+  echo "rules repo" > "$R/home/CLAUDE.md"; git -C "$R" commit -qam repo
+  base=$("$SRC/bin/jeeves-status" | awk -F'\t' '$2 == "CLAUDE.md" { print $5 }')
+  check "status gives a base" [ -n "$base" ] && [ "$base" != none ]
+  check "git cat-file -p reads the base as plain text" grep -qx "rules only ever stored encrypted" <<< "$(git -C "$R" cat-file -p "$base")"
+}
+
 run_test "snapshot does nothing when disk matches the repo" t_nothing_changed
 run_test "snapshot commits a changed CLAUDE.md" t_disk_change_committed
 run_test "snapshot skips when the repo has uncommitted changes" t_dirty_repo_skips
@@ -837,6 +1028,24 @@ run_test "a deadline stops a hung command by its PID" t_deadline_stops_a_hung_co
 run_test "github find lists the user's data repos once each, and fails cleanly" t_github_finds_data_repos
 run_test "github create makes a private repo with the jeeves-data topic, and reports a taken name" t_github_creates_a_private_data_repo
 run_test "the manifests and hooks.json are valid and wire up the hooks" t_plugin_files
+
+# Encryption tests need age 1.3+ with age-plugin-batchpass.
+if v=$(age --version 2>/dev/null) && command -v age-plugin-batchpass >/dev/null 2>&1; then
+  run_test "encrypt on keeps files encrypted in git and plain in the working tree" t_encrypt_on_keeps_files_encrypted_in_git_and_plain_in_the_working_tree
+  run_test "encrypt on refuses a short or mismatched passphrase, a cancel, and no dialog" t_encrypt_on_refuses_a_short_or_mismatched_passphrase_or_a_cancel
+  run_test "a locked clone refuses to sync until unlocked" t_a_locked_clone_refuses_to_sync_until_unlocked
+  run_test "a locked device does not take another device's encryption" t_a_locked_device_does_not_take_another_devices_encryption
+  run_test "a key missing from the store stops the pull and says so" t_a_key_missing_from_the_store_stops_the_pull_and_says_so
+  run_test "a failing encryption never commits plain text" t_a_failing_encryption_never_commits_plain_text
+  run_test "merges of encrypted files combine both sides and show conflicts in plain text" t_merges_of_encrypted_files_combine_both_sides_and_show_conflicts_in_plain_text
+  run_test "scan refuses a file that would be pushed unencrypted" t_scan_refuses_a_file_that_would_be_pushed_unencrypted
+  run_test "cleanup --all leaves one encrypted commit, and another device follows" t_cleanup_all_leaves_one_encrypted_commit_and_another_device_follows
+  run_test "a new passphrase opens the key and the old one no longer does" t_a_new_passphrase_opens_the_key_and_the_old_one_no_longer_does
+  run_test "lock removes the key and the scripts then refuse" t_lock_removes_the_key_and_the_scripts_then_refuse
+  run_test "the base of an encrypted file stays readable" t_the_base_of_an_encrypted_file_stays_readable
+else
+  echo "skip encryption tests: age 1.3 or later with age-plugin-batchpass is not on the PATH"
+fi
 
 echo "$passed passed, $failed failed"
 [ $failed = 0 ]
