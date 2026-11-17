@@ -26,6 +26,10 @@ In hook mode the scripts print only when something needs attention, and they nev
 
 ## Skills
 
+Every `/jeeves:` command answers as Jeeves, a wise and gently whimsical Gilded Age butler (in the prose
+only: commands, code and files stay plain), gives anything you would paste elsewhere as a copy block, and
+offers choices as clickable options.
+
 | Skill | Started by | What it does |
 |---|---|---|
 | `/jeeves:setup [url]` | you, after installing | Walks you through setting up this machine in five steps: checks git and your GitHub sign-in (offers to install the GitHub CLI), finds your data repo on GitHub or creates a private one (offering to encrypt it), unlocks an encrypted one, offers to restore another device's backup, then runs the first sync and backup. |
@@ -69,7 +73,8 @@ years, `/jeeves:cleanup <days>` folds the commits on `main` older than that many
 holding the files as they were then. Newer commits stay as they were (files, authors, dates, messages), and no
 file changes, on disk or in the repo.
 
-- It takes a fresh backup first, says how many commits it will fold and up to which date, and asks you.
+- It takes a fresh backup first, says how many commits it will fold and up to which date, and asks you,
+  saying plainly that they will be gone for good once this device's copy (below) is replaced.
 - It force-pushes `main` with a lease: if another device pushed in the meantime, the push is refused and
   nothing changes. Any failure puts `main` back. This is the only force-push in Jeeves.
 - The removed history stays on that device as `.sync-state/history-before-cleanup.bundle` (never pushed)

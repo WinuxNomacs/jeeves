@@ -27,6 +27,17 @@ The automatic cleanup is set in `jeeves.conf` at the top of the data repo, share
 `keep_days=<n>` (1 or more) and `auto_every_days=<m>` (at least `keep_days`). At each session start, the
 hook cleans up when the history's first commit is `m` days old.
 
+## Voice
+
+Speak as Jeeves: a wise, gently whimsical English butler of the Gilded Age, courteous and unflappable, with
+a dry wit ("If I may...", "I have taken the liberty of..."). Keep it to the prose around the facts (a
+greeting, a transition, a closing line), never at the cost of clarity, accuracy or brevity, and without
+gendered forms of address. Code, commands, file contents, commit messages and the text written into
+CLAUDE.md stay plain. Data meant for another program (a command, a path, a URL, a value to paste) goes in
+its own fenced code block, so it copies with one click. Whenever the user chooses, ask with
+AskUserQuestion: the obvious options, the recommended one first; they can still type their own under
+"Other".
+
 ## Steps
 
 1. Run `JEEVES_DATA="${user_config.data_repo}" jeeves-status` and note its `datarepo` line; if it says no
@@ -34,9 +45,13 @@ hook cleans up when the history's first commit is `m` days old.
    `cd <datarepo path> &&`.
 2. **No request:** show `jeeves.conf` (or say there is none, so no automatic cleanup) and ask what to do.
 3. **`<days>`** (a whole number, 1 or more): run `jeeves-cleanup --dry-run <days>` and show its line. If it
-   finds nothing to remove, say so and stop. Otherwise ask the user to confirm with AskUserQuestion, naming
-   how many commits are folded and up to which date. On a yes, run `jeeves-cleanup <days>` and report its
-   last line. If it stopped, report why (a refused push changed nothing; it can be run again).
+   finds nothing to remove, say so and stop. Otherwise make sure the user understands what they lose before
+   asking: those commits (their history, not the files, which stay as they are) are removed from GitHub and
+   from every device; this device keeps them in `.sync-state/history-before-cleanup.bundle` only until the
+   next cleanup replaces it, and after that they are gone for good (GitHub may keep unreachable copies for a
+   while, outside Jeeves' control). Then ask with AskUserQuestion, naming how many commits and up to which
+   date, with the options "Yes, remove them permanently" and "No, keep them". On a yes, run
+   `jeeves-cleanup <days>` and report its last line. If it stopped, report why (a refused push changed nothing; it can be run again).
 4. **`auto <every> [<keep>]`:** `<keep>` defaults to the current `keep_days`, or to `<every>` when there is
    none. Refuse if either is not a whole number of 1 or more, or `<every>` is below `<keep>`.
    **`off`:** remove the `auto_every_days` line (keep `keep_days`).

@@ -9,11 +9,7 @@
   (0.2.1, `./`); an older Claude Code refuses `userConfig` (README: update first); setup's restore question
   never asked (0.2.2). Left: the edit hook (a direct edit, not through `/jeeves:update`), the restored
   settings' paths, the history cleanup on macOS, encryption on macOS.
-- **Then:** 2. Cleanup warning (from `new.md`): the manual cleanup's confirmation says plainly that the
-  folded commits will be gone. 3. Butler persona and reply conventions (from `new.md`, to discuss first):
-  Jeeves answers as a wise and whimsical Gilded Age English butler, gives data meant for another program as
-  a one-click copy block, and offers clickable answer options.
-- **Later:** 4. Per-device overlay (only if a shared file must differ per host) · Anthropic directory
+- **Later:** 2. Per-device overlay (only if a shared file must differ per host) · Anthropic directory
   submission (only on the user's direct command)
 
 ## Done
@@ -72,6 +68,11 @@
   lost in a pipe, a progress record on stderr, Cancel returned as an empty answer). Not run live yet: a real
   `/jeeves:encrypt` (the user's call), the Keychain and macOS dialog (macOS phase), `secret-tool` and zenity.
   Details below under "2. Encryption".
+- 3. Cleanup warning (2026-11-17, from `new.md`): `skills/cleanup/SKILL.md` step 3 and `/jeeves:encrypt`'s
+  question say the folded commits go for good; README; a check in `tests/run.sh`. Details below.
+- 4. Butler persona and reply conventions (2026-11-17, from `new.md`): a "Voice" section, the same in every
+  skill (a check keeps them equal); README. Copy blocks and clickable options are also rules in the global
+  CLAUDE.md (written through `/jeeves:update`). Release 0.7.0. Details below.
 
 ---
 
@@ -747,7 +748,7 @@ and its last backup stays in `hosts/RAIVEN-win/`. WSL and native Windows on one 
 Credential Manager entry for the key, so `/jeeves:lock` on one locks both. The user tags releases (or asks Claude to, for one tag at a time; this repo's tags are
 annotated: `git tag -a`); nothing goes to Anthropic's directory without the user's direct command.
 
-## 2. Cleanup warning (planned 2026-11-17, from `new.md`)
+## 3. Cleanup warning (done)
 
 **Request:** "When cleanup is ran manually, double check with the user before moving forward so they
 understand that commits older than the given number of days will be gone forever."
@@ -762,7 +763,7 @@ outside Jeeves' control). The files themselves do not change.
 **Proposed:** reword step 3's question (and the README) so the answer options say it: "Yes, remove them
 permanently" / "No, keep them". Same for `/jeeves:encrypt`'s fold. Text-only change: no rehearsal needed.
 
-## 3. Butler persona and reply conventions (planned 2026-11-17, from `new.md`; to discuss)
+## 4. Butler persona and reply conventions (done)
 
 **Requests:**
 - "Can the Jeeves plugin imitate a persona so that its responses are always that of a wise & whimsical
@@ -794,7 +795,14 @@ permanently" / "No, keep them". Same for `/jeeves:encrypt`'s fold. Text-only cha
 - P4. Tone limits: never at the cost of the global style rules (concise, no emojis, accuracy first)?
   Whimsy in greetings and asides only, never inside code, commands, commit messages or files?
 
-## 4. Per-device overlay
+**Decisions (2026-11-17, with the user):** P1 the `/jeeves:` skills only; P2 no output style (an output
+style would change every reply, so none is shipped); P3 both: in the skills and as global CLAUDE.md rules;
+P4 not asked, built as proposed (prose only, global style rules win, no gendered forms of address). Built
+before the macOS phase.
+
+**As built:** the "Voice" section sits before each skill's first section (`lock` gained a "Steps" heading).
+
+## 2. Per-device overlay
 
 Mostly obsolete since Generic made `settings.json` and `keybindings.json` per host. Only needed if a shared
 file (a `CLAUDE.md` rule, a skill) ever has to differ between hosts: then decide host vs platform scope and

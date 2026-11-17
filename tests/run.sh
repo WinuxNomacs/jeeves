@@ -797,6 +797,12 @@ t_plugin_files() {
     check "the $k skill keeps the passphrase out of the chat" grep -qi "passphrase never goes through" "$SRC/skills/$k/SKILL.md"
   done
   check "the update skill sends a locked device to /jeeves:unlock" grep -q "point the user to \`/jeeves:unlock\`" "$SRC/skills/update/SKILL.md"
+  voice=$(awk '/^## Voice$/ { on = 1 } on && /^## / && !/^## Voice$/ { exit } on' "$SRC/skills/update/SKILL.md")
+  for f in "$SRC"/skills/*/SKILL.md; do
+    check "$f has the same Voice section as the update skill" [ "$(awk '/^## Voice$/ { on = 1 } on && /^## / && !/^## Voice$/ { exit } on' "$f")" = "$voice" ]
+  done
+  check "the Voice section asks for copy blocks and clickable options" bash -c 'grep -q "fenced code block" <<< "$1" && grep -q "AskUserQuestion" <<< "$1"' _ "$voice"
+  check "the cleanup confirmation says the commits go permanently" grep -q '"Yes, remove them permanently"' "$SRC/skills/cleanup/SKILL.md"
   for k in setup restore cleanup encrypt unlock lock; do
     sk=$SRC/skills/$k/SKILL.md
     check "$k skill is named $k" grep -q "^name: $k\$" "$sk"
