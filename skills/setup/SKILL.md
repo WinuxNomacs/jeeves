@@ -2,13 +2,14 @@
 name: setup
 description: >-
   Set up Jeeves on this machine, step by step: check git and GitHub access, find the user's data repo on
-  GitHub or create a private one, offer to restore another machine's settings, then run the first sync and
-  backup. Use after installing the plugin.
+  GitHub or create a private one (offering to encrypt it with a passphrase), unlock an encrypted one, offer
+  to restore another machine's settings, then run the first sync and backup. Use after installing the plugin.
 argument-hint: "[git URL of an existing data repo]"
 disable-model-invocation: true
 allowed-tools:
   - Bash(jeeves-check)
   - Bash(jeeves-github find)
+  - Bash(jeeves-encrypt status)
   - Bash(jeeves-status)
   - Bash(jeeves-restore)
   - Bash(git status:*)
@@ -22,7 +23,7 @@ Argument (a URL of an existing data repo, or nothing): $ARGUMENTS
 Jeeves keeps the user's shared global preferences (`~/.claude/CLAUDE.md`, `agents/`, `commands/`, `skills/`)
 in a private git repo of their own, the **data repo**, under `home/`, and each machine's backup of its
 `settings.json`, `keybindings.json` and memories under `hosts/<host>/`. The commands `jeeves-check`,
-`jeeves-github`, `jeeves-status`, `jeeves-restore` and `jeeves-init` are on the Bash PATH.
+`jeeves-github`, `jeeves-status`, `jeeves-restore`, `jeeves-init` and `jeeves-encrypt` are on the Bash PATH.
 
 ## How to guide
 
@@ -32,7 +33,8 @@ and what happens next. Every choice is an AskUserQuestion with the recommended o
 picks rather than types; ask for typing only for a URL or a name. Never search for credentials, and never
 ask for a password or token: sign-ins are the user's own, in their terminal. Never copy credentials,
 `~/.claude.json`, history or transcripts anywhere. Anything that installs software or changes global
-settings is shown as the exact command and run only after the user agrees.
+settings is shown as the exact command and run only after the user agrees. A passphrase never goes through
+the chat: `jeeves-encrypt` asks for it in a window of the OS (see `/jeeves:encrypt` for how to handle that).
 
 Start by running `JEEVES_DATA="${user_config.data_repo}" jeeves-check` (an empty option is fine: it then
 uses `~/jeeves-data`). Its lines (tab-separated) are the facts for the steps below; run it again after
@@ -83,6 +85,15 @@ The folder on this machine is the `datarepo` path.
 - **Create:** `jeeves-github create <name>` (it prints `<owner/name>\t<clone url>`; a taken name: ask for
   another), then `jeeves-init "<datarepo path>" "<clone url>"`. Nothing is pushed until step 5. Without `gh`,
   `jeeves-init "<datarepo path>" "<url>"` with the URL of the empty repo the user made.
+- **Encrypt** (only a repo just created): now, before anything is pushed, is the best time. Ask "Encrypt your
+  data with a passphrase?" (recommended first), explaining in one or two sentences: GitHub then holds only
+  encrypted files; each device asks for the passphrase once; a passphrase lost on every device means the data
+  can't be read. Options: "Yes, encrypt it", "Not now (/jeeves:encrypt later)". On a yes, follow
+  `/jeeves:encrypt` steps 1 and 2 with these changes: no sync first, no question again, and no
+  `jeeves-cleanup --all` (there is no history to remove yet). Start the commands with
+  `cd "<datarepo path>" &&`.
+- **Unlock** (after a clone): `cd "<datarepo path>" && jeeves-encrypt status`. With `encryption locked`, the
+  repo is encrypted: follow `/jeeves:unlock` steps 1 and 2 before going on.
 
 ## Step 4 of 5: Settings from another machine
 
@@ -111,4 +122,5 @@ Report in a few lines: where the data repo is (folder and GitHub repo), whether 
 the first sync merged or installed, and what happens from now on: a snapshot at every session start and after
 each edit Claude makes to `~/.claude/CLAUDE.md`; `/jeeves:update` to sync by hand or change a preference;
 on another device, install Jeeves and run `/jeeves:setup`, which finds this data repo by itself when that
-device is signed in to GitHub with `gh`.
+device is signed in to GitHub with `gh` (and asks for the passphrase if it is encrypted). Without encryption,
+mention `/jeeves:encrypt` in one line.

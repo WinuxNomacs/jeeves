@@ -8,6 +8,9 @@
 #   gh-protocol  https | ssh | skip                      how gh clones (its git_protocol setting)
 #   ssh-github   ok <login> | fail <why> | skip          an SSH key GitHub accepts
 #   gh-install   <command> | none                        how to install gh here (run only after the user agrees)
+#   age          ok <version> | old <version> | missing    age, for encryption (1.3.0 or later, with age-plugin-batchpass)
+#   age-install  <command> | none                        how to install age here (none: the release download)
+#   keystore     keychain | wincred | secret-service | none  where an encryption key would be kept
 #   datarepo     <path> repo | empty | missing | other
 #
 # datarepo: the data repo folder ($JEEVES_DATA, the plugin option data_repo, or ~/jeeves-data), ~/ expanded. repo: a git
@@ -66,6 +69,20 @@ case "$os" in
     fi ;;
 esac
 line gh-install "$install"
+
+v=$(age_version)
+if [ -z "$v" ]; then line age missing
+elif version_at_least "$v" "$AGE_MIN_VERSION" && command -v age-plugin-batchpass >/dev/null 2>&1; then line age ok "$v"
+else line age old "$v"
+fi
+# Linux packages are often older than 1.3 (Ubuntu 24.04 apt: 1.2.1), so only Homebrew is offered there.
+install=none
+case "$os" in
+  windows) { command -v winget >/dev/null 2>&1 || command -v winget.exe >/dev/null 2>&1; } && install="winget install --id FiloSottile.age -e" ;;
+  *) command -v brew >/dev/null 2>&1 && install="brew install age" ;;
+esac
+line age-install "$install"
+line keystore "$(keystore_kind)"
 
 dir=$(expand_path "${JEEVES_DATA:-${CLAUDE_PLUGIN_OPTION_DATA_REPO:-$DEFAULT_DATA_REPO}}")
 if [ ! -e "$dir" ]; then line datarepo "$dir" missing

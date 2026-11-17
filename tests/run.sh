@@ -689,6 +689,18 @@ t_check_reports_a_signed_in_machine() {
   check "never adds GitHub's host key itself" grep -q "StrictHostKeyChecking=yes" "$FAKE_LOG"
   check "the data repo is there" [ "$(field datarepo <<< "$out")" = "$R	repo" ]
   check "an install line" grep -q "^gh-install	" <<< "$out"
+  check "age and its install line reported" bash -c 'grep -q "^age	" <<< "$1" && grep -q "^age-install	" <<< "$1"' _ "$out"
+  check "the key store reported" grep -Eq "^keystore	(keychain|wincred|secret-service|none)$" <<< "$out"
+}
+
+t_check_reports_age_as_missing_old_or_ok() {
+  fake_tools
+  printf '#!/bin/sh\necho v1.2.1\n' > "$W/bin/old-age"; chmod +x "$W/bin/old-age"
+  check "age missing" [ "$(JEEVES_AGE=$W/bin/no-age check_cmd | field age)" = missing ]
+  check "age 1.2 is too old" [ "$(JEEVES_AGE=$W/bin/old-age check_cmd | field age)" = "old	1.2.1" ]
+  printf '#!/bin/sh\necho v1.3.2\n' > "$W/bin/new-age"; chmod +x "$W/bin/new-age"
+  printf '#!/bin/sh\n' > "$W/bin/age-plugin-batchpass"; chmod +x "$W/bin/age-plugin-batchpass"
+  check "age 1.3.2 with batchpass is ok" [ "$(PATH=$W/bin:$PATH JEEVES_AGE=$W/bin/new-age check_cmd | field age)" = "ok	1.3.2" ]
 }
 
 t_check_reports_what_is_missing_or_failing() {
@@ -780,7 +792,12 @@ t_plugin_files() {
   check "setup walks through five numbered steps, starting from jeeves-check" bash -c 'grep -q "## Step 1 of 5" "$1" && grep -q "## Step 5 of 5" "$1" && grep -q "jeeves-check" "$1"' _ "$SRC/skills/setup/SKILL.md"
   check "setup finds or creates the data repo through jeeves-github" bash -c 'grep -q "jeeves-github find" "$1" && grep -q "jeeves-github create" "$1"' _ "$SRC/skills/setup/SKILL.md"
   check "the data_repo option defaults to ~/jeeves-data" grep -q '"default": "~/jeeves-data"' "$SRC/.claude-plugin/plugin.json"
-  for k in setup restore cleanup; do
+  check "setup offers encryption for a new repo and unlocks an encrypted clone" bash -c 'grep -q "^- \*\*Encrypt\*\*" "$1" && grep -q "^- \*\*Unlock\*\*" "$1"' _ "$SRC/skills/setup/SKILL.md"
+  for k in encrypt unlock setup; do
+    check "the $k skill keeps the passphrase out of the chat" grep -qi "passphrase never goes through" "$SRC/skills/$k/SKILL.md"
+  done
+  check "the update skill sends a locked device to /jeeves:unlock" grep -q "point the user to \`/jeeves:unlock\`" "$SRC/skills/update/SKILL.md"
+  for k in setup restore cleanup encrypt unlock lock; do
     sk=$SRC/skills/$k/SKILL.md
     check "$k skill is named $k" grep -q "^name: $k\$" "$sk"
     check "only the user starts the $k skill" grep -q '^disable-model-invocation: true$' "$sk"
@@ -808,7 +825,7 @@ encrypt() { "$SRC/bin/jeeves-encrypt" "$@"; }
 is_encrypted_blob() { [ "$(git -C "$1" cat-file -p "$2" | head -c 21)" = "age-encryption.org/v1" ]; }
 # Device B: its own ~/.claude, key store and a clone of the remote. Run a command as B with: as_b <cmd>.
 as_b() { JEEVES_HOST=hostb CLAUDE_HOME=$W/claudeB JEEVES_DATA=$W/repoB JEEVES_KEY_DIR=$W/keysB "$@"; }
-device_b() { mkdir -p "$W/claudeB"; git clone -q "$W/remote.git" "$W/repoB" 2>/dev/null; }
+device_b() { mkdir -p "$W/claudeB"; git clone -q -c core.autocrlf=false "$W/remote.git" "$W/repoB" 2>/dev/null; }
 
 t_encrypt_on_keeps_files_encrypted_in_git_and_plain_in_the_working_tree() {
   crypt_env; snap >/dev/null; n=$(commits)
@@ -904,7 +921,7 @@ t_a_failing_encryption_never_commits_plain_text() {
   check "exit 1" [ $rc = 1 ]
   check "no commit" [ "$(commits)" = "$n" ]
   check "no plain text in any commit" bash -c '! git -C "$1" log -p --no-textconv --all | grep -q "rules v2"' _ "$R"
-  out=$(PATH=/usr/bin:/bin JEEVES_AGE=/nonexistent/age snap)
+  out=$(JEEVES_AGE=/nonexistent/age snap)
   check "without age, snapshot says so before copying anything" grep -q "age is not installed" <<< "$out"
 }
 
@@ -969,6 +986,15 @@ t_lock_removes_the_key_and_the_scripts_then_refuse() {
   check "snapshot refuses" grep -q "locked: run /jeeves:unlock" <<< "$(snap)"
 }
 
+t_a_new_data_repo_encrypted_before_its_first_snapshot_never_holds_plain_text() {
+  crypt_env
+  "$SRC/bin/jeeves-init" "$W/fresh" >/dev/null; export JEEVES_DATA=$W/fresh R=$W/fresh
+  check "encrypt on works on an empty data repo" grep -q "encrypted 0 files" <<< "$(encrypt on)"
+  snap >/dev/null
+  check "the first snapshot's CLAUDE.md is stored encrypted" is_encrypted_blob "$R" HEAD:home/CLAUDE.md
+  check "no plain text anywhere in its history" bash -c '! git -C "$1" log -p --no-textconv --all | grep -q "rules v1"' _ "$R"
+}
+
 t_the_base_of_an_encrypted_file_stays_readable() {
   crypt_env; snap >/dev/null; encrypt on >/dev/null
   echo "rules only ever stored encrypted" > "$W/claude/CLAUDE.md"; snap >/dev/null
@@ -1024,6 +1050,7 @@ run_test "the automatic cleanup runs only when jeeves.conf turns it on and it is
 run_test "check reports a signed-in machine: git, gh, GitHub login, protocol, SSH key, data repo" t_check_reports_a_signed_in_machine
 run_test "check reports a missing gh, a signed-out gh, no SSH key and an unknown host key" t_check_reports_what_is_missing_or_failing
 run_test "check reports the data repo folder as missing, empty or other, with ~/ expanded and ~/jeeves-data by default" t_check_reports_each_data_repo_state
+run_test "check reports age as missing, too old or ok" t_check_reports_age_as_missing_old_or_ok
 run_test "a deadline stops a hung command by its PID" t_deadline_stops_a_hung_command
 run_test "github find lists the user's data repos once each, and fails cleanly" t_github_finds_data_repos
 run_test "github create makes a private repo with the jeeves-data topic, and reports a taken name" t_github_creates_a_private_data_repo
@@ -1043,6 +1070,7 @@ if v=$(age --version 2>/dev/null) && command -v age-plugin-batchpass >/dev/null 
   run_test "a new passphrase opens the key and the old one no longer does" t_a_new_passphrase_opens_the_key_and_the_old_one_no_longer_does
   run_test "lock removes the key and the scripts then refuse" t_lock_removes_the_key_and_the_scripts_then_refuse
   run_test "the base of an encrypted file stays readable" t_the_base_of_an_encrypted_file_stays_readable
+  run_test "a new data repo encrypted before its first snapshot never holds plain text" t_a_new_data_repo_encrypted_before_its_first_snapshot_never_holds_plain_text
 else
   echo "skip encryption tests: age 1.3 or later with age-plugin-batchpass is not on the PATH"
 fi
