@@ -2,6 +2,16 @@
 
 A new version reaches installed copies only when `version` in `.claude-plugin/plugin.json` changes.
 
+## 0.5.0 (2026-11-17)
+
+- **Guided setup.** `/jeeves:setup` walks you through five steps: tools, GitHub access (it offers to install
+  the GitHub CLI and has you sign in with `! gh auth login`), your data repo (found on GitHub by its
+  `jeeves-data` topic, or created as a private `jeeves-data` repo), settings from another machine, first sync.
+- The `data_repo` option defaults to `~/jeeves-data`, and Jeeves uses that folder when the option is unset.
+  A machine not set up yet is told so at each session start, with `/jeeves:setup` to run.
+- New commands `jeeves-check` (read-only facts for setup) and `jeeves-github` (`find`, `create <name>`).
+- Every call to GitHub from these commands has a deadline.
+
 ## 0.4.0 (2026-11-17)
 
 - **Session review in `/jeeves:update`.** When you run it, Claude first goes through the session for what it
