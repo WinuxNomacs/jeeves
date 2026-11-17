@@ -2,8 +2,8 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** 1. Release procedure (a repo skill) · 2. Encryption tests everywhere (age in CI and on
-  RAIVEN) · 3. Pre-release review of the whole plugin, then the release (the `v1.0.0` tag is on hold)
+- **Up next:** 1. Encryption tests everywhere (age in CI and on RAIVEN) · 2. Pre-release review of the
+  whole plugin, then the release (the `v1.0.0` tag is on hold)
 - **Later:** 4. Per-device overlay (only if a shared file must differ per host) · Anthropic directory
   submission (only on the user's direct command)
 
@@ -78,7 +78,10 @@
 - Release 1.0.0 (2026-11-17): version and `CHANGELOG.md` only (no code change since 0.7.0, so no upgrade
   rehearsal); full suite and the test workflow run by hand on the release branch (Linux, Windows, macOS).
   Tags `v0.3.0` to `v0.7.0` were never pushed. The `v1.0.0` tag is on hold (2026-11-17): the release had no
-  code review, so phase 3 reviews first and the release is bumped (1.0.1) if anything changes.
+  code review, so the pre-release review comes first and the release is bumped (1.0.1) if anything changes.
+- 6. Release procedure (2026-11-17): `.claude/skills/release/SKILL.md` (`/release`), pointed to from
+  `.claude/CLAUDE.md`; it includes the review for bugs, interaction breakdowns and secret leaks, and lists
+  untagged release merges. Details below under "Release procedure (done)".
 
 ---
 
@@ -852,7 +855,10 @@ leaks no secret anywhere.
 **Builds on:** the release steps used so far (global "Packages the user owns", this repo's `CLAUDE.md`), the
 test workflow, `tests/run.sh`.
 
-### 1. Release procedure
+### Release procedure (done)
+
+Built as `.claude/skills/release/SKILL.md`, pointed to from `.claude/CLAUDE.md` (Working on the plugin,
+Layout). The user tags when they say so; then Claude runs the tag command for that release. Planned steps:
 
 `.claude/skills/release/SKILL.md`, pointed to from `.claude/CLAUDE.md`. Steps:
 
@@ -889,7 +895,7 @@ test workflow, `tests/run.sh`.
 9. **After:** the user tags; the tag's run is green; then `claude plugin marketplace update` and
    `claude plugin update` in the scratch config show the new version's cache folder; clone installs pull.
 
-### 2. Encryption tests everywhere
+### 1. Encryption tests everywhere
 
 The 13 encryption tests skip without age 1.3+: RAIVEN's apt has 1.2.1 and the workflow installs none, so
 for 1.0.0 they ran only by hand on the Mac.
@@ -900,7 +906,7 @@ for 1.0.0 they ran only by hand on the Mac.
 - RAIVEN: age 1.3+ from the release download into `~/.local/bin` (user-level; the command shown first).
 - Vet age's current state from its repo and releases first, and record the evidence here.
 
-### 3. Pre-release review and release
+### 2. Pre-release review and release
 
 Run the procedure on the whole plugin (not only the diff since 0.7.0: no release has had this review),
 fix what it finds, then release (1.0.1 if anything changed, else tag 1.0.0 as merged).
