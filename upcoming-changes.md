@@ -2,11 +2,11 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** 1. Guided setup (from `new.md`, before publishing): `/jeeves:setup` as a step-by-step walk
-  that checks GitHub access, finds or creates the data repo. 2. Encryption with a passphrase (from `new.md`,
-  before publishing): our own on age, key in the OS credential store. Both planned below, decisions recorded.
+- **Up next:** 2. Encryption with a passphrase (from `new.md`,
+  before publishing): our own on age, key in the OS credential store. Planned below, decisions recorded.
 - **Then:** 3. macOS device: finished in a Claude Code session on the Mac (this session is closed here and the
-  work resumes there; see "3. macOS device" for the handoff), testing phases 1 and 2 there too. Found and fixed so far: the marketplace's plugin
+  work resumes there; see "3. macOS device" for the handoff), testing phases 1 and 2 there too, including
+  a live `/jeeves:setup` walk-through (not run live yet). Found and fixed so far: the marketplace's plugin
   source `"."` refused by older Claude Code (0.2.1, `./`); an older Claude Code refuses `userConfig` (README:
   update first); setup's restore question never asked (0.2.2). Left: the edit hook (a direct edit, not
   through `/jeeves:update`), the restored settings' paths, the history cleanup on macOS.
@@ -53,6 +53,11 @@
 - 6. Session review in `/jeeves:update` (2026-11-17, the user's request): `skills/update/SKILL.md`,
   "Session review"; checks in `tests/run.sh` (the manifests test). Release 0.4.0. Details below under
   "6. Session review".
+- 1. Guided setup (2026-11-17, from `new.md`): `skills/setup/SKILL.md` (five numbered steps),
+  `bin/jeeves-check`, `bin/jeeves-github`, `with_deadline` and `os_name` in `lib/lib.sh`, the `data_repo`
+  default `~/jeeves-data` (manifest and `find_data_repo`); 49 tests in `tests/run.sh` (stand-in `gh` and
+  `ssh` that fail on request). The walk-through itself is not run live yet (phase 3). Release 0.5.0.
+  Details below under "1. Guided setup".
 
 ---
 
@@ -495,7 +500,7 @@ the rule it becomes, revising in place where a rule covers it; ask; write during
 - **Project commits:** on the current branch when it is not the default one; on the default branch, a short
   `claude-md/<name>` branch merged back with `--no-ff`; never pushed unless that repo's CLAUDE.md allows it.
 
-## 1. Guided setup (planned 2026-11-17, from `new.md`)
+## 1. Guided setup (done)
 
 **Request:** before release and publishing, walk a new user through installing step by step, with as little
 interaction and technical knowledge as possible, always saying what is needed next; for example, check their
@@ -535,6 +540,24 @@ values go to `settings.json` under `pluginConfigs`. `gh` is the GitHub CLI (vers
 - **`bin/jeeves-check`** (new, read-only): one line per check (`git`, `bash`, `gh`, `gh-auth`, `ssh-github`,
   `claude-version`), each `ok`/`missing`/`fail` with a detail, so the skill reads facts instead of guessing,
   and the tests can fake each tool failing.
+
+### As built (2026-11-17)
+
+- **The default is Jeeves's own too.** An install without `--config` left `data_repo` unset despite the
+  manifest's `default` (Claude Code 2.1.304: "1 userConfig option not yet set", nothing in `pluginConfigs`;
+  with `required: true` it is "1 required"). Whether a session then substitutes the default was not
+  checkable without a signed-in session, so `find_data_repo` and `jeeves-check` fall back to `~/jeeves-data`
+  themselves, `required` is dropped, and the default stays for the install dialog. A machine not set up
+  hears "Jeeves is not set up on this machine yet ... run /jeeves:setup" at each session start.
+- **No Claude Code version check:** a plugin that loads (with `userConfig`) already proves it is new enough;
+  `claude` is not on the PATH under the VS Code extension anyway.
+- **Deadlines:** `with_deadline` (portable: macOS has no `timeout`) stops a hung `gh` or `ssh` by its own
+  PID, TERM then KILL. `ssh` uses `StrictHostKeyChecking=yes`, so it never adds GitHub's host key itself;
+  GitHub's "Hi <login>! You've successfully authenticated" comes with exit status 1, so the text is matched.
+- **Arguments are checked before `gh` runs** (a test caught `gh config get` running before a bad name was
+  refused).
+- **Existing data repos need the topic** to be found: `WinuxNomacs/jeeves-cmd` has none yet (checked with
+  `gh repo view`).
 
 ### What can fail
 

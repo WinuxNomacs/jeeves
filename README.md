@@ -26,7 +26,7 @@ In hook mode the scripts print only when something needs attention, and they nev
 
 | Skill | Started by | What it does |
 |---|---|---|
-| `/jeeves:setup [url]` | you, after installing | Clones your data repo (or creates one), offers to restore another device's backup on a new machine, then runs the first sync and backup. |
+| `/jeeves:setup [url]` | you, after installing | Walks you through setting up this machine in five steps: checks git and your GitHub sign-in (offers to install the GitHub CLI), finds your data repo on GitHub or creates a private one, offers to restore another device's backup, then runs the first sync and backup. |
 | `/jeeves:update [change]` | you, or Claude | Syncs the shared files and pushes; with a change, makes it. See below. |
 | `/jeeves:cleanup <days>` | you | Removes history older than that many days (1 or more), keeping every file, after a fresh backup and your confirmation; `/jeeves:cleanup auto <every> [<keep>]` or `off` sets the automatic cleanup. See below. |
 | `/jeeves:restore <host>` | you | Copies a device's backed-up `settings.json`, `keybindings.json` (and on request memories) onto this machine, then fixes paths that only worked there (`data_repo`, a local marketplace folder) and lists other machine-specific values. Replaced files are saved first. |
@@ -89,6 +89,8 @@ The plugin's `bin/` is on the PATH of Claude's Bash tool, so Claude (or you, by 
 | `jeeves-apply` | data repo → `~/.claude` | Installs shared files that changed in the data repo since this device last synced. Never overwrites a file a session edited since then. |
 | `jeeves-restore [<host> [--memories]]` | data repo → `~/.claude` | Copies a device's backup onto this machine, saving replaced files under `.sync-state/overwritten/`. Without a host, prints this machine's host name and the hosts with a backup. |
 | `jeeves-cleanup <days>` | data repo → origin | Folds the history older than `<days>` days into one root commit (same files) and force-pushes `main` with a lease; `--dry-run <days>` only says what it would do; `--auto` is what the session-start hook runs. |
+| `jeeves-check` | (read-only) | What setup needs to know: OS, git, the GitHub CLI and sign-in, an SSH key GitHub accepts, how to install the CLI here, the data repo folder's state. |
+| `jeeves-github find` / `create <name>` | GitHub | Lists your data repos on GitHub (topic `jeeves-data`, or named `jeeves-data`), or creates a private one with that topic, through the GitHub CLI. |
 | `jeeves-init <folder> [<url>]` | (new repo) | Creates an empty data repo (`.gitignore`, `.gitattributes`, README), optionally with a remote. |
 | `jeeves-status` | (read-only) | Lists each path out of sync (`disk`, `repo` or `conflict`) with its disk, repo and last-synced hashes, and how `main` stands against `origin/main`. |
 | `jeeves-scan` | (read-only) | Looks for secrets (private keys, API keys and tokens, password assignments) in the commits a push would send; lists file and line, never the value. |
@@ -121,7 +123,7 @@ Claude Code on one PC stay apart. `JEEVES_HOST` overrides it. A data repo made b
 (with `home/settings.json` and `memory/<host>/`) is moved to this layout by each device's next snapshot.
 
 The scripts find it, in this order: `$JEEVES_DATA`; the plugin option `data_repo`; the git repo around the
-current folder, if it has a `home/` folder. Hooks see the plugin option; Claude's Bash tool does not, so run
+current folder, if it has a `home/` folder; `~/jeeves-data`, the option's default. Hooks see the plugin option; Claude's Bash tool does not, so run
 the commands inside the data repo or export `JEEVES_DATA`.
 
 ## Install
@@ -136,14 +138,15 @@ claude plugin marketplace add WinuxNomacs/jeeves
 claude plugin install jeeves@jeeves
 ```
 
-Claude Code asks for `data_repo`: the folder where your data repo is (or will be) on this machine, for
-example `~/gitrepos/config/jeeves-data`. Then run `/jeeves:setup` (with your data repo's git URL if you
-already have one) in a new session.
+Claude Code asks for `data_repo`, the folder for your data repo on this machine: keep the default,
+`~/jeeves-data`. Then start a new session and run `/jeeves:setup`. It walks you through the rest, step by
+step: it checks your GitHub sign-in (and offers to install the GitHub CLI if you don't have it), creates
+your private `jeeves-data` repo on GitHub, or finds the one another device made, and runs the first sync.
 
 The VS Code extension has no `/plugin` command: run the commands above in a terminal, with `claude` if it is
 installed, or else with the executable the extension ships (on Windows,
 `%USERPROFILE%\.vscode\extensions\anthropic.claude-code-<version>-win32-x64\resources\native-binary\claude.exe`),
-adding `--config data_repo=<path>` to the install, then start a new conversation.
+adding `--config data_repo=~/jeeves-data` to the install (or another folder), then start a new conversation.
 
 **Updates:** auto-update is off for third-party marketplaces. Update with
 `claude plugin marketplace update jeeves` and `claude plugin update jeeves@jeeves`, or turn on auto-update in
@@ -160,9 +163,10 @@ claude plugin install jeeves@jeeves
 
 ## Adding a device
 
-Install the plugin, set `data_repo` to where the data repo should be on this machine, and run
-`/jeeves:setup <url of your data repo>`. It clones it, offers to restore another device's settings, and
-merges this machine's shared files with the repo's (keeping what both hold, asking before dropping text).
+Install the plugin and run `/jeeves:setup`. Signed in to GitHub with the GitHub CLI, it finds your data
+repo by itself (otherwise give its URL: `/jeeves:setup <url>`), clones it, offers to restore another device's
+settings, and merges this machine's shared files with the repo's (keeping what both hold, asking before
+dropping text).
 
 ## Tests
 
