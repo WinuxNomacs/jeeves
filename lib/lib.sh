@@ -11,20 +11,31 @@ else
   case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) HOST=$HOST-win ;; esac
 fi
 
-# Find the data repo (the git repo holding home/ and memory/) and set REPO and the paths inside it.
+# Find the data repo (the git repo holding home/ and hosts/) and set REPO and the paths inside it.
 # Order: $JEEVES_DATA, then the plugin option data_repo (hooks see it as CLAUDE_PLUGIN_OPTION_DATA_REPO),
 # then the git repo around the current folder if it has a home/ folder (Claude's Bash tool sees no
-# plugin variables, but runs inside the data repo when working on it).
+# plugin variables, but runs inside the data repo when working on it), then DEFAULT_DATA_REPO (the
+# option's default, which an install without --config may leave unset).
 # Returns 1 with DATA_REPO_PROBLEM set when none is found.
+DEFAULT_DATA_REPO=$HOME/jeeves-data
+
+# A path with a leading ~/ (as plugin options are written) made absolute.
+expand_path() {
+  case "$1" in "~") printf '%s\n' "$HOME" ;; "~/"*) printf '%s\n' "$HOME/${1#"~/"}" ;; *) printf '%s\n' "$1" ;; esac
+}
+
 find_data_repo() {
-  local candidate=${JEEVES_DATA:-$CLAUDE_PLUGIN_OPTION_DATA_REPO} top
-  case "$candidate" in "~/"*) candidate=$HOME/${candidate#"~/"} ;; esac
+  local candidate top
+  candidate=$(expand_path "${JEEVES_DATA:-$CLAUDE_PLUGIN_OPTION_DATA_REPO}")
   if [ -z "$candidate" ]; then
     top=$(git rev-parse --show-toplevel 2>/dev/null) && [ -d "$top/home" ] && candidate=$top
   fi
   if [ -z "$candidate" ]; then
-    DATA_REPO_PROBLEM="no data repo set: set the plugin option data_repo, then run /jeeves:setup (or export JEEVES_DATA, or run this inside the data repo)"
-    return 1
+    candidate=$DEFAULT_DATA_REPO
+    if [ ! -e "$candidate/.git" ]; then
+      DATA_REPO_PROBLEM="Jeeves is not set up on this machine yet (no data repo at $candidate, the default): run /jeeves:setup"
+      return 1
+    fi
   fi
   if ! git -C "$candidate" rev-parse --git-dir >/dev/null 2>&1; then
     DATA_REPO_PROBLEM="the data repo $candidate is not a git repository: to clone or create it, run /jeeves:setup"
@@ -156,4 +167,29 @@ cleaned_root() {
 # Drop the objects no branch reaches any more (removed history, kept in the bundle), so .git shrinks.
 shrink_repo() {
   git_repo reflog expire --expire=now --all && git_repo gc -q --prune=now 2>/dev/null
+}
+
+# Run a command with a deadline in seconds (no `timeout` on macOS): past it, the command is stopped by its own
+# PID, gracefully and then by force, and this returns 124.
+with_deadline() {
+  local limit=$(( $1 * 10 )) i=0 pid
+  shift
+  "$@" & pid=$!
+  while kill -0 "$pid" 2>/dev/null; do
+    if [ $i -ge $limit ]; then
+      kill "$pid" 2>/dev/null; sleep 1; kill -9 "$pid" 2>/dev/null; wait "$pid" 2>/dev/null
+      return 124
+    fi
+    sleep 0.1; i=$((i + 1))
+  done
+  wait "$pid"
+}
+
+# This machine's OS as Jeeves names it: linux, wsl, macos or windows (Git Bash).
+os_name() {
+  case "$(uname -s)" in
+    Darwin) echo macos ;;
+    MINGW*|MSYS*|CYGWIN*) echo windows ;;
+    *) if grep -qi microsoft /proc/version 2>/dev/null; then echo wsl; else echo linux; fi ;;
+  esac
 }

@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# Find or create the user's data repo on GitHub, through the GitHub CLI (gh) the user is signed in to.
+#
+#   jeeves-github find           the user's data repos: one "<owner/name>\t<clone url>" line each (none: no
+#                                output); a data repo has the GitHub topic jeeves-data, or is named jeeves-data
+#   jeeves-github create <name>  create a private repo <name> with that topic; prints its line as above
+#
+# The clone URL follows gh's git_protocol (https or ssh). Each call to GitHub has a deadline. Exit status 1
+# with a message on stderr when gh fails (not signed in, offline, a name already taken). JEEVES_GH names the
+# gh command (tests use it).
+
+. "$(dirname "$0")/../lib/lib.sh"
+
+TOPIC=jeeves-data
+gh=${JEEVES_GH:-gh}
+say() { echo "jeeves github: $*" >&2; }
+usage() { echo "usage: jeeves-github find | create <name>" >&2; exit 2; }
+case "$1" in
+  find) [ $# = 1 ] || usage ;;
+  create)
+    [ $# = 2 ] || usage
+    case "$2" in ''|*[!A-Za-z0-9._-]*) say "a repo name uses only letters, digits, '.', '_' and '-'"; exit 2 ;; esac ;;
+  *) usage ;;
+esac
+command -v "$gh" >/dev/null 2>&1 || { say "the GitHub CLI (gh) is not installed"; exit 1; }
+
+case "$("$gh" config get git_protocol 2>/dev/null)" in ssh) field=sshUrl ;; *) field=url ;; esac
+# "<owner/name>\t<clone url>" for one repo, from gh's JSON.
+repo_line() { with_deadline 30 "$gh" repo view "$1" --json "nameWithOwner,$field" --jq "[.nameWithOwner, .$field] | @tsv"; }
+
+case "$1" in
+  find)
+    if ! found=$(with_deadline 30 "$gh" repo list --topic "$TOPIC" --limit 1000 \
+         --json "nameWithOwner,$field" --jq ".[] | [.nameWithOwner, .$field] | @tsv" 2>/dev/null); then
+      say "could not list your repositories (not signed in, or GitHub could not be reached)"; exit 1
+    fi
+    named=$(repo_line "$TOPIC" 2>/dev/null)
+    printf '%s\n%s\n' "$found" "$named" | awk 'NF && !seen[$1]++'
+    ;;
+  create)
+    name=$2
+    if ! err=$(with_deadline 60 "$gh" repo create "$name" --private \
+         --description "Claude Code preferences, versioned by Jeeves" 2>&1 >/dev/null); then
+      say "could not create $name: $(printf '%s' "$err" | head -2 | join_lines)"; exit 1
+    fi
+    created=$(repo_line "$name") || { say "created $name, but could not read it back"; exit 1; }
+    with_deadline 30 "$gh" repo edit "$(printf '%s' "$created" | cut -f1)" --add-topic "$TOPIC" >/dev/null 2>&1 ||
+      say "created $name, but could not add the topic $TOPIC (other devices won't find it by itself)"
+    printf '%s\n' "$created"
+    ;;
+esac

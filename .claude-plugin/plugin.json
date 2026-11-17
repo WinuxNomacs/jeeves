@@ -20,8 +20,8 @@
     "data_repo": {
       "type": "directory",
       "title": "Data repo",
-      "description": "Local clone of the git repo that holds your preferences (home/ and hosts/), for example ~/gitrepos/config/jeeves-cmd",
-      "required": true
+      "description": "Folder for the git repo that holds your preferences (home/ and hosts/) on this machine. Keep the default unless you already have it elsewhere; /jeeves:setup clones or creates it there.",
+      "default": "~/jeeves-data"
     }
   }
 }

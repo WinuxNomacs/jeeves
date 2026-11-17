@@ -240,14 +240,16 @@ t_folder_finds_data_repo() {
 }
 
 t_no_data_repo() {
-  unset JEEVES_DATA
+  unset JEEVES_DATA; export HOME=$W
   out=$(cd "$SCRATCH" && snap); rc=$?
-  check "says how to set it" grep -q "set the plugin option data_repo" <<< "$out"
+  check "says Jeeves is not set up and points to /jeeves:setup" grep -q "not set up on this machine yet (no data repo at $W/jeeves-data, the default): run /jeeves:setup" <<< "$out"
   check "exit status 1" [ $rc = 1 ]
   (cd "$SCRATCH" && snap --hook >/dev/null); check "hook mode exits 0" [ $? = 0 ]
   out=$(cd "$SCRATCH" && apply); rc=$?
-  check "apply says how to set it" grep -q "set the plugin option data_repo" <<< "$out"
+  check "apply says the same" grep -q "run /jeeves:setup" <<< "$out"
   check "apply exit status 1" [ $rc = 1 ]
+  git clone -q "$W/remote.git" "$W/jeeves-data" 2>/dev/null
+  check "with no option set, the default ~/jeeves-data is used" grep -q "^datarepo	$W/jeeves-data$" <<< "$(cd "$SCRATCH" && "$SRC/bin/jeeves-status")"
   export JEEVES_DATA=$W/claude
   check "a folder that is not a git repo is refused" grep -q "not a git repository" <<< "$(snap)"
   check "and the message points to /jeeves:setup" grep -q "run /jeeves:setup" <<< "$(snap)"
@@ -641,6 +643,111 @@ t_automatic_cleanup_runs_only_when_due_and_configured() {
   check "a failed automatic cleanup is reported and the hook exits 0" bash -c 'out=$("$1/bin/jeeves-snapshot" --hook); [ $? = 0 ] && grep -q "push refused or failed" <<< "$out"' _ "$SRC"
 }
 
+# Guided setup. Stand-ins for gh and ssh in $W/bin answer as the FAKE_* variables say, and log their arguments.
+fake_tools() {
+  mkdir -p "$W/bin"; export FAKE_LOG=$W/fake.log; : > "$FAKE_LOG"
+  cat > "$W/bin/gh" <<'F'
+#!/bin/sh
+echo "gh $*" >> "$FAKE_LOG"
+case "$*" in
+  --version) echo "gh version 2.46.0 (2025-12-13 Ubuntu 2.46.0-4)" ;;
+  "api user"*) [ "${FAKE_GH_AUTH:-ok}" = ok ] && echo octocat || { echo "gh: To get started with GitHub CLI, please run:  gh auth login" >&2; exit 4; } ;;
+  "config get git_protocol") echo "${FAKE_GH_PROTOCOL:-https}" ;;
+  "repo list"*) [ -n "$FAKE_GH_LIST_FAIL" ] && { echo "error connecting to api.github.com" >&2; exit 1; }; [ -n "$FAKE_GH_LIST" ] && printf '%b\n' "$FAKE_GH_LIST" ;;
+  "repo view jeeves-data "*) if [ -n "$FAKE_GH_NAMED" ]; then printf '%b\n' "$FAKE_GH_NAMED"
+    elif [ -e "$FAKE_LOG.created-jeeves-data" ]; then printf 'octocat/jeeves-data\thttps://github.com/octocat/jeeves-data\n'
+    else echo "GraphQL: Could not resolve to a Repository" >&2; exit 1; fi ;;
+  "repo view "*) printf 'octocat/%s\thttps://github.com/octocat/%s\n' "$3" "$3" ;;
+  "repo create"*) [ "$FAKE_GH_CREATE" = taken ] && { echo "GraphQL: Name already exists on this account (createRepository)" >&2; exit 1; }; touch "$FAKE_LOG.created-$3"; echo "https://github.com/octocat/$3" ;;
+  "repo edit"*) ;;
+  *) echo "fake gh: unexpected $*" >&2; exit 9 ;;
+esac
+F
+  cat > "$W/bin/ssh" <<'F'
+#!/bin/sh
+echo "ssh $*" >> "$FAKE_LOG"
+case "${FAKE_SSH:-ok}" in
+  ok) echo "Hi octocat! You've successfully authenticated, but GitHub does not provide shell access." >&2; exit 1 ;;
+  hostkey) echo "Host key verification failed." >&2; exit 255 ;;
+  *) echo "git@github.com: Permission denied (publickey)." >&2; exit 255 ;;
+esac
+F
+  chmod +x "$W/bin/gh" "$W/bin/ssh"
+  export JEEVES_GH=$W/bin/gh JEEVES_SSH=$W/bin/ssh
+}
+check_cmd() { "$SRC/bin/jeeves-check"; }
+field() { awk -F'\t' -v k="$1" '$1 == k { $1 = ""; sub(/^\t/, ""); print }' OFS='\t'; }
+ghcmd() { "$SRC/bin/jeeves-github" "$@"; }
+
+t_check_reports_a_signed_in_machine() {
+  fake_tools; out=$(check_cmd)
+  check "git found" grep -q "^git	ok	[0-9]" <<< "$out"
+  check "gh found with its version" [ "$(field gh <<< "$out")" = "ok	2.46.0" ]
+  check "signed in to GitHub as octocat" [ "$(field gh-auth <<< "$out")" = "ok	octocat" ]
+  check "gh clones over https" [ "$(field gh-protocol <<< "$out")" = https ]
+  check "an SSH key GitHub accepts" [ "$(field ssh-github <<< "$out")" = "ok	octocat" ]
+  check "never adds GitHub's host key itself" grep -q "StrictHostKeyChecking=yes" "$FAKE_LOG"
+  check "the data repo is there" [ "$(field datarepo <<< "$out")" = "$R	repo" ]
+  check "an install line" grep -q "^gh-install	" <<< "$out"
+}
+
+t_check_reports_what_is_missing_or_failing() {
+  fake_tools
+  out=$(JEEVES_GH=$W/bin/no-gh FAKE_SSH=nokey check_cmd)
+  check "gh missing" [ "$(field gh <<< "$out")" = missing ]
+  check "sign-in skipped without gh" [ "$(field gh-auth <<< "$out")" = skip ]
+  check "no accepted SSH key" [ "$(field ssh-github <<< "$out")" = "fail	no SSH key that GitHub accepts" ]
+  out=$(FAKE_GH_AUTH=no FAKE_SSH=hostkey FAKE_GH_PROTOCOL=ssh check_cmd)
+  check "gh signed out" bash -c '[[ "$1" == "fail	not signed in"* ]]' _ "$(field gh-auth <<< "$out")"
+  check "gh clones over ssh" [ "$(field gh-protocol <<< "$out")" = ssh ]
+  check "github.com missing from known_hosts" [ "$(field ssh-github <<< "$out")" = "fail	github.com is not in known_hosts" ]
+}
+
+t_check_reports_each_data_repo_state() {
+  fake_tools
+  check "nothing set: the default ~/jeeves-data" [ "$(HOME=$W JEEVES_DATA= check_cmd | field datarepo)" = "$W/jeeves-data	missing" ]
+  check "missing, with ~/ expanded" [ "$(HOME=$W JEEVES_DATA='~/jeeves-data' check_cmd | field datarepo)" = "$W/jeeves-data	missing" ]
+  mkdir "$W/jeeves-data"
+  check "empty" [ "$(HOME=$W JEEVES_DATA='~/jeeves-data' check_cmd | field datarepo)" = "$W/jeeves-data	empty" ]
+  echo x > "$W/jeeves-data/notes.txt"
+  check "other files" [ "$(HOME=$W JEEVES_DATA='~/jeeves-data' check_cmd | field datarepo)" = "$W/jeeves-data	other" ]
+}
+
+t_deadline_stops_a_hung_command() {
+  . "$SRC/lib/lib.sh"
+  start=$(date +%s)
+  with_deadline 1 sleep 30; rc=$?
+  check "returns 124" [ $rc = 124 ]
+  check "within a few seconds" [ $(( $(date +%s) - start )) -lt 5 ]
+  check "the command's own result otherwise" bash -c '. "$1/lib/lib.sh"; with_deadline 5 sh -c "exit 3"; [ $? = 3 ]' _ "$SRC"
+}
+
+t_github_finds_data_repos() {
+  fake_tools
+  out=$(FAKE_GH_LIST='octocat/prefs\thttps://github.com/octocat/prefs\noctocat/jeeves-data\thttps://github.com/octocat/jeeves-data' \
+        FAKE_GH_NAMED='octocat/jeeves-data\thttps://github.com/octocat/jeeves-data' ghcmd find)
+  check "both repos, each once" [ "$(printf '%s\n' "$out" | cut -f1 | tr '\n' ' ')" = "octocat/prefs octocat/jeeves-data " ]
+  check "looks for the jeeves-data topic" grep -q "repo list --topic jeeves-data" "$FAKE_LOG"
+  check "none: no output" [ -z "$(ghcmd find)" ]
+  FAKE_GH_PROTOCOL=ssh ghcmd find >/dev/null
+  check "ssh protocol asks for ssh URLs" grep -q "nameWithOwner,sshUrl" "$FAKE_LOG"
+  out=$(FAKE_GH_LIST_FAIL=1 ghcmd find 2>&1); rc=$?
+  check "a failing gh: exit status 1 with a message" bash -c '[ $1 = 1 ] && grep -q "could not list your repositories" <<< "$2"' _ $rc "$out"
+}
+
+t_github_creates_a_private_data_repo() {
+  fake_tools
+  out=$(ghcmd create jeeves-data)
+  check "prints the new repo and its clone URL" [ "$out" = "octocat/jeeves-data	https://github.com/octocat/jeeves-data" ]
+  check "private" grep -q "repo create jeeves-data --private" "$FAKE_LOG"
+  check "with the jeeves-data topic" grep -q "repo edit octocat/jeeves-data --add-topic jeeves-data" "$FAKE_LOG"
+  out=$(FAKE_GH_CREATE=taken ghcmd create jeeves-data 2>&1); rc=$?
+  check "a taken name: exit status 1 with gh's reason" bash -c '[ $1 = 1 ] && grep -q "Name already exists" <<< "$2"' _ $rc "$out"
+  : > "$FAKE_LOG"
+  ghcmd create 'bad name;rm' 2>/dev/null; rc=$?
+  check "an unsafe name is refused before gh runs" bash -c '[ $1 = 2 ] && [ ! -s "$2" ]' _ $rc "$FAKE_LOG"
+}
+
 t_plugin_files() {
   for f in .claude-plugin/plugin.json .claude-plugin/marketplace.json hooks/hooks.json; do
     if have_python; then
@@ -670,6 +777,9 @@ t_plugin_files() {
   check "the update skill reviews the session only when the user ran it" grep -q '## Session review (only when the user ran it)' "$sk"
   check "the session review offers a select-all option and follows up on unselected items" bash -c 'grep -q "\"All of these\"" "$1" && grep -q "Follow-up:" "$1"' _ "$sk"
   check "setup always asks about a restore before the first sync" grep -q 'Always ask; never skip this step' "$SRC/skills/setup/SKILL.md"
+  check "setup walks through five numbered steps, starting from jeeves-check" bash -c 'grep -q "## Step 1 of 5" "$1" && grep -q "## Step 5 of 5" "$1" && grep -q "jeeves-check" "$1"' _ "$SRC/skills/setup/SKILL.md"
+  check "setup finds or creates the data repo through jeeves-github" bash -c 'grep -q "jeeves-github find" "$1" && grep -q "jeeves-github create" "$1"' _ "$SRC/skills/setup/SKILL.md"
+  check "the data_repo option defaults to ~/jeeves-data" grep -q '"default": "~/jeeves-data"' "$SRC/.claude-plugin/plugin.json"
   for k in setup restore cleanup; do
     sk=$SRC/skills/$k/SKILL.md
     check "$k skill is named $k" grep -q "^name: $k\$" "$sk"
@@ -696,7 +806,7 @@ run_test "snapshot records locally when the remote is unreachable" t_offline_rec
 run_test "a new device that differs from the repo gets a conflict, not a guess" t_new_device_first_sync
 run_test "the data repo comes from the plugin option when JEEVES_DATA is unset" t_option_finds_data_repo
 run_test "the data repo is found from the current folder inside it" t_folder_finds_data_repo
-run_test "without a data repo, the scripts say how to set one and hook mode exits 0" t_no_data_repo
+run_test "without a data repo, the scripts point to /jeeves:setup, hook mode exits 0, and ~/jeeves-data is the default" t_no_data_repo
 run_test "the edit hook snapshots after an edit to the global CLAUDE.md" t_edit_hook_snapshots_claude_md
 run_test "the edit hook ignores edits to other files" t_edit_hook_ignores_other_files
 run_test "the edit hook's systemMessage is valid JSON" t_edit_hook_escapes_json
@@ -720,6 +830,12 @@ run_test "a failed push or an unreachable origin leaves main as it was" t_cleanu
 run_test "after another device cleans up, snapshot switches to the new history and records its unpushed change again" t_other_device_switches_and_keeps_its_unpushed_change
 run_test "after another device cleans up, a file both changed is a conflict with the right base" t_other_device_switch_reports_a_conflict_when_both_changed
 run_test "the automatic cleanup runs only when jeeves.conf turns it on and it is due" t_automatic_cleanup_runs_only_when_due_and_configured
+run_test "check reports a signed-in machine: git, gh, GitHub login, protocol, SSH key, data repo" t_check_reports_a_signed_in_machine
+run_test "check reports a missing gh, a signed-out gh, no SSH key and an unknown host key" t_check_reports_what_is_missing_or_failing
+run_test "check reports the data repo folder as missing, empty or other, with ~/ expanded and ~/jeeves-data by default" t_check_reports_each_data_repo_state
+run_test "a deadline stops a hung command by its PID" t_deadline_stops_a_hung_command
+run_test "github find lists the user's data repos once each, and fails cleanly" t_github_finds_data_repos
+run_test "github create makes a private repo with the jeeves-data topic, and reports a taken name" t_github_creates_a_private_data_repo
 run_test "the manifests and hooks.json are valid and wire up the hooks" t_plugin_files
 
 echo "$passed passed, $failed failed"

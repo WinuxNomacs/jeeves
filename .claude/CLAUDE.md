@@ -18,7 +18,8 @@ already snapshotted the data repo when the plugin is installed.
   `jeeves-snapshot` (`~/.claude` → data repo, commits on its `main`), `jeeves-apply` (data repo → `~/.claude`),
   `jeeves-hook-edit` (snapshots after an edit to `~/.claude/CLAUDE.md`), `jeeves-status` (read-only: what is
   out of sync, with hashes), `jeeves-scan` (secrets in the outgoing commits), `jeeves-restore` (a host's
-  backup → `~/.claude`), `jeeves-init` (new data repo), `jeeves-cleanup` (folds old history into one root
+  backup → `~/.claude`), `jeeves-init` (new data repo), `jeeves-check` (read-only facts for setup: tools,
+  GitHub sign-in, data repo folder), `jeeves-github` (find or create the data repo on GitHub through `gh`), `jeeves-cleanup` (folds old history into one root
   commit and force-pushes with a lease; `--auto` runs from the session-start snapshot per `jeeves.conf`).
 - `skills/` — `update` (`/jeeves:update`: when the user runs it, a review of the session for rules to save
   to the global and project CLAUDE.md; then sync, or a change to a shared file, then push), `setup`, `restore`,
