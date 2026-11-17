@@ -346,6 +346,31 @@ t_scan_flags_secrets_without_printing_them() {
   check "never prints the secret" bash -c '! grep -Eq "x{10}|abcdefghijklmnop" <<< "$1"' _ "$out"
 }
 
+t_scan_checks_every_outgoing_commit_not_only_the_last() {
+  snap >/dev/null
+  tok="sk-ant-api03-$(printf 'x%.0s' 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24)"
+  printf 'rules v1\nexport ANTHROPIC_API_KEY=%s\n' "$tok" > "$R/home/CLAUDE.md"
+  git -C "$R" commit -qam "oops"; c=$(git -C "$R" rev-parse --short HEAD)
+  echo "rules v1" > "$R/home/CLAUDE.md"; git -C "$R" commit -qam "removed again"
+  out=$(scan); rc=$?
+  check "exit status 1" [ $rc = 1 ]
+  check "names the commit, file and line" grep -q "possible Anthropic API key at home/CLAUDE.md:2 (commit $c)" <<< "$out"
+  check "never prints the secret" bash -c '! grep -Eq "x{10}" <<< "$1"' _ "$out"
+}
+
+t_scan_checks_a_branch_merged_into_main() {
+  snap >/dev/null
+  git -C "$R" -c core.autocrlf=false switch -q -c pref/x
+  printf 'rules v1\npassword = "abcdefghijklmnop1234"\n' > "$R/home/CLAUDE.md"; git -C "$R" commit -qam "oops"
+  echo "rules v1" > "$R/home/CLAUDE.md"; git -C "$R" commit -qam "removed again"
+  git -C "$R" -c core.autocrlf=false switch -q main
+  echo "agent v2" > "$R/home/agents/a.md"; git -C "$R" commit -qam "other"
+  git -C "$R" -c core.autocrlf=false merge -q --no-ff pref/x -m "Merge branch 'pref/x'"
+  out=$(scan); rc=$?
+  check "exit status 1" [ $rc = 1 ]
+  check "names the file and line" grep -q "value at home/CLAUDE.md:2 (commit" <<< "$out"
+}
+
 t_scan_passes_clean_diff() {
   snap >/dev/null
   printf 'rules v2\nUse a token budget of 2000 when summarising.\n' > "$R/home/CLAUDE.md"
@@ -956,6 +981,17 @@ t_scan_refuses_a_file_that_would_be_pushed_unencrypted() {
   check "exit 1" [ $rc = 1 ]
 }
 
+t_scan_refuses_plain_text_in_an_earlier_outgoing_commit() {
+  crypt_env; snap >/dev/null; encrypt on >/dev/null; git -C "$R" push -q origin main 2>/dev/null
+  echo plain > "$R/home/agents/p.md"
+  git -C "$R" -c filter.jeeves.clean=cat add home/agents/p.md; git -C "$R" commit -qm plain
+  c=$(git -C "$R" rev-parse --short HEAD)
+  git -C "$R" rm -qf home/agents/p.md; git -C "$R" commit -qm "removed again"
+  out=$("$SRC/bin/jeeves-scan"); rc=$?
+  check "names the file and commit" grep -q "not encrypted: home/agents/p.md (commit $c)" <<< "$out"
+  check "exit 1" [ $rc = 1 ]
+}
+
 t_cleanup_all_leaves_one_encrypted_commit_and_another_device_follows() {
   crypt_env; snap >/dev/null; git -C "$R" push -q origin main 2>/dev/null
   device_b; echo "rules v1" > "$W/claudeB/CLAUDE.md"; as_b snap >/dev/null; as_b apply >/dev/null
@@ -1036,6 +1072,8 @@ run_test "the edit hook's systemMessage is valid JSON" t_edit_hook_escapes_json
 run_test "status lists out-of-sync paths with their disk, repo and base hashes" t_status_lists_out_of_sync_paths
 run_test "status reports a diverged main and a dirty data repo" t_status_reports_diverged_and_dirty
 run_test "scan flags secrets in outgoing commits without printing them" t_scan_flags_secrets_without_printing_them
+run_test "scan checks every outgoing commit, not only the last" t_scan_checks_every_outgoing_commit_not_only_the_last
+run_test "scan checks the commits of a branch merged into main" t_scan_checks_a_branch_merged_into_main
 run_test "scan passes a clean outgoing diff" t_scan_passes_clean_diff
 run_test "snapshot points to /jeeves:update for newer files and conflicts" t_snapshot_points_to_update_skill
 run_test "per-host backups are never applied, and only their own host rewrites them" t_host_files_never_applied
@@ -1072,6 +1110,7 @@ if v=$(age --version 2>/dev/null) && command -v age-plugin-batchpass >/dev/null 
   run_test "a failing encryption never commits plain text" t_a_failing_encryption_never_commits_plain_text
   run_test "merges of encrypted files combine both sides and show conflicts in plain text" t_merges_of_encrypted_files_combine_both_sides_and_show_conflicts_in_plain_text
   run_test "scan refuses a file that would be pushed unencrypted" t_scan_refuses_a_file_that_would_be_pushed_unencrypted
+  run_test "scan refuses plain text in an earlier outgoing commit, even when a later one removed it" t_scan_refuses_plain_text_in_an_earlier_outgoing_commit
   run_test "cleanup --all leaves one encrypted commit, and another device follows" t_cleanup_all_leaves_one_encrypted_commit_and_another_device_follows
   run_test "a new passphrase opens the key and the old one no longer does" t_a_new_passphrase_opens_the_key_and_the_old_one_no_longer_does
   run_test "lock removes the key and the scripts then refuse" t_lock_removes_the_key_and_the_scripts_then_refuse
