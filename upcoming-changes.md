@@ -712,9 +712,8 @@ starts.
 
 Handoff steps:
 1. On RAIVEN: everything committed, merged and pushed; this section current; close the session.
-2. On the Mac, in a terminal, **before opening any Claude Code session** (the Mac runs 0.2.2, from the GitHub
-   marketplace, which knows neither encryption nor a cleaned-up history; its `/jeeves:update` could merge
-   unrelated histories and push old history back): `git clone https://github.com/WinuxNomacs/jeeves.git
+2. On the Mac, in a terminal (the user uninstalled the Mac's 0.2.2 on 2026-11-17, so no old Jeeves runs
+   there; if a `marketplace remove` below says it is not found, that is fine): `git clone https://github.com/WinuxNomacs/jeeves.git
    ~/gitrepos/config/jeeves`; switch the plugin from the GitHub marketplace to that clone so edits load with `/reload-plugins`
    (`claude plugin marketplace remove jeeves`, `claude plugin marketplace add ~/gitrepos/config/jeeves`,
    `claude plugin install jeeves@jeeves --config data_repo="$HOME/gitrepos/config/jeeves-cmd"`).
@@ -739,8 +738,7 @@ The Mac session then:
 
 Facts the Mac session needs (from RAIVEN's memory, which does not travel): the data repo is
 `WinuxNomacs/jeeves-cmd` (private), hosts so far `RAIVEN` (Linux, WSL), `RAIVEN-win` (Windows, same PC),
-`Winuxs-MacBook-Pro`. RAIVEN-win is retired (2026-11-17): its plugin is to be uninstalled and its clones
-deleted by the user; it comes back only for Windows testing, installed fresh from the GitHub marketplace,
+`Winuxs-MacBook-Pro`. RAIVEN-win is retired (2026-11-17): its plugin is uninstalled and its plugin clone deleted; it comes back only for Windows testing, installed fresh from the GitHub marketplace,
 and its last backup stays in `hosts/RAIVEN-win/`. WSL and native Windows on one PC share one Windows
 Credential Manager entry for the key, so `/jeeves:lock` on one locks both. The user tags releases (or asks Claude to, for one tag at a time; this repo's tags are
 annotated: `git tag -a`); nothing goes to Anthropic's directory without the user's direct command.
