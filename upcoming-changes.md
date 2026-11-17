@@ -2,15 +2,14 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** 2. Encryption with a passphrase (from `new.md`,
-  before publishing): our own on age, key in the OS credential store. Planned below, decisions recorded.
-- **Then:** 3. macOS device: finished in a Claude Code session on the Mac (this session is closed here and the
-  work resumes there; see "3. macOS device" for the handoff), testing phases 1 and 2 there too, including
-  a live `/jeeves:setup` walk-through (not run live yet). Found and fixed so far: the marketplace's plugin
-  source `"."` refused by older Claude Code (0.2.1, `./`); an older Claude Code refuses `userConfig` (README:
-  update first); setup's restore question never asked (0.2.2). Left: the edit hook (a direct edit, not
-  through `/jeeves:update`), the restored settings' paths, the history cleanup on macOS.
-- **Later:** 4. Per-device overlay (only if a shared file must differ per host) · Anthropic directory
+- **Up next:** 1. macOS device: finished in a Claude Code session on the Mac (this session is closed here and
+  the work resumes there; see "1. macOS device" for the handoff), testing the earlier phases there too,
+  including a live `/jeeves:setup` walk-through (not run live yet) and encryption with the Keychain and the
+  macOS dialog. Found and fixed so far: the marketplace's plugin source `"."` refused by older Claude Code
+  (0.2.1, `./`); an older Claude Code refuses `userConfig` (README: update first); setup's restore question
+  never asked (0.2.2). Left: the edit hook (a direct edit, not through `/jeeves:update`), the restored
+  settings' paths, the history cleanup on macOS, encryption on macOS.
+- **Later:** 2. Per-device overlay (only if a shared file must differ per host) · Anthropic directory
   submission (only on the user's direct command)
 
 ## Done
@@ -56,8 +55,19 @@
 - 1. Guided setup (2026-11-17, from `new.md`): `skills/setup/SKILL.md` (five numbered steps),
   `bin/jeeves-check`, `bin/jeeves-github`, `with_deadline` and `os_name` in `lib/lib.sh`, the `data_repo`
   default `~/jeeves-data` (manifest and `find_data_repo`); 49 tests in `tests/run.sh` (stand-in `gh` and
-  `ssh` that fail on request). The walk-through itself is not run live yet (phase 3). Release 0.5.0.
+  `ssh` that fail on request). The walk-through itself is not run live yet (the macOS phase). Release 0.5.0.
   Details below under "1. Guided setup".
+- 2. Encryption (2026-11-17, from `new.md`): `lib/crypt.sh`, `bin/jeeves-crypt` (git filter, textconv,
+  merge driver), `bin/jeeves-encrypt` (status, on, unlock, lock, passphrase), `jeeves-cleanup --all`, the
+  lock checks in `find_data_repo` and the snapshot's pull, `jeeves-scan`'s check for unencrypted files,
+  `jeeves-check`'s age and key store lines; skills `encrypt`, `unlock`, `lock`; setup offers encryption for a
+  new repo and unlocks an encrypted clone. 63 tests in `tests/run.sh` (13 for encryption with real age and a
+  stand-in key store and dialog, failures injected; skipped without age 1.3+), passing on Linux and under
+  Windows Git Bash with the Windows `age.exe`. Checked live on RAIVEN (Windows 11, from WSL): the Windows
+  Credential Manager round trip and the Windows password prompt (found and fixed: PowerShell's exit status
+  lost in a pipe, a progress record on stderr, Cancel returned as an empty answer). Not run live yet: a real
+  `/jeeves:encrypt` (the user's call), the Keychain and macOS dialog (macOS phase), `secret-tool` and zenity.
+  Details below under "2. Encryption".
 
 ---
 
@@ -571,7 +581,7 @@ without Git Bash, an old Claude Code (the install fails before setup: README say
 - **B/C. Defaults:** folder `~/jeeves-data` on each machine; new GitHub repo `jeeves-data`, private, with a
   topic so other devices find it.
 
-## 2. Encryption with a passphrase (planned 2026-11-17, from `new.md`)
+## 2. Encryption with a passphrase (done)
 
 **Request:** before release and publishing, an easy option to encrypt the user's data in git, so they can
 secure it with a passphrase; research options with better git/GitHub integration than ansible-vault.
@@ -608,10 +618,14 @@ openssl build would need its own HMAC. No GitHub-native client-side encryption w
 - **Passphrase entry (decision E4):** never through the Claude chat (it is saved in transcripts) and never
   as a command argument. An OS dialog: `osascript` on macOS, the Windows credential prompt (`Get-Credential`,
   also from WSL through `powershell.exe`), `zenity --password` on a Linux desktop; with none available, a
-  command for the user to paste into their own terminal. The script hands it to age on a file descriptor
-  (`AGE_PASSPHRASE_FD`, `age -j batchpass`), never in an environment variable or a file. Needs age 1.3.0 or
-  later with `age-plugin-batchpass` (age itself reads a passphrase only from a terminal, which Claude's
-  shell lacks; checked in its source 2026-11-17); check what the package managers ship.
+  command for the user to paste into their own terminal. The script hands it to age as `AGE_PASSPHRASE` of
+  that one age process (`age -j batchpass`), never on a command line or in a file. Built that way rather
+  than with `AGE_PASSPHRASE_FD` as first planned: a file descriptor from bash is not inherited by the Windows
+  `age.exe`, and a process's environment is readable only by the same user, who can read the key store
+  anyway. Needs age 1.3.0 or later with `age-plugin-batchpass` (age itself reads a passphrase only from a
+  terminal, which Claude's shell lacks; checked in its source 2026-11-17). Packages (2026-11-17): Homebrew
+  1.3.2, winget `FiloSottile.age` 1.3.2 (installs `age-plugin-batchpass` too, per its manifest), Ubuntu
+  24.04 apt 1.2.1 (too old: setup points to the release download).
 - **Making the passphrase (decision E5):** the user's own. Before asking, explain that a passphrase lost on
   every device means the data on GitHub can't be read (an unlocked device can set a new one without the old),
   and recommend generating one with a trusted password manager. Typed or pasted twice, and both must match.
@@ -636,6 +650,35 @@ openssl build would need its own HMAC. No GitHub-native client-side encryption w
   store), passphrase change (re-encrypts only `identity.age`).
 - **Locked device:** hooks exit 0 and say once that the data repo is locked and how to unlock.
 
+### As built (2026-11-17)
+
+- **Key to age:** on stdin (`age -d -i -`), which works with the Windows `age.exe` too; the ciphertext goes
+  to a temp file in `.git/jeeves/tmp/`. To the stores: on stdin as well (`security -i`, `secret-tool store`,
+  PowerShell `[Console]::In`), never on a command line.
+- **Windows Credential Manager:** a small C# type over `CredRead`/`CredWrite`/`CredDelete` through
+  `powershell.exe -EncodedCommand`; generic credentials `jeeves:<recipient>`, persisted on this machine only.
+  Measured live: 1.4-1.6 s per call.
+- **Speed:** git compares only size and whole-second mtime in an encrypted data repo (`core.checkStat=minimal`,
+  `core.trustctime=false`), since the snapshot rewrites `hosts/` with the same times every run. On a copy of
+  jeeves-cmd (133 files): a snapshot 0.5 s encrypted vs 0.8-0.9 s plain; `encrypt on` 11 s, mostly the filter
+  started once per file (48 ms each, age itself 15 ms). On Windows that one-time cost (also an unlock of a
+  new device, which decrypts every file) is several times higher; not measured. If it matters, git's
+  long-running filter protocol (`filter.<driver>.process`) is the fix.
+- **Lazy key:** the snapshot reads the key only when origin brought something to check out, so a session
+  start with nothing new costs no store read.
+- **Locked device:** `find_data_repo` refuses (all scripts but `jeeves-encrypt`) with "run /jeeves:unlock";
+  `.git/jeeves/unlocked` holds the recipient. A device that pulls another device's encryption while locked
+  does not take it.
+- **Base versions:** `set_base` writes the synced version into git's objects (`hash-object -w`, unreachable,
+  never pushed), so the update skill's `git cat-file -p <base>` still works when git stores files encrypted.
+  `gc` may prune them later; a merge then has no base and keeps both sides.
+- **Snapshot:** stops (records nothing) when `git add` fails, and checks age before copying anything.
+- **Passphrase:** at least 12 characters, typed twice.
+- **Turning it on:** `jeeves-encrypt on` commits; `/jeeves:encrypt` then runs `jeeves-cleanup --all`. During
+  setup, a new repo is encrypted before its first push, so there is no history to fold.
+- **Cache:** `.git/jeeves/clean/` (plain hash -> ciphertext) grows by one small file per version; not pruned
+  yet (about 5 KB per version on jeeves-cmd).
+
 ### What can fail
 
 No age installed (setup offers to install it, like `gh`); no credential store (WSL, a headless Linux); a
@@ -654,7 +697,7 @@ credential store each time may be slow (measure; cache the key per process if ne
   recommending a password manager to generate it.
 - **E6. Old history:** folded away right after encrypting.
 
-## 3. macOS device
+## 1. macOS device
 
 The scripts' half is covered: the test workflow runs the suite on macOS with its own bash 3.2 (green since
 run 43981931017, and on tag `v0.2.2`). Done by hand on the Mac (2026-11-17): installed 0.2.1 then 0.2.2 from
@@ -682,6 +725,10 @@ The Mac session then:
 - checks the restored `settings.json`: `data_repo` and the marketplace path point at Mac folders;
 - runs the history cleanup on the Mac (built in 0.3.0): `tests/run.sh cleanup`, then
   `jeeves-cleanup --dry-run 1` on the real data repo; a real cleanup only if the user asks;
+- encryption (built in 0.6.0): `brew install age` (ask first), `tests/run.sh` (the encryption tests run with
+  age on the PATH), then the Keychain and the macOS dialog live on a scratch data repo
+  (`JEEVES_DATA=<scratch> jeeves-encrypt on`, then `lock` and `unlock`); a Keychain entry is
+  `security find-generic-password -s jeeves`; delete the scratch entry afterwards;
 - fixes what it finds on a branch, merges, pushes `main` (allowed by `.claude/CLAUDE.md`), and moves this
   phase to Done.
 
@@ -690,7 +737,7 @@ Facts the Mac session needs (from RAIVEN's memory, which does not travel): the d
 `Winuxs-MacBook-Pro`; the user tags releases (or asks Claude to, for one tag at a time; this repo's tags are
 annotated: `git tag -a`); nothing goes to Anthropic's directory without the user's direct command.
 
-## 4. Per-device overlay
+## 2. Per-device overlay
 
 Mostly obsolete since Generic made `settings.json` and `keybindings.json` per host. Only needed if a shared
 file (a `CLAUDE.md` rule, a skill) ever has to differ between hosts: then decide host vs platform scope and

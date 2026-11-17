@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# git's filter, diff and merge driver for an encrypted data repo. Jeeves sets them up in the data repo's
+# .git/config (lib.sh's crypt_setup); not for running by hand.
+#
+#   jeeves-crypt clean                    plain text on stdin -> age output (needs only the recipient)
+#   jeeves-crypt smudge                   age output on stdin -> plain text (needs the key)
+#   jeeves-crypt textconv <file>          plain text of a stored file, for git diff and log
+#   jeeves-crypt merge <O> <A> <B> <L>    three-way merge of stored files; the result, encrypted, in <A>
+#
+# Content that is not age output (history from before encryption) passes through as it is. age output differs
+# on every run, so clean keeps a cache (plain hash -> ciphertext, in .git/jeeves/clean/) and gives the same
+# ciphertext for the same text; smudge fills it too, so a checked-out file shows no change. A failure exits
+# non-zero, so git stops (the filter is required) or reports a conflict: plain text never goes into a commit.
+
+. "$(dirname "$0")/../lib/crypt.sh"
+
+dirs=$(git rev-parse --git-dir --show-toplevel) || exit 1
+CRYPT_DIR=$(printf '%s\n' "$dirs" | sed -n 1p)/jeeves
+CRYPT_TOP=$(printf '%s\n' "$dirs" | sed -n 2p)
+cache=$CRYPT_DIR/clean
+mkdir -p "$cache" "$CRYPT_DIR/tmp" || exit 1
+t=$CRYPT_DIR/tmp/$$
+trap 'rm -f "$t".*' EXIT
+fail() { echo "jeeves crypt: $*" >&2; exit 1; }
+
+# Keep a ciphertext for its plain text (hash), written atomically.
+remember() { cp "$2" "$cache/$1.$$" && mv "$cache/$1.$$" "$cache/$1"; }
+
+# encrypt <plain file> <out file>
+encrypt() {
+  local h r
+  h=$(git hash-object --no-filters -- "$1") || return 1
+  if [ -s "$cache/$h" ]; then cp "$cache/$h" "$2"; return; fi
+  r=$(cat "$CRYPT_TOP/recipient" 2>/dev/null) && [ -n "$r" ] || fail "no recipient file at the top of the data repo"
+  "$AGE" -r "$r" -o "$2" "$1" || return 1
+  remember "$h" "$2"
+}
+
+# plain <stored file> <out file>: decrypt, or copy content from before encryption.
+plain() {
+  if is_age "$1"; then decrypt_file "$1" > "$2"; else cp "$1" "$2"; fi
+}
+
+case "$1" in
+  clean)
+    cat > "$t.in" || exit 1
+    if is_age "$t.in"; then cat "$t.in"; exit; fi
+    encrypt "$t.in" "$t.out" || fail "could not encrypt ${2:-a file}"
+    cat "$t.out" ;;
+  smudge)
+    cat > "$t.in" || exit 1
+    if ! is_age "$t.in"; then cat "$t.in"; exit; fi
+    decrypt_file "$t.in" > "$t.out" || fail "could not decrypt ${2:-a file}"
+    remember "$(git hash-object --no-filters -- "$t.out")" "$t.in"
+    cat "$t.out" ;;
+  textconv)
+    [ $# = 2 ] || fail "textconv takes one file"
+    if is_age "$2"; then decrypt_file "$2"; else cat "$2"; fi ;;
+  merge)
+    [ $# -ge 4 ] || fail "merge takes <O> <A> <B> <L>"
+    plain "$2" "$t.O" && plain "$3" "$t.A" && plain "$4" "$t.B" || exit 1
+    git merge-file --marker-size="${5:-7}" -L ours -L base -L theirs "$t.A" "$t.O" "$t.B"
+    rc=$?
+    [ $rc -lt 128 ] || exit 1
+    encrypt "$t.A" "$t.enc" || exit 1
+    cp "$t.enc" "$3" || exit 1
+    exit $rc ;;
+  *) fail "usage: jeeves-crypt clean | smudge | textconv <file> | merge <O> <A> <B> <L>" ;;
+esac

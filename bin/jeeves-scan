@@ -5,7 +5,8 @@
 #   jeeves-scan   exit 0: nothing found; exit 1: each finding listed as file:line and the kind of secret
 #
 # Only added lines are checked. The matched text itself is never printed, so a finding does not spread the
-# secret further. The data repo is found as lib/lib.sh describes.
+# secret further. In an encrypted data repo it reads the plain text (with the key), and also refuses any file
+# under home/ or hosts/ that main would send unencrypted. The data repo is found as lib/lib.sh describes.
 
 . "$(dirname "$0")/../lib/lib.sh"
 
@@ -19,13 +20,23 @@ else
   from=$(git hash-object -t tree /dev/null)
 fi
 
+found=0
+if encrypted_at main; then
+  load_key || { say "the data repo's key is not in this device's key store: run /jeeves:unlock"; exit 1; }
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    if [ "$(git_repo cat-file blob "main:$f" | head -c ${#AGE_MAGIC})" != "$AGE_MAGIC" ]; then
+      say "not encrypted: $f"; found=1
+    fi
+  done < <(git_repo diff --name-only --no-renames --diff-filter=AM "$from" main -- home hosts)
+fi
+
 # Added lines as "<file>\t<line>\t<text>".
 added=$(git_repo diff --no-color --no-ext-diff -U0 "$from" main -- | awk '
   /^\+\+\+ / { f = substr($0, 7); next }
   /^@@/ { split($3, a, ","); n = substr(a[1], 2) + 0; next }
   /^\+/ { print f "\t" n "\t" substr($0, 2); n++ }')
 
-found=0
 look() { # look <kind> <grep flags> <extended regex>
   local hits
   hits=$(printf '%s\n' "$added" | cut -f3- | grep -n $2 -e "$3" | cut -d: -f1)
@@ -46,7 +57,7 @@ if [ -n "$added" ]; then
 fi
 
 if [ $found = 1 ]; then
-  say "do not push; remove the secret from the commits first (rewrite only commits not yet pushed)"
+  say "do not push; fix the commits first (rewrite only commits not yet pushed)"
   exit 1
 fi
 lines=0; [ -n "$added" ] && lines=$(printf '%s\n' "$added" | wc -l | tr -d ' ')

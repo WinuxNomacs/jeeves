@@ -31,10 +31,10 @@ while IFS= read -r p; do
     state=repo
   fi
   case "$state" in
-    insync) set_base "$p" "$d" ;;
+    insync) set_base "$p" "$d" "$CLAUDE_HOME/$p" ;;
     repo)
       if [ "$r" = "-" ]; then rm -f "$CLAUDE_HOME/$p"; else copy_file "$HOME_COPY/$p" "$CLAUDE_HOME/$p"; fi
-      set_base "$p" "$r"
+      set_base "$p" "$r" "$HOME_COPY/$p"
       installed+=("$p") ;;
     disk) skipped+=("$p (changed on disk; run jeeves-snapshot first)") ;;
     conflict) skipped+=("$p (changed on both sides; compare, then jeeves-snapshot --force or jeeves-apply --force)") ;;

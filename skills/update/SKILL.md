@@ -99,7 +99,8 @@ The live files are in `~/.claude`. The data repo keeps the shared ones under `ho
 
 ## Find the data repo
 
-Run `JEEVES_DATA="${user_config.data_repo}" jeeves-status`. If it says no data repo is set, or that the data
+Run `JEEVES_DATA="${user_config.data_repo}" jeeves-status`. If it says the data repo is encrypted and this
+device is locked, stop and point the user to `/jeeves:unlock`. If it says no data repo is set, or that the data
 repo is not a git repository, stop and tell the user to run `/jeeves:setup` (after setting the plugin option
 `data_repo` if it is empty). Never clone or create the data repo here: setup also offers to restore another
 machine's backup, which only it can do before the first sync. Otherwise start every later command
