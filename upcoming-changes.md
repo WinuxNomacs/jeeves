@@ -2,16 +2,8 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** 1. macOS device: finished in a Claude Code session on the Mac (this session is closed here and
-  the work resumes there; see "1. macOS device" for the handoff), testing the earlier phases there too,
-  including a live `/jeeves:setup` walk-through (not run live yet) and encryption with the Keychain and the
-  macOS dialog. Found and fixed so far: the marketplace's plugin source `"."` refused by older Claude Code
-  (0.2.1, `./`); an older Claude Code refuses `userConfig` (README: update first); setup's restore question
-  never asked (0.2.2). Checked on the Mac (2026-11-17, nothing to fix): the suite, the restored settings'
-  paths, the history cleanup, encryption with the Keychain and the dialog, the edit hook, the
-  `/jeeves:setup` walk-through (fresh-machine paths, scratch). Found: `jeeves-cmd` lacked the `jeeves-data`
-  topic (added). Left: whether `/reload-plugins` refreshes the plugin cache's copy of the clone.
-- **Later:** 2. Per-device overlay (only if a shared file must differ per host) · Anthropic directory
+- **Up next:** nothing planned (1.0.0 was to follow the macOS phase: the user's call).
+- **Later:** 1. Per-device overlay (only if a shared file must differ per host) · Anthropic directory
   submission (only on the user's direct command)
 
 ## Done
@@ -68,13 +60,20 @@
   Windows Git Bash with the Windows `age.exe`. Checked live on RAIVEN (Windows 11, from WSL): the Windows
   Credential Manager round trip and the Windows password prompt (found and fixed: PowerShell's exit status
   lost in a pipe, a progress record on stderr, Cancel returned as an empty answer). Not run live yet: a real
-  `/jeeves:encrypt` (the user's call), the Keychain and macOS dialog (macOS phase), `secret-tool` and zenity.
+  `/jeeves:encrypt` (the user's call), `secret-tool` and zenity.
   Details below under "2. Encryption".
 - 3. Cleanup warning (2026-11-17, from `new.md`): `skills/cleanup/SKILL.md` step 3 and `/jeeves:encrypt`'s
   question say the folded commits go for good; README; a check in `tests/run.sh`. Details below.
 - 4. Butler persona and reply conventions (2026-11-17, from `new.md`): a "Voice" section, the same in every
   skill (a check keeps them equal); README. Copy blocks and clickable options are also rules in the global
   CLAUDE.md (written through `/jeeves:update`). Release 0.7.0. Details below.
+- 5. macOS device (2026-11-17, in a Claude Code session on the Mac): every earlier phase checked on macOS 26
+  with bash 3.2 (63 tests, encryption included), plus live: the edit hook, restored settings' paths, the
+  cleanup dry run, encryption with the Keychain and the macOS dialog (Cancel too), and the `/jeeves:setup`
+  walk-through (fresh-machine paths, scratch). Found and fixed over the phase: the marketplace's plugin
+  source `"."` refused by older Claude Code (0.2.1), older Claude Code refusing `userConfig` (README),
+  setup's restore question never asked (0.2.2), and `jeeves-cmd` lacking the `jeeves-data` topic (added).
+  No code change in the Mac session. Details below under "5. macOS device".
 
 ---
 
@@ -704,7 +703,7 @@ credential store each time may be slow (measure; cache the key per process if ne
   recommending a password manager to generate it.
 - **E6. Old history:** folded away right after encrypting.
 
-## 1. macOS device
+## 5. macOS device (done)
 
 The scripts' half is covered: the test workflow runs the suite on macOS with its own bash 3.2 (green since
 run 43981931017, and on tag `v0.2.2`). Done by hand on the Mac (2026-11-17): installed 0.2.1 then 0.2.2 from
@@ -772,8 +771,10 @@ Checked in the Mac session (2026-11-17; macOS 26.6 arm64, `/bin/bash` 3.2.57, gi
   `CLAUDE.md` as a conflict with base `none`; merged keeping both sides, `jeeves-apply --force`, the second
   snapshot printed nothing, status listed no paths, `jeeves-scan` clean. Not pushed (scratch).
 - The plugin cache (`~/.claude/plugins/cache/jeeves/jeeves/0.7.0/`) is a copy of the clone, not a link,
-  while `.claude/CLAUDE.md` says a local-marketplace install loads in place; an untracked probe file
-  (`bin/.reload-probe`) was not in the cache before a second `/reload-plugins`.
+  but it is not what runs: `/reload-plugins` reported "`jeeves@jeeves` re-read from its folder:
+  `~/gitrepos/config/jeeves`", and the Bash tool's PATH holds the clone's `bin/`. An untracked probe file
+  stayed out of the cache after that reload. So `.claude/CLAUDE.md`'s "loads in place" holds; the cache
+  folders (`0.2.1`, `0.2.2`, `0.7.0`) are leftovers.
 
 Facts the Mac session needs (from RAIVEN's memory, which does not travel): the data repo is
 `WinuxNomacs/jeeves-cmd` (private), hosts so far `RAIVEN` (Linux, WSL), `RAIVEN-win` (Windows, same PC),
@@ -836,7 +837,7 @@ before the macOS phase.
 
 **As built:** the "Voice" section sits before each skill's first section (`lock` gained a "Steps" heading).
 
-## 2. Per-device overlay
+## 1. Per-device overlay
 
 Mostly obsolete since Generic made `settings.json` and `keybindings.json` per host. Only needed if a shared
 file (a `CLAUDE.md` rule, a skill) ever has to differ between hosts: then decide host vs platform scope and
