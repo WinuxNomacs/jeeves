@@ -35,6 +35,7 @@ already snapshotted the data repo when the plugin is installed.
   `lib/crypt.sh` — encryption: the key stores (Keychain, Windows Credential Manager through PowerShell,
   `secret-tool`, a key file), the passphrase dialogs, age helpers.
 - `tests/run.sh` — tests; each runs against a scratch `~/.claude`, data repo and bare remote.
+- `.claude/skills/release/` — the release procedure (a skill for working on the repo, not shipped as one).
 - This file is `.claude/CLAUDE.md`, for working on the repo; Claude Code loads it here as project context.
   At the root it would be shipped with the plugin to no effect, and `claude plugin validate --strict` fails.
 
@@ -46,6 +47,9 @@ already snapshotted the data repo when the plugin is installed.
 - To run a `bin/` script by hand against scratch folders, `export CLAUDE_HOME=<scratch>/.claude
   JEEVES_DATA=<scratch>/data` (and `JEEVES_HOST=<name>` to act as another host) first; never put `env ...`
   in a variable and run `$VAR cmd`, which zsh (the macOS shell) does not split.
+- **Releases follow `.claude/skills/release/SKILL.md`** (`/release`): readiness, the review for bugs,
+  interaction breakdowns and secret leaks, the checks, the release branch, CI, the merge, and the tag on the
+  user's word.
 - After changing a manifest or `hooks.json`: `claude plugin validate .` and
   `claude plugin validate .claude-plugin/marketplace.json`.
 - Rehearse an upgrade in a scratch `CLAUDE_CONFIG_DIR`: `claude plugin marketplace add WinuxNomacs/jeeves`
@@ -83,8 +87,9 @@ The repo is public (`WinuxNomacs/jeeves`) and is the plugin's marketplace. Claud
 push branches to it whenever the work needs it, and push `main` after a merge whose full test suite passed,
 without asking each time. A push to `main` reaches new installs at once (they take the default branch);
 existing installs get it only when `plugin.json`'s `version` changes, which happens on a `release/X.Y.Z`
-branch (version and `CHANGELOG.md`), merged like any other. Still never force-push, rewrite pushed history,
-or tag: a tag marks a release and starts the test workflow, so it stays the user's call. Tags are annotated:
+branch (version and `CHANGELOG.md`), merged like any other. Still never force-push or rewrite pushed history.
+A tag marks a release and starts the test workflow, so Claude tags and pushes a tag only when the user says
+so for that release. Tags are annotated:
 `git tag -a vX.Y.Z -m "Jeeves X.Y.Z"` (a plain `git tag` fails here with "no tag message").
 
 The only workflow, `.github/workflows/test.yml`, runs on a pushed tag or by hand (Actions tab, or
