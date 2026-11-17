@@ -2,6 +2,11 @@
 
 A new version reaches installed copies only when `version` in `.claude-plugin/plugin.json` changes.
 
+## 0.2.1 (2026-11-17)
+
+- The marketplace gives the plugin source as `./`: older Claude Code versions refused to add the marketplace
+  with `"."` (`plugins.0.source: Invalid input`).
+
 ## 0.2.0 (2026-11-16)
 
 - **Shared vs per device.** Only `CLAUDE.md`, `agents/`, `commands/` and `skills/` are synced between devices

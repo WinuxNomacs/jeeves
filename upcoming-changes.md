@@ -34,7 +34,8 @@
 - 4. Publish (2026-11-16): the repo is public; MIT `LICENSE`; manifests pass `claude plugin validate
   --strict` (`CLAUDE.md` moved to `.claude/`); `.github/workflows/test.yml` (tags and by hand; Linux,
   Windows, macOS bash 3.2, all green); README installs from GitHub; release 0.2.0 merged (`9de7f1e`,
-  `CHANGELOG.md`), to be tagged by the user. Details below under "4. Publish".
+  `CHANGELOG.md`), then 0.2.1 (marketplace source `./`: older Claude Code versions refused `"."`, found
+  adding the marketplace on the Mac), to be tagged by the user. Details below under "4. Publish".
 
 ---
 
