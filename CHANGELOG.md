@@ -2,6 +2,12 @@
 
 A new version reaches installed copies only when `version` in `.claude-plugin/plugin.json` changes.
 
+## 0.2.2 (2026-11-17)
+
+- `/jeeves:setup` always asks whether to restore another device's backup, and waits for the answer.
+- On a machine without a data repo, the session-start message and `/jeeves:update` point to `/jeeves:setup`
+  instead of the update skill cloning the repo itself (which skipped the restore question).
+
 ## 0.2.1 (2026-11-17)
 
 - The marketplace gives the plugin source as `./`: older Claude Code versions refused to add the marketplace
