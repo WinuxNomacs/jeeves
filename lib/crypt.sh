@@ -84,11 +84,13 @@ public static class JeevesCred {
 '
 
 # Run a PowerShell script (ASCII) through -EncodedCommand (UTF-16LE base64), so no quoting reaches the
-# Windows command line. Extra arguments are not passed: the script reads stdin.
+# Windows command line. Extra arguments are not passed: the script reads stdin. Returns PowerShell's status.
 run_powershell() {
-  local enc
-  enc=$(printf '%s' "$1" | iconv -f UTF-8 -t UTF-16LE | base64 | tr -d '\n\r') || return 1
-  powershell.exe -NoProfile -NoLogo ${2:+-NonInteractive} -EncodedCommand "$enc" | tr -d '\r'
+  local enc out rc
+  enc=$(printf '%s\n%s' '$ProgressPreference = "SilentlyContinue"' "$1" | iconv -f UTF-8 -t UTF-16LE | base64 | tr -d '\n\r') || return 1
+  out=$(powershell.exe -NoProfile -NoLogo ${2:+-NonInteractive} -EncodedCommand "$enc"); rc=$?
+  [ -z "$out" ] || printf '%s\n' "$out" | tr -d '\r'
+  return $rc
 }
 
 # store_get <recipient>: print the private key, or return 1.
@@ -188,5 +190,7 @@ $m = [Console]::In.ReadLine()
 $c = $Host.UI.PromptForCredential("Jeeves", $m, "Jeeves", "")
 if ($c -eq $null) { exit 1 }
 [Console]::Out.Write($c.GetNetworkCredential().Password)') || return 1
+  # Cancel may come back as an empty answer rather than no credential.
+  [ -n "$out" ] || return 1
   printf '%s\n' "$out"
 }
