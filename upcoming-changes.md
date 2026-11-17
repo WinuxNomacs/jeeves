@@ -8,8 +8,9 @@
   macOS dialog. Found and fixed so far: the marketplace's plugin source `"."` refused by older Claude Code
   (0.2.1, `./`); an older Claude Code refuses `userConfig` (README: update first); setup's restore question
   never asked (0.2.2). Checked on the Mac (2026-11-17, nothing to fix): the suite, the restored settings'
-  paths, the history cleanup, encryption with the Keychain and the dialog. Left: the edit hook (a direct
-  edit, not through `/jeeves:update`), the live `/jeeves:setup` walk-through.
+  paths, the history cleanup, encryption with the Keychain and the dialog, the edit hook, the
+  `/jeeves:setup` walk-through (fresh-machine paths, scratch). Found: `jeeves-cmd` lacked the `jeeves-data`
+  topic (added). Left: whether `/reload-plugins` refreshes the plugin cache's copy of the clone.
 - **Later:** 2. Per-device overlay (only if a shared file must differ per host) · Anthropic directory
   submission (only on the user's direct command)
 
@@ -572,8 +573,8 @@ values go to `settings.json` under `pluginConfigs`. `gh` is the GitHub CLI (vers
   GitHub's "Hi <login>! You've successfully authenticated" comes with exit status 1, so the text is matched.
 - **Arguments are checked before `gh` runs** (a test caught `gh config get` running before a bad name was
   refused).
-- **Existing data repos need the topic** to be found: `WinuxNomacs/jeeves-cmd` has none yet (checked with
-  `gh repo view`).
+- **Existing data repos need the topic** to be found: `WinuxNomacs/jeeves-cmd` had none; added on
+  2026-11-17 in the macOS phase (`gh repo edit --add-topic jeeves-data`), and `jeeves-github find` lists it.
 
 ### What can fail
 
@@ -759,6 +760,20 @@ Checked in the Mac session (2026-11-17; macOS 26.6 arm64, `/bin/bash` 3.2.57, gi
   changed", exit 1, still locked). No scratch Keychain entry left.
 - The Mac's `~/.claude/CLAUDE.md` was behind the shared one (RAIVEN's later rules); `jeeves-apply`
   installed it.
+- Edit hook, after `/reload-plugins`: a direct Edit of the real `~/.claude/CLAUDE.md` (one word) was
+  committed within seconds as `726b2d2 snapshot(Winuxs-MacBook-Pro): backup settings.json CLAUDE.md` (the
+  settings backup rode along: the install had changed it). Local only until `/jeeves:update` pushes it.
+- `/jeeves:setup` walk-through, fresh-machine paths, in this session on a scratch `~/.claude` and an empty
+  scratch data repo folder (`JEEVES_HOST=NewMac`): `jeeves-check` all ok (gh signed in, keychain, age);
+  `jeeves-github find` listed nothing (the missing topic, above; after adding it, the first call right
+  after the edit was still empty, the next one listed `jeeves-cmd`: GitHub's lag); HTTPS clone with gh's
+  sign-in; not encrypted, so no unlock; `jeeves-restore` offered RAIVEN-win, RAIVEN, Winuxs-MacBook-Pro and
+  saved the scratch `settings.json` first; the first snapshot committed the backup and reported
+  `CLAUDE.md` as a conflict with base `none`; merged keeping both sides, `jeeves-apply --force`, the second
+  snapshot printed nothing, status listed no paths, `jeeves-scan` clean. Not pushed (scratch).
+- The plugin cache (`~/.claude/plugins/cache/jeeves/jeeves/0.7.0/`) is a copy of the clone, not a link,
+  while `.claude/CLAUDE.md` says a local-marketplace install loads in place; an untracked probe file
+  (`bin/.reload-probe`) was not in the cache before a second `/reload-plugins`.
 
 Facts the Mac session needs (from RAIVEN's memory, which does not travel): the data repo is
 `WinuxNomacs/jeeves-cmd` (private), hosts so far `RAIVEN` (Linux, WSL), `RAIVEN-win` (Windows, same PC),
