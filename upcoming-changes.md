@@ -2,7 +2,14 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** 1. macOS device (a real Mac, by hand; the scripts already pass on macOS in CI)
+- **Up next:** 1. macOS device (a real Mac, by hand; the scripts already pass on macOS in CI). Found so far,
+  fixed: the marketplace's plugin source `"."` refused by older Claude Code (0.2.1, `./`); an older Claude Code
+  refuses `userConfig` (README: update first); setup's restore question was never asked on the Mac, as on
+  Windows before (0.2.2: the hook and status messages on a machine without a data repo point to
+  `/jeeves:setup`, the update skill never clones and sends it there, setup asks the restore question with
+  AskUserQuestion and waits). Synced from the Mac: `hosts/Winuxs-MacBook-Pro/`, and its CLAUDE.md rules merged
+  into the shared one (then made to hold on Windows too: elevated permissions, killing by PID, empty-variable
+  deletes, graceful-then-forced stops). Still to check on the Mac: `/jeeves:restore`, the edit hook.
 - **Later:** 2. Per-device overlay (only if a shared file must differ per host) · Anthropic directory
   submission (only on the user's direct command)
 

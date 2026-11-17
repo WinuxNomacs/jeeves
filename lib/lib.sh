@@ -23,11 +23,11 @@ find_data_repo() {
     top=$(git rev-parse --show-toplevel 2>/dev/null) && [ -d "$top/home" ] && candidate=$top
   fi
   if [ -z "$candidate" ]; then
-    DATA_REPO_PROBLEM="no data repo set: set the plugin option data_repo (/plugin, or /config), export JEEVES_DATA, or run this inside the data repo"
+    DATA_REPO_PROBLEM="no data repo set: set the plugin option data_repo, then run /jeeves:setup (or export JEEVES_DATA, or run this inside the data repo)"
     return 1
   fi
   if ! git -C "$candidate" rev-parse --git-dir >/dev/null 2>&1; then
-    DATA_REPO_PROBLEM="the data repo $candidate is not a git repository"
+    DATA_REPO_PROBLEM="the data repo $candidate is not a git repository: to clone or create it, run /jeeves:setup"
     return 1
   fi
   REPO=$(cd "$candidate" && pwd)
