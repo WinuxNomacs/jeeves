@@ -2,6 +2,14 @@
 
 A new version reaches installed copies only when `version` in `.claude-plugin/plugin.json` changes.
 
+## 0.7.0 (2026-11-17)
+
+- **Jeeves speaks as Jeeves.** Every `/jeeves:` command answers as a wise and gently whimsical Gilded Age
+  butler, in the prose only (commands, code and files stay plain), gives anything meant to be pasted
+  elsewhere as a copy block, and offers choices as clickable options.
+- `/jeeves:cleanup` and `/jeeves:encrypt` say plainly that the history they fold is gone for good once this
+  device's copy is replaced, and ask with "remove permanently" in the answer.
+
 ## 0.6.0 (2026-11-17)
 
 - **Encryption with a passphrase.** `/jeeves:encrypt` encrypts the data repo's `home/` and `hosts/` with
