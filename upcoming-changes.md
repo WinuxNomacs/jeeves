@@ -382,12 +382,14 @@ objects; the packed part is 4 KiB). Growth is slow (small text files), so this i
 **Builds on:** `jeeves-snapshot` (the fresh backup, fetch and fast-forward), `jeeves-scan`, the update skill's
 push, `.sync-state/` (per-device sync record: blob hashes, which a rewrite does not change).
 
-**Conflicts with standing rules, so it needs one narrow exception:** the global CLAUDE.md ("never
-force-push", "only rewrite history that has not been pushed"), this repo's CLAUDE.md ("the scripts never
-push") and the update skill ("never force-push"). Proposed exception: only the cleanup, only the data repo's
-`main`, only with `--force-with-lease` (so a push another device made meanwhile is never overwritten), only
-when the user ran it or turned on the automatic cleanup. The global rule is changed through `/jeeves:update`
-when the phase is built.
+**Conflicts with standing rules, so the rules change (decision E):** the global CLAUDE.md ("never
+force-push", "only rewrite history that has not been pushed") says that a repo's own CLAUDE.md may allow a
+force-push or a rewrite of pushed history for a task it names, and that the rule holds everywhere else (done
+2026-11-17 through `/jeeves:update`). When the phase is built, the data repo's CLAUDE.md ("Still never
+force-push, rewrite pushed history") gets that permission for the cleanup only: only the data repo's `main`,
+only with `--force-with-lease` (so a push another device made meanwhile is never overwritten), only when the
+user ran it or turned on the automatic cleanup. This repo's CLAUDE.md ("the scripts never push") and the
+update skill ("never force-push") name `jeeves-cleanup` as the one exception.
 
 ### Design (proposed)
 
@@ -414,9 +416,9 @@ when the phase is built.
   `auto_every_days`), so all devices agree and only one needs to run it (decision A). The last cleanup's
   date is the root commit's, so no extra state. When due, the session-start hook runs it and pushes (decision C).
   `auto_every_days` must be ≥ `keep_days` (request (2)); a smaller value is refused with a message.
-- **GitHub caveat:** after the force-push, GitHub no longer shows the old commits, but it may keep them as
-  unreachable objects for a while and in any fork; removing them from GitHub for good is a GitHub support
-  request. A secret already pushed must be revoked, not cleaned up.
+- **Out of scope: GitHub's own retention.** GitHub may keep the removed commits as unreachable objects for a
+  while, and forks keep them; that is GitHub's to clean up (decision E). The aim is a data repo that stays
+  small and readable over years. A secret already pushed must still be revoked, not cleaned up.
 
 ### What can fail (it runs unattended in automatic mode)
 
@@ -451,6 +453,8 @@ only when due. Fake dates with `GIT_COMMITTER_DATE`.
   failure is undone and reported.
 - **D. Two numbers:** `keep_days` (minimum 1) and `auto_every_days` (how often the automatic cleanup runs,
   at least `keep_days`; unset means no automatic cleanup).
+- **E. Rules:** the global rule allows a force-push only where a repo's own CLAUDE.md names the task (the
+  data repo's, for the cleanup); GitHub's retention of removed commits is accepted as out of our control.
 
 ## 2. macOS device (was 1)
 
