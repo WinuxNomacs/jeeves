@@ -1,5 +1,7 @@
 # Jeeves
 
+![Jeeves, a butler in a dark tailcoat and white bow tie](docs/images/jeeves-butler.jpg)
+
 A Claude Code plugin that keeps the version history of your global Claude Code preferences in a git repo of
 your own (the **data repo**), on Linux, macOS and Windows:
 
