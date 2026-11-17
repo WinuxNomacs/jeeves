@@ -599,22 +599,40 @@ openssl build would need its own HMAC. No GitHub-native client-side encryption w
 ### Design (proposed)
 
 - **Keys:** `jeeves-encrypt` makes an age key pair; the private key is committed as `identity.age`,
-  encrypted with the user's passphrase. Each device enters the passphrase once (setup, or
+  encrypted with the user's passphrase, and the public key as `recipient` (plain: encrypting needs only it). Each device enters the passphrase once (setup, or
   `/jeeves:unlock`); the decrypted private key goes to the **OS credential store** (decision E2): macOS
   Keychain (`security`), Windows Credential Manager (read through PowerShell, which has no built-in reader),
   Linux Secret Service (`secret-tool`); WSL probably through Windows' store via `powershell.exe` (to check).
   The passphrase itself is never stored. Where no store is available, say so and ask (a key file is the
   fallback to offer).
+- **Passphrase entry (decision E4):** never through the Claude chat (it is saved in transcripts) and never
+  as a command argument. An OS dialog: `osascript` on macOS, the Windows credential prompt (`Get-Credential`,
+  also from WSL through `powershell.exe`), `zenity --password` on a Linux desktop; with none available, a
+  command for the user to paste into their own terminal. The script hands it to age on a file descriptor
+  (`AGE_PASSPHRASE_FD`, `age -j batchpass`), never in an environment variable or a file. Needs age 1.3.0 or
+  later with `age-plugin-batchpass` (age itself reads a passphrase only from a terminal, which Claude's
+  shell lacks; checked in its source 2026-11-17); check what the package managers ship.
+- **Making the passphrase (decision E5):** the user's own. Before asking, explain that a passphrase lost on
+  every device means the data on GitHub can't be read (an unlocked device can set a new one without the old),
+  and recommend generating one with a trusted password manager. Typed or pasted twice, and both must match.
+  How they keep it is up to them.
+- **Key once per script run (measured 2026-11-17):** a read from the Windows store costs about 1-1.5 s
+  (PowerShell start from WSL 620-750 ms; `Add-Type` CredRead 1.5 s; DPAPI 0.9 s), and git starts the filter
+  once per file (133 files in jeeves-cmd today). So each Jeeves script reads the key once and passes it to
+  the git it runs in an environment variable of that process only; the filter, `textconv` and merge driver
+  read the store only when it is missing (git run by hand).
 - **Git integration:** a clean/smudge filter (`filter.jeeves.required=true`, so a missing key fails rather
   than committing plain text), a `textconv` for diffs, and a merge driver that decrypts, merges with
   `git merge-file`, and encrypts, so the working tree stays plain and the update skill's merges keep working.
-  age output differs each run, so the filter keeps a plain-hash → ciphertext cache in `.git/` (otherwise
-  every `git status` sees a change). `jeeves-scan` scans the plain text.
+  age output differs each run, so the filter keeps a plain-hash → ciphertext cache in `.git/jeeves/`
+  (otherwise every `git status` sees a change); encrypting needs no private key, so `git status` never reads
+  the store. `jeeves-scan` scans the plain text.
 - **Scope (decision E3):** every file except the repo's own config (`.gitignore`, `.gitattributes`,
   `README.md`, `jeeves.conf`, `identity.age`). Visible on GitHub still: file names (including project paths
   under `hosts/`), sizes, commit messages.
-- **Commands:** `/jeeves:encrypt` (turn on for an existing repo: re-commits every file encrypted; older
-  history stays plain until a cleanup folds it), `/jeeves:unlock`, `/jeeves:lock` (removes the key from the
+- **Commands:** `/jeeves:encrypt` (turn on for an existing repo: re-commits every file encrypted, then
+  folds all history into that one encrypted commit at once with the history cleanup, decision E6; GitHub may
+  keep unreachable copies for a while, outside our control), `/jeeves:unlock`, `/jeeves:lock` (removes the key from the
   store), passphrase change (re-encrypts only `identity.age`).
 - **Locked device:** hooks exit 0 and say once that the data repo is locked and how to unlock.
 
@@ -631,6 +649,10 @@ credential store each time may be slow (measure; cache the key per process if ne
 - **E1. Approach:** our own, on age.
 - **E2. Key storage:** the OS credential store, unattended after one unlock per device.
 - **E3. Scope:** all data, offered during setup.
+- **E4. Passphrase entry:** an OS dialog, falling back to the user's own terminal.
+- **E5. Making the passphrase:** the user's own, typed twice, after explaining what losing it means and
+  recommending a password manager to generate it.
+- **E6. Old history:** folded away right after encrypting.
 
 ## 3. macOS device
 
