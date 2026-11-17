@@ -1,7 +1,7 @@
 {
   "name": "jeeves",
   "displayName": "Jeeves",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Shares your global Claude Code CLAUDE.md, agents, commands and skills across your devices through a git repo of your own, and backs up each device's settings, keybindings and memories, with a snapshot at every session start and after each edit to the global CLAUDE.md",
   "author": {
     "name": "Winux Nomacs"
