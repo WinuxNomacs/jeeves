@@ -15,7 +15,7 @@ them for you:
 
 | Hook | When | What it runs |
 |---|---|---|
-| SessionStart | every session start | `jeeves-snapshot --hook`: pulls the data repo, records what changed in `~/.claude`, backs up this device, commits on `main` |
+| SessionStart | every session start | `jeeves-snapshot --hook`: pulls the data repo, records what changed in `~/.claude`, backs up this device, commits on `main`; then the automatic history cleanup, if it is turned on and due |
 | PostToolUse (`Write\|Edit`) | right after Claude edits `~/.claude/CLAUDE.md` | `jeeves-snapshot --hook --no-pull`, reported as a system message |
 
 In hook mode the scripts print only when something needs attention, and they never block a session.
@@ -26,6 +26,7 @@ In hook mode the scripts print only when something needs attention, and they nev
 |---|---|---|
 | `/jeeves:setup [url]` | you, after installing | Clones your data repo (or creates one), offers to restore another device's backup on a new machine, then runs the first sync and backup. |
 | `/jeeves:update [change]` | you, or Claude | Syncs the shared files and pushes; with a change, makes it. See below. |
+| `/jeeves:cleanup <days>` | you | Removes history older than that many days (1 or more), keeping every file, after a fresh backup and your confirmation; `/jeeves:cleanup auto <every> [<keep>]` or `off` sets the automatic cleanup. See below. |
 | `/jeeves:restore <host>` | you | Copies a device's backed-up `settings.json`, `keybindings.json` (and on request memories) onto this machine, then fixes paths that only worked there (`data_repo`, a local marketplace folder) and lists other machine-specific values. Replaced files are saved first. |
 
 ### The `update` skill
@@ -45,6 +46,27 @@ It pushes without asking and shows no diff unless you ask for one: every step is
 whenever text could be lost: a passage changed differently on both sides, a rejected push (it never
 force-pushes), or a possible secret found by `jeeves-scan` in what it is about to push.
 
+### History cleanup
+
+The data repo gains a commit for every change, on every device. To keep it small and readable over the
+years, `/jeeves:cleanup <days>` folds the commits on `main` older than that many days into one first commit
+holding the files as they were then. Newer commits stay as they were (files, authors, dates, messages), and no
+file changes, on disk or in the repo.
+
+- It takes a fresh backup first, says how many commits it will fold and up to which date, and asks you.
+- It force-pushes `main` with a lease: if another device pushed in the meantime, the push is refused and
+  nothing changes. Any failure puts `main` back. This is the only force-push in Jeeves.
+- The removed history stays on that device as `.sync-state/history-before-cleanup.bundle` (never pushed)
+  until the next cleanup replaces it; `git clone <bundle>` opens it.
+- Other devices notice the new history at their next snapshot and switch to it, keeping their own old
+  history in the same bundle. A change a device had not pushed is recorded again from its disk, or reported
+  as a conflict if the other side changed the same file.
+- **Automatic:** `jeeves.conf` at the top of the data repo, shared by all devices, holds
+  `keep_days=<n>` and `auto_every_days=<m>` (`m` at least `n`). At session start, when the history's first
+  commit is `m` days old, the hook cleans up and pushes. `/jeeves:cleanup auto <m> <n>` writes it.
+- GitHub may keep removed commits for a while, and forks keep theirs; that is outside Jeeves. A secret that
+  was ever pushed must be revoked.
+
 ## Commands
 
 The plugin's `bin/` is on the PATH of Claude's Bash tool, so Claude (or you, by giving the full path) runs:
@@ -54,6 +76,7 @@ The plugin's `bin/` is on the PATH of Claude's Bash tool, so Claude (or you, by 
 | `jeeves-snapshot` | `~/.claude` → data repo | Fast-forwards `main` from its remote, copies changed shared files into `home/`, mirrors this device's settings, keybindings and memories into `hosts/<host>/`, commits on `main`. Never pushes. |
 | `jeeves-apply` | data repo → `~/.claude` | Installs shared files that changed in the data repo since this device last synced. Never overwrites a file a session edited since then. |
 | `jeeves-restore [<host> [--memories]]` | data repo → `~/.claude` | Copies a device's backup onto this machine, saving replaced files under `.sync-state/overwritten/`. Without a host, prints this machine's host name and the hosts with a backup. |
+| `jeeves-cleanup <days>` | data repo → origin | Folds the history older than `<days>` days into one root commit (same files) and force-pushes `main` with a lease; `--dry-run <days>` only says what it would do; `--auto` is what the session-start hook runs. |
 | `jeeves-init <folder> [<url>]` | (new repo) | Creates an empty data repo (`.gitignore`, `.gitattributes`, README), optionally with a remote. |
 | `jeeves-status` | (read-only) | Lists each path out of sync (`disk`, `repo` or `conflict`) with its disk, repo and last-synced hashes, and how `main` stands against `origin/main`. |
 | `jeeves-scan` | (read-only) | Looks for secrets (private keys, API keys and tokens, password assignments) in the commits a push would send; lists file and line, never the value. |
@@ -78,6 +101,7 @@ A git repo with:
   `projects/<project>/memory/`). Only that device writes its folder. Memories are restored only on request
   and only for projects that exist on the new machine, because their folder names are absolute paths.
 - Never copied: credentials, `~/.claude.json`, history, transcripts, caches.
+- `jeeves.conf` (optional): the automatic history cleanup's settings.
 - `.gitignore`: `.sync-state/` and `*.sync-tmp`; `.gitattributes`: `* text=auto eol=lf`.
 
 `<host>` is the machine's host name; on native Windows it gets `-win` (`mypc-win`), so a WSL and a Windows

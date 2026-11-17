@@ -12,14 +12,16 @@ already snapshotted the data repo when the plugin is installed.
 ## Layout
 
 - `.claude-plugin/plugin.json` — manifest (`userConfig.data_repo`); `.claude-plugin/marketplace.json` — the repo
-  is its own marketplace (plugin source `"."`).
+  is its own marketplace (plugin source `"./"`).
 - `hooks/hooks.json` — SessionStart → `jeeves-snapshot --hook`; PostToolUse `Write|Edit` → `jeeves-hook-edit`.
 - `bin/` — on the Bash tool's PATH while the plugin is enabled, so every name starts with `jeeves-`.
   `jeeves-snapshot` (`~/.claude` → data repo, commits on its `main`), `jeeves-apply` (data repo → `~/.claude`),
   `jeeves-hook-edit` (snapshots after an edit to `~/.claude/CLAUDE.md`), `jeeves-status` (read-only: what is
   out of sync, with hashes), `jeeves-scan` (secrets in the outgoing commits), `jeeves-restore` (a host's
-  backup → `~/.claude`), `jeeves-init` (new data repo).
-- `skills/` — `update` (`/jeeves:update`: sync, or a change to a shared file, then push), `setup`, `restore`.
+  backup → `~/.claude`), `jeeves-init` (new data repo), `jeeves-cleanup` (folds old history into one root
+  commit and force-pushes with a lease; `--auto` runs from the session-start snapshot per `jeeves.conf`).
+- `skills/` — `update` (`/jeeves:update`: sync, or a change to a shared file, then push), `setup`, `restore`,
+  `cleanup` (`/jeeves:cleanup`: history cleanup and its `jeeves.conf` settings).
   They get the data repo from `${user_config.data_repo}` (substituted into skill text; the Bash tool sees no
   plugin variables).
 - Shared files (`home/`, synced) vs per-device files (`hosts/<host>/`, backup only): the lists are at the top
@@ -43,8 +45,10 @@ already snapshotted the data repo when the plugin is installed.
   could differ there (from WSL: copy the tree to a `C:` folder and run `bash.exe -lc tests/run.sh`). No GNU-only flags (no `sed -i`, no `\|` in sed), no
   associative arrays, no `set -u`, no `jq`.
 - Hooks must never block a session: hook mode always exits 0 and prints only what needs attention.
-- The scripts themselves never push; they contact the remote only for `fetch` + fast-forward in `snapshot`.
-  Only the `update` skill pushes, after `jeeves-scan`.
+- The scripts never push, with one exception: `jeeves-cleanup` force-pushes the data repo's `main`, always
+  with a lease (`--force-with-lease=main:<the origin/main it checked>`), after `jeeves-scan`, and puts `main`
+  back if the push fails. Otherwise they contact the remote only for `fetch` + fast-forward in `snapshot`,
+  and only the `update` and `cleanup` skills push.
 - Never copy secrets: `.credentials.json`, `~/.claude.json`, transcripts, history.
 - Tests: `tests/run.sh` (or `tests/run.sh <name part>`).
 

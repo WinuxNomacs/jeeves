@@ -41,8 +41,9 @@ The live files are in `~/.claude`. The data repo keeps the shared ones under `ho
   ways. Additions on both sides are not a conflict: keep both.
 - **Push without asking** when the steps below end cleanly. Do not show diffs unless the user asks for them;
   everything is in git.
-- **Never force-push**, never rewrite pushed commits, never tag. A rejected push is never forced: fetch, merge,
-  and if it is still rejected, stop and ask.
+- **Never force-push**, never rewrite pushed commits, never tag (only `/jeeves:cleanup`, which the user
+  starts, rewrites history). A rejected push is never forced: fetch, merge, and if it is still rejected,
+  stop and ask.
 - **A failed `jeeves-scan` stops everything:** tell the user what it found (file and line, never the value)
   and ask how to proceed. Never search files, transcripts or the environment for credentials.
 - Edit `home/…` in the data repo, never `~/.claude` directly; `jeeves-apply` installs the result. Never edit

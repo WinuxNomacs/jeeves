@@ -3,3 +3,4 @@
 # Untracked inbox for new requests, and personal Claude Code settings for this repo.
 new.md
 .claude/settings.local.json
+ignored/
