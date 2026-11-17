@@ -36,13 +36,17 @@ again. Never copy credentials, `~/.claude.json`, history or transcripts anywhere
    - new: `jeeves-init "${user_config.data_repo}" [<url of an empty remote repo>]`. Jeeves creates no
      GitHub repo itself: if the user wants a remote, they create an empty private one and give its URL.
    If a clone fails for lack of access, stop and tell the user; never look for credentials.
-3. **New machine?** Start every later command with `cd <the datarepo path from step 1> &&` (the shell's
-   folder is not kept between commands). Run `jeeves-restore`: it prints `this host: <name>` and
-   `backups: <hosts>`. Whether `<name>` is listed says nothing: the session-start snapshot backs this
-   machine up before setup runs. When the list names other hosts, ask the user whether to restore one of
-   them onto this machine (that machine's settings and keybindings; memories too, for projects that exist
-   here): useful on a fresh machine, and a backup from another OS may hold paths that need fixing. If yes,
-   follow `/jeeves:restore <host>` (the restore skill) before going on.
+3. **Restore another machine's backup? Always ask; never skip this step.** Start every later command with
+   `cd <the datarepo path from step 1> &&` (the shell's folder is not kept between commands). Run
+   `jeeves-restore`: it prints `this host: <name>` and `backups: <hosts>`. Whether `<name>` is listed says
+   nothing: the session-start snapshot backs this machine up before setup runs. When the list names any host
+   other than `<name>`, stop and ask the user with the AskUserQuestion tool (one option per other host, plus
+   "No, keep this machine's settings"), and do not start step 4 until they answer. Ask even when this machine
+   already has settings, and even when other rules say to proceed without asking: the choice is theirs. A
+   restore copies that machine's `settings.json` and `keybindings.json` (memories too, for projects that
+   exist here; ask about those in the same question or right after), saving this machine's copies first; a
+   backup from another OS may hold paths that need fixing. If they pick a host, follow `/jeeves:restore
+   <host>` (the restore skill) before going on.
 4. **First sync and backup:** follow `/jeeves:update` (the update skill) with no request: it records this
    machine's files, merges what differs from the shared copies (on a new machine with no sync record, it keeps
    everything both sides hold and asks before dropping text), installs the result, backs up this host under

@@ -250,6 +250,7 @@ t_no_data_repo() {
   check "apply exit status 1" [ $rc = 1 ]
   export JEEVES_DATA=$W/claude
   check "a folder that is not a git repo is refused" grep -q "not a git repository" <<< "$(snap)"
+  check "and the message points to /jeeves:setup" grep -q "run /jeeves:setup" <<< "$(snap)"
 }
 
 t_edit_hook_snapshots_claude_md() {
@@ -506,6 +507,8 @@ t_plugin_files() {
   check "update skill is named update" grep -q '^name: update$' "$sk"
   check "Claude may start the update skill" bash -c '! grep -q "^disable-model-invocation: true" "$1"' _ "$sk"
   check "update skill gets the data repo from the plugin option" grep -q 'JEEVES_DATA="${user_config.data_repo}"' "$sk"
+  check "the update skill sends a machine with no data repo to setup, never clones" grep -q 'Never clone or create the data repo here' "$sk"
+  check "setup always asks about a restore before the first sync" grep -q 'Always ask; never skip this step' "$SRC/skills/setup/SKILL.md"
   for k in setup restore; do
     sk=$SRC/skills/$k/SKILL.md
     check "$k skill is named $k" grep -q "^name: $k\$" "$sk"

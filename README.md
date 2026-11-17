@@ -92,7 +92,8 @@ the commands inside the data repo or export `JEEVES_DATA`.
 
 Requirements: Claude Code (the CLI or an IDE extension; claude.ai and Cowork don't install plugins with a
 `bin/` folder), git and bash. On Windows: Git for Windows, since Claude Code runs hooks and its Bash tool in
-Git Bash.
+Git Bash. Claude Code must be recent enough for plugin options: an older one refuses the plugin with
+`Unrecognized keys: "displayName", "userConfig"`; run `claude update` first (2.1.304 is known to work).
 
 ```sh
 claude plugin marketplace add WinuxNomacs/jeeves
@@ -103,8 +104,8 @@ Claude Code asks for `data_repo`: the folder where your data repo is (or will be
 example `~/gitrepos/config/jeeves-data`. Then run `/jeeves:setup` (with your data repo's git URL if you
 already have one) in a new session.
 
-The VS Code extension has no `/plugin` command: run the commands above with the `claude` executable the
-extension ships (on Windows,
+The VS Code extension has no `/plugin` command: run the commands above in a terminal, with `claude` if it is
+installed, or else with the executable the extension ships (on Windows,
 `%USERPROFILE%\.vscode\extensions\anthropic.claude-code-<version>-win32-x64\resources\native-binary\claude.exe`),
 adding `--config data_repo=<path>` to the install, then start a new conversation.
 

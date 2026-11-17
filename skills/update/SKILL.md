@@ -51,8 +51,10 @@ The live files are in `~/.claude`. The data repo keeps the shared ones under `ho
 
 ## Find the data repo
 
-Run `JEEVES_DATA="${user_config.data_repo}" jeeves-status`. If it says no data repo is set, stop and tell the
-user to set the plugin option `data_repo` (`/plugin` or `/config`). Otherwise start every later command
+Run `JEEVES_DATA="${user_config.data_repo}" jeeves-status`. If it says no data repo is set, or that the data
+repo is not a git repository, stop and tell the user to run `/jeeves:setup` (after setting the plugin option
+`data_repo` if it is empty). Never clone or create the data repo here: setup also offers to restore another
+machine's backup, which only it can do before the first sync. Otherwise start every later command
 with `cd <the path on its datarepo line> &&` (the shell may not keep its folder between commands), so the
 scripts and git act on the data repo.
 
