@@ -39,19 +39,29 @@ already snapshotted the data repo when the plugin is installed.
   it over the working copy, and keep `main` working.
 - After changing a manifest or `hooks.json`: `claude plugin validate .` and
   `claude plugin validate .claude-plugin/marketplace.json`.
+- Rehearse an upgrade in a scratch `CLAUDE_CONFIG_DIR`: `claude plugin marketplace add WinuxNomacs/jeeves`
+  and `claude plugin install jeeves@jeeves --config data_repo=<scratch>` (the published version); after the
+  release is pushed, `claude plugin marketplace update jeeves` and `claude plugin update jeeves@jeeves`,
+  then check `<scratch>/plugins/cache/jeeves/jeeves/<version>/`. For scripts, also run the last tag's `bin/`
+  (a `git worktree` of it) against a scratch data repo, then the new `bin/` on the state it wrote.
 
 ## Rules for the scripts
 
 - Portable bash: macOS bash 3.2, Git Bash, Linux. Run the tests under Windows Git Bash too when a change
-  could differ there (from WSL: copy the tree to a `C:` folder and run `bash.exe -lc tests/run.sh`). No GNU-only flags (no `sed -i`, no `\|` in sed), no
-  associative arrays, no `set -u`, no `jq`.
+  could differ there (from WSL: copy the tree to a `C:` folder and run `bash.exe -lc tests/run.sh`). No
+  GNU-only flags (no `sed -i`, no `\|` in sed), no `timeout`, no `date -d` or `date -r` (missing or different
+  on macOS; format dates with git), no associative arrays, no `set -u`, no `jq`.
+- When a test's own git command writes files (switch, merge, checkout), give it `-c core.autocrlf=false`, as
+  the scripts' `git_repo` does: Git for Windows would write CRLF and the scripts would see a dirty repo.
 - Hooks must never block a session: hook mode always exits 0 and prints only what needs attention.
 - The scripts never push, with one exception: `jeeves-cleanup` force-pushes the data repo's `main`, always
   with a lease (`--force-with-lease=main:<the origin/main it checked>`), after `jeeves-scan`, and puts `main`
   back if the push fails. Otherwise they contact the remote only for `fetch` + fast-forward in `snapshot`,
   and only the `update` and `cleanup` skills push.
 - Never copy secrets: `.credentials.json`, `~/.claude.json`, transcripts, history.
-- Tests: `tests/run.sh` (or `tests/run.sh <name part>`).
+- Tests: `tests/run.sh` (or `tests/run.sh <a word from the test's name>`; check how many ran). To see a new
+  check fail on the old code, put back only the file under test (`git show HEAD:<file> > <file>`), never
+  `git stash`, which stashes the tests too.
 
 ## Pushing and pulling (overrides the global "never push" rule, for this repo only)
 
@@ -60,7 +70,8 @@ push branches to it whenever the work needs it, and push `main` after a merge wh
 without asking each time. A push to `main` reaches new installs at once (they take the default branch);
 existing installs get it only when `plugin.json`'s `version` changes, which happens on a `release/X.Y.Z`
 branch (version and `CHANGELOG.md`), merged like any other. Still never force-push, rewrite pushed history,
-or tag: a tag marks a release and starts the test workflow, so it stays the user's call.
+or tag: a tag marks a release and starts the test workflow, so it stays the user's call. Tags are annotated:
+`git tag -a vX.Y.Z -m "Jeeves X.Y.Z"` (a plain `git tag` fails here with "no tag message").
 
 The only workflow, `.github/workflows/test.yml`, runs on a pushed tag or by hand (Actions tab, or
 `gh workflow run tests`), never on a push or pull request; Actions minutes are free on a public repo, but ask
