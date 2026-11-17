@@ -494,6 +494,7 @@ t_plugin_files() {
   check "MIT licence file" grep -q '^MIT License$' "$SRC/LICENSE"
   check "licence declared in plugin.json" grep -q '"license": "MIT"' "$SRC/.claude-plugin/plugin.json"
   check "version set in plugin.json only, not in marketplace.json" bash -c '! grep -q "\"version\"" "$1"' _ "$SRC/.claude-plugin/marketplace.json"
+  check "the marketplace gives the plugin source as ./ (older Claude Code versions reject \".\")" grep -q '"source": "\./"' "$SRC/.claude-plugin/marketplace.json"
   check "no CLAUDE.md at the plugin root (shipped to users to no effect)" [ ! -e "$SRC/CLAUDE.md" ]
   wf=$SRC/.github/workflows/test.yml
   check "the workflow has no pull-request or schedule trigger" bash -c '! grep -Eq "^  (pull_request|pull_request_target|schedule):" "$1"' _ "$wf"

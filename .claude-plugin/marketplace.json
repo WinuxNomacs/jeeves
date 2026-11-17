@@ -7,7 +7,7 @@
   "plugins": [
     {
       "name": "jeeves",
-      "source": ".",
+      "source": "./",
       "description": "Shares your global CLAUDE.md, agents, commands and skills across devices; backs up each device's settings and memories"
     }
   ]
