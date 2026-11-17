@@ -9,9 +9,9 @@
 #
 # The data repo is found as lib/lib.sh describes (JEEVES_DATA, the plugin option, or the current folder).
 #
-# Never pushes. The hosts/<host>/ backup is only ever written by that host and is never applied back
-# (jeeves-restore copies it onto a machine on request). A shared file whose name another OS can't hold is
-# not taken.
+# Never pushes (at session start it runs jeeves-cleanup --auto, which may: see there). The hosts/<host>/
+# backup is only ever written by that host and is never applied back (jeeves-restore copies it onto a
+# machine on request). A shared file whose name another OS can't hold is not taken.
 
 . "$(dirname "$0")/../lib/lib.sh"
 
@@ -41,11 +41,35 @@ if [ -f "$REPO/.git/MERGE_HEAD" ] || [ -n "$(git_repo status --porcelain)" ]; th
   finish 1
 fi
 
+# Another device cleaned up the history (jeeves-cleanup): origin/main shares no commit with main. Keep this
+# device's old history in a bundle and take the new one. Files this device changed in commits it never
+# pushed get, as their last synced version, the one it last shared with origin, so the disk loop below
+# records them again (or reports a conflict) instead of taking them for older than the repo's.
+switch_to_cleaned_history() {
+  local p
+  mkdir -p "$STATE_DIR"
+  git_repo bundle create "$STATE_DIR/$CLEANUP_BUNDLE_NAME" main >/dev/null 2>&1
+  if [ -n "$last_origin" ] && git_repo cat-file -e "$last_origin^{commit}" 2>/dev/null; then
+    git_repo diff --name-only "$last_origin" HEAD -- home/ | sed 's#^home/##' | while IFS= read -r p; do
+      set_base "$p" "$(git_repo rev-parse -q --verify "$last_origin:home/$p" || echo -)"
+    done
+  else
+    # Nothing known as shared: every file that differs from the repo becomes a conflict to merge.
+    all_tracked | while IFS= read -r p; do set_base "$p" -; done
+  fi
+  git_repo reset -q --hard origin/main
+  shrink_repo
+  say "the history was cleaned up on another device; switched to it (this device's old history is in" \
+      ".sync-state/$CLEANUP_BUNDLE_NAME)"
+}
+
 # Bring in what other devices pushed. Offline or slow is fine: carry on locally.
+last_origin=$(git_repo rev-parse -q --verify refs/remotes/origin/main)
 if [ $pull = 1 ] && git_repo remote get-url origin >/dev/null 2>&1; then
-  if GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=5" \
-     git_repo fetch -q origin main 2>/dev/null; then
-    if git_repo merge-base --is-ancestor HEAD origin/main; then
+  if remote_git fetch -q origin main 2>/dev/null; then
+    if ! git_repo merge-base HEAD origin/main >/dev/null 2>&1 && cleaned_root origin/main; then
+      switch_to_cleaned_history
+    elif git_repo merge-base --is-ancestor HEAD origin/main; then
       git_repo merge -q --ff-only origin/main >/dev/null
     elif ! git_repo merge-base --is-ancestor origin/main HEAD; then
       say "main and origin/main have diverged; recording locally, merge them before pushing"
@@ -120,4 +144,6 @@ if [ ${#conflicts[@]} -gt 0 ]; then
       "merge them with /jeeves:update, or keep the disk copy with 'jeeves-snapshot --force' or the repo copy with 'jeeves-apply --force'"
   status=1
 fi
+# At session start, the automatic history cleanup, when jeeves.conf turns it on and one is due.
+[ $hook = 1 ] && [ $pull = 1 ] && "$(dirname "$0")/jeeves-cleanup" --auto
 finish $status

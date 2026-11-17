@@ -482,6 +482,165 @@ t_init_creates_a_data_repo() {
   check "the first snapshot fills it" [ -f "$W/new/home/CLAUDE.md" ] && check "and backs up the host" [ -f "$W/new/hosts/testhost/settings.json" ]
 }
 
+# History cleanup. Times are hours after the init commit; JEEVES_NOW puts "now" at hour 240 (day 10).
+cleanup() { "$SRC/bin/jeeves-cleanup" "$@"; }
+at() { echo $(( $(git -C "$R" log --reverse --format=%ct main | head -1) + $1 * 3600 )); }
+commit_at() { # commit_at <repo> <hour> <text> [file]: a commit dated <hour>, adding <text> to <file> (log.txt)
+  local f=${4:-log.txt}
+  echo "$3" >> "$1/$f"; git -C "$1" add "$f"
+  GIT_AUTHOR_DATE="$(at $2) +0000" GIT_COMMITTER_DATE="$(at $2) +0000" git -C "$1" commit -q -m "$3"
+}
+# Init at 0, then commits at 48, 120, 228 and 234 h: a 1-day cleanup folds init, 48 and 120 into one root.
+old_history() {
+  snap >/dev/null
+  for h in 48 120 228 234; do commit_at "$R" $h "c$h"; done
+  export JEEVES_NOW=$(at 240)
+}
+subjects() { git -C "$R" log --format=%s main | tr '\n' ' '; }
+
+t_cleanup_with_nothing_old_enough() {
+  old_history; n=$(commits); head=$(git -C "$R" rev-parse main)
+  check "says nothing to remove" grep -q "nothing older than 11 days" <<< "$(cleanup 11)"
+  check "main unchanged" [ "$(git -C "$R" rev-parse main)" = "$head" ]
+  git -C "$R" reset -q --hard "$(git -C "$R" rev-list --max-parents=0 main)"
+  for h in 220 228; do commit_at "$R" $h "c$h"; done
+  head=$(git -C "$R" rev-parse main)
+  check "only the first commit is older: says nothing to remove" grep -q "nothing older than 1 days" <<< "$(cleanup 1)"
+  check "main still unchanged" [ "$(git -C "$R" rev-parse main)" = "$head" ]
+}
+
+t_cleanup_folds_old_history() {
+  old_history
+  tree=$(git -C "$R" rev-parse "main^{tree}"); oldc=$(git -C "$R" rev-parse main~2)
+  meta=$(git -C "$R" log -2 --format='%s|%an|%ae|%ad|%cd' --date=raw main)
+  check "dry run says what it would fold" grep -q "would fold the 3 commits up to .* and keep the 2 newer ones" <<< "$(cleanup --dry-run 1)"
+  check "dry run changes nothing" [ "$(commits)" = 5 ]
+  out=$(cleanup 1); rc=$?
+  check "exit status 0" [ $rc = 0 ]
+  check "says folded and pushed" grep -q "folded the 3 commits up to .* kept the 2 newer ones; pushed" <<< "$out"
+  check "main is the new root and the 2 newer commits" [ "$(commits)" = 3 ]
+  check "the root is marked as a cleanup" bash -c '[[ "$1" == "c234 c228 jeeves-cleanup: history up to "* ]]' _ "$(subjects)"
+  check "the root has no parent" [ -z "$(git -C "$R" rev-list --parents -n 1 main~2 | cut -s -d' ' -f2-)" ]
+  check "same files" [ "$(git -C "$R" rev-parse "main^{tree}")" = "$tree" ]
+  check "the newer commits keep their message, author and dates" [ "$(git -C "$R" log -2 --format='%s|%an|%ae|%ad|%cd' --date=raw main)" = "$meta" ]
+  check "origin has the new main" [ "$(git -C "$W/remote.git" rev-parse main)" = "$(git -C "$R" rev-parse main)" ]
+  check "the old history is kept in a bundle" git -C "$R" bundle verify -q "$R/.sync-state/history-before-cleanup.bundle"
+  check "the bundle holds the removed commits" bash -c 'git -C "$1" bundle list-heads "$1/.sync-state/history-before-cleanup.bundle" | grep -q main' _ "$R"
+  check "the removed commits are gone from .git" bash -c '! git -C "$1" cat-file -e "$2" 2>/dev/null' _ "$R" "$oldc"
+  check "no temporary files left" [ -z "$(ls "$R/.sync-state" | grep sync-tmp)" ]
+  check "the next snapshot has nothing to record" [ -z "$(snap)" ]
+}
+
+t_cleanup_keeps_a_merge_across_the_cutoff() {
+  snap >/dev/null
+  commit_at "$R" 48 c48; commit_at "$R" 120 c120
+  # Checkouts and the merge keep line endings as committed, as the scripts' git does (Git for Windows would
+  # write CRLF).
+  git -c core.autocrlf=false -C "$R" switch -q -c side main~1; commit_at "$R" 222 s222 side.txt
+  git -c core.autocrlf=false -C "$R" switch -q main
+  GIT_AUTHOR_DATE="$(at 230) +0000" GIT_COMMITTER_DATE="$(at 230) +0000" git -c core.autocrlf=false -C "$R" merge -q --no-ff side -m merge
+  git -C "$R" branch -q -D side
+  export JEEVES_NOW=$(at 240); tree=$(git -C "$R" rev-parse "main^{tree}")
+  cleanup 1 >/dev/null
+  check "same files" [ "$(git -C "$R" rev-parse "main^{tree}")" = "$tree" ]
+  check "the merge keeps two parents" [ "$(git -C "$R" rev-list --parents -n 1 main | wc -w | tr -d ' ')" = 3 ]
+  check "both lines start at the new root" [ "$(git -C "$R" rev-parse main^1)" = "$(git -C "$R" rev-parse main^2^)" ]
+  check "root, side commit and merge" [ "$(commits)" = 3 ]
+}
+
+# A pre-push hook in the data repo: another device pushes just before this push, or the push fails.
+pre_push() { printf '#!/bin/sh\n%s\n' "$1" > "$R/.git/hooks/pre-push"; chmod +x "$R/.git/hooks/pre-push"; }
+
+t_cleanup_lease_refuses_another_devices_push() {
+  old_history; git -C "$R" push -q origin main 2>/dev/null
+  git clone -q "$W/remote.git" "$W/other" 2>/dev/null
+  pre_push "unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE; git -C '$W/other' commit -q --allow-empty -m other && git -C '$W/other' push -q origin main 2>/dev/null"
+  head=$(git -C "$R" rev-parse main)
+  out=$(cleanup 1); rc=$?
+  check "says the push was refused" grep -q "push refused or failed, so main was put back" <<< "$out"
+  check "exit status 1" [ $rc = 1 ]
+  check "main is put back" [ "$(git -C "$R" rev-parse main)" = "$head" ]
+  check "the other device's push is still on origin" [ "$(git -C "$W/remote.git" log -1 --format=%s main)" = other ]
+  check "no bundle and no temporary files" [ -z "$(ls "$R/.sync-state" | grep -e bundle -e sync-tmp)" ]
+}
+
+t_cleanup_failed_push_puts_main_back() {
+  old_history; head=$(git -C "$R" rev-parse main); remote=$(git -C "$W/remote.git" rev-parse main)
+  pre_push "exit 1"
+  out=$(cleanup 1); rc=$?
+  check "says the push failed" grep -q "push refused or failed" <<< "$out"
+  check "exit status 1" [ $rc = 1 ]
+  check "main is put back" [ "$(git -C "$R" rev-parse main)" = "$head" ]
+  check "origin unchanged" [ "$(git -C "$W/remote.git" rev-parse main)" = "$remote" ]
+  rm "$R/.git/hooks/pre-push"
+  git -C "$R" remote set-url origin "$W/nowhere.git"
+  check "an unreachable origin: skipped before any change" grep -q "could not reach origin; nothing changed" <<< "$(cleanup 1)"
+  check "main still as it was" [ "$(git -C "$R" rev-parse main)" = "$head" ]
+}
+
+# Another device ("other", its own ~/.claude) cleans up; this device runs its next snapshot.
+other_device_cleans_up() { # other_device_cleans_up [<new CLAUDE.md text it pushed first>]
+  git clone -q "$W/remote.git" "$W/other" 2>/dev/null
+  mkdir -p "$W/claude2" && cp -pR "$W/claude/." "$W/claude2/" && echo "rules v1" > "$W/claude2/CLAUDE.md"
+  ( export CLAUDE_HOME=$W/claude2 JEEVES_DATA=$W/other JEEVES_HOST=other
+    snap >/dev/null
+    for h in 48 120 228; do commit_at "$W/other" $h "c$h"; done
+    if [ -n "$1" ]; then
+      echo "$1" > "$W/other/home/CLAUDE.md"; git -C "$W/other" add home/CLAUDE.md; commit_at "$W/other" 229 c229
+      apply >/dev/null; git -C "$W/other" push -q origin main 2>/dev/null
+    fi
+    JEEVES_NOW=$(at 240) cleanup 1 >/dev/null )
+}
+
+t_other_device_switches_and_keeps_its_unpushed_change() {
+  snap >/dev/null; git -C "$R" push -q origin main 2>/dev/null; git -C "$R" fetch -q origin
+  echo "rules v2 from this device" > "$W/claude/CLAUDE.md"; snap --no-pull >/dev/null
+  other_device_cleans_up
+  out=$(snap)
+  check "says it switched to the cleaned-up history" grep -q "cleaned up on another device; switched to it" <<< "$out"
+  check "records its unpushed change again" grep -q "committed CLAUDE.md" <<< "$out"
+  check "the repo holds this device's change" grep -q "from this device" "$R/home/CLAUDE.md"
+  check "the disk copy is untouched" grep -q "from this device" "$W/claude/CLAUDE.md"
+  check "main builds on the new origin/main" git -C "$R" merge-base --is-ancestor origin/main main
+  check "and starts at the cleanup root" bash -c 'git -C "$1" log --format=%s main | tail -1 | grep -q "^jeeves-cleanup:"' _ "$R"
+  check "status lists no paths" [ -z "$("$SRC/bin/jeeves-status" | grep -Ev '^(datarepo|branch|main)	')" ]
+  check "the old history is kept in a bundle" [ -f "$R/.sync-state/history-before-cleanup.bundle" ]
+}
+
+t_other_device_switch_reports_a_conflict_when_both_changed() {
+  snap >/dev/null; git -C "$R" push -q origin main 2>/dev/null; git -C "$R" fetch -q origin
+  echo "rules v2 from this device" > "$W/claude/CLAUDE.md"; snap --no-pull >/dev/null
+  other_device_cleans_up "rules v2 from the other device"
+  out=$(snap)
+  check "says it switched" grep -q "switched to it" <<< "$out"
+  check "reports a conflict, not an install" grep -q "changed both on disk and in the repo: CLAUDE.md" <<< "$out"
+  check "the disk copy is untouched" grep -q "from this device" "$W/claude/CLAUDE.md"
+  check "the base is the version both last shared" [ "$("$SRC/bin/jeeves-status" | awk -F'\t' '$1 == "conflict" { print $5 }')" = "$(printf 'rules v1\n' | git hash-object --stdin)" ]
+}
+
+t_automatic_cleanup_runs_only_when_due_and_configured() {
+  old_history
+  check "without jeeves.conf: nothing" [ -z "$(snap --hook)" ]
+  conf() { printf '%s\n' "$@" > "$R/jeeves.conf"; git -C "$R" add jeeves.conf
+    GIT_AUTHOR_DATE="$(at 236) +0000" GIT_COMMITTER_DATE="$(at 236) +0000" git -C "$R" commit -q -m conf; }
+  conf keep_days=1; check "keep_days alone: nothing" [ -z "$(snap --hook)" ]
+  conf keep_days=one auto_every_days=10
+  check "a malformed jeeves.conf is skipped with a message" grep -q "automatic cleanup skipped: jeeves.conf needs" <<< "$(snap --hook)"
+  conf keep_days=3 auto_every_days=2
+  check "auto_every_days below keep_days is refused" grep -q "auto_every_days (2) must be at least keep_days (3)" <<< "$(snap --hook)"
+  conf keep_days=1 auto_every_days=11; n=$(commits)
+  check "not due yet: nothing" [ -z "$(snap --hook)" ]
+  check "not due yet: history unchanged" [ "$(commits)" = "$n" ]
+  conf keep_days=1 auto_every_days=10
+  out=$(snap --hook); rc=$?
+  check "due: cleans up and pushes" grep -q "folded the 3 commits .*; pushed" <<< "$out"
+  check "the hook exits 0" [ $rc = 0 ]
+  check "origin has it" [ "$(git -C "$W/remote.git" rev-parse main)" = "$(git -C "$R" rev-parse main)" ]
+  check "just cleaned up: not due again" [ -z "$(snap --hook)" ]
+  pre_push "exit 1"; export JEEVES_NOW=$(at 600)
+  check "a failed automatic cleanup is reported and the hook exits 0" bash -c 'out=$("$1/bin/jeeves-snapshot" --hook); [ $? = 0 ] && grep -q "push refused or failed" <<< "$out"' _ "$SRC"
+}
+
 t_plugin_files() {
   for f in .claude-plugin/plugin.json .claude-plugin/marketplace.json hooks/hooks.json; do
     if have_python; then
@@ -509,7 +668,7 @@ t_plugin_files() {
   check "update skill gets the data repo from the plugin option" grep -q 'JEEVES_DATA="${user_config.data_repo}"' "$sk"
   check "the update skill sends a machine with no data repo to setup, never clones" grep -q 'Never clone or create the data repo here' "$sk"
   check "setup always asks about a restore before the first sync" grep -q 'Always ask; never skip this step' "$SRC/skills/setup/SKILL.md"
-  for k in setup restore; do
+  for k in setup restore cleanup; do
     sk=$SRC/skills/$k/SKILL.md
     check "$k skill is named $k" grep -q "^name: $k\$" "$sk"
     check "only the user starts the $k skill" grep -q '^disable-model-invocation: true$' "$sk"
@@ -551,6 +710,14 @@ run_test "native Windows gets -win after the host name" t_native_windows_host_na
 run_test "the edit hook takes a Windows C:\\ path" t_edit_hook_takes_a_windows_path
 run_test "restore copies a host's backup and saves what it replaces" t_restore_copies_a_host_backup
 run_test "init creates an empty data repo that a snapshot fills" t_init_creates_a_data_repo
+run_test "cleanup with nothing old enough changes nothing" t_cleanup_with_nothing_old_enough
+run_test "cleanup folds older commits into one root, keeps newer ones with their files, authors and dates, and pushes" t_cleanup_folds_old_history
+run_test "cleanup keeps a merge whose branch starts before the cutoff" t_cleanup_keeps_a_merge_across_the_cutoff
+run_test "cleanup's lease refuses when another device pushed meanwhile, and main is put back" t_cleanup_lease_refuses_another_devices_push
+run_test "a failed push or an unreachable origin leaves main as it was" t_cleanup_failed_push_puts_main_back
+run_test "after another device cleans up, snapshot switches to the new history and records its unpushed change again" t_other_device_switches_and_keeps_its_unpushed_change
+run_test "after another device cleans up, a file both changed is a conflict with the right base" t_other_device_switch_reports_a_conflict_when_both_changed
+run_test "the automatic cleanup runs only when jeeves.conf turns it on and it is due" t_automatic_cleanup_runs_only_when_due_and_configured
 run_test "the manifests and hooks.json are valid and wire up the hooks" t_plugin_files
 
 echo "$passed passed, $failed failed"

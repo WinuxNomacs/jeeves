@@ -137,3 +137,23 @@ bad_name() {
 case_collisions() {
   awk '{ k = tolower($0); n[k]++; p[NR] = $0; l[NR] = k } END { for (i = 1; i <= NR; i++) if (n[l[i]] > 1) print p[i] }'
 }
+
+# Git commands that contact origin: never wait for a password prompt, and give up on a dead ssh host fast.
+remote_git() { GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=5" git_repo "$@"; }
+
+# The first line jeeves-cleanup gives the parentless commit that replaces the removed history.
+CLEANUP_MARK="jeeves-cleanup:"
+# Where the removed history is kept on this device (never pushed) until the next cleanup replaces it.
+CLEANUP_BUNDLE_NAME=history-before-cleanup.bundle
+
+# True when the history of the given commit starts at a jeeves-cleanup root.
+cleaned_root() {
+  git_repo rev-list --max-parents=0 "$1" 2>/dev/null | while IFS= read -r r; do
+    git_repo log -1 --format=%s "$r"
+  done | grep -q "^$CLEANUP_MARK"
+}
+
+# Drop the objects no branch reaches any more (removed history, kept in the bundle), so .git shrinks.
+shrink_repo() {
+  git_repo reflog expire --expire=now --all && git_repo gc -q --prune=now 2>/dev/null
+}
