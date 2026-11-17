@@ -2,12 +2,15 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** 1. macOS device: finished in a Claude Code session on the Mac (this session is closed here and the
-  work resumes there; see "1. macOS device" for the handoff). Found and fixed so far: the marketplace's plugin
+- **Up next:** 1. Guided setup (from `new.md`, before publishing): `/jeeves:setup` as a step-by-step walk
+  that checks GitHub access, finds or creates the data repo. 2. Encryption with a passphrase (from `new.md`,
+  before publishing): our own on age, key in the OS credential store. Both planned below, decisions recorded.
+- **Then:** 3. macOS device: finished in a Claude Code session on the Mac (this session is closed here and the
+  work resumes there; see "3. macOS device" for the handoff), testing phases 1 and 2 there too. Found and fixed so far: the marketplace's plugin
   source `"."` refused by older Claude Code (0.2.1, `./`); an older Claude Code refuses `userConfig` (README:
   update first); setup's restore question never asked (0.2.2). Left: the edit hook (a direct edit, not
   through `/jeeves:update`), the restored settings' paths, the history cleanup on macOS.
-- **Later:** 2. Per-device overlay (only if a shared file must differ per host) · Anthropic directory
+- **Later:** 4. Per-device overlay (only if a shared file must differ per host) · Anthropic directory
   submission (only on the user's direct command)
 
 ## Done
@@ -492,7 +495,121 @@ the rule it becomes, revising in place where a rule covers it; ask; write during
 - **Project commits:** on the current branch when it is not the default one; on the default branch, a short
   `claude-md/<name>` branch merged back with `--no-ff`; never pushed unless that repo's CLAUDE.md allows it.
 
-## 1. macOS device
+## 1. Guided setup (planned 2026-11-17, from `new.md`)
+
+**Request:** before release and publishing, walk a new user through installing step by step, with as little
+interaction and technical knowledge as possible, always saying what is needed next; for example, check their
+GitHub access and offer to create the data repo when they have none.
+
+**Today** (read 2026-11-17): installing takes two terminal commands, and the install dialog asks for the
+`data_repo` folder with no default. `/jeeves:setup` then needs the URL of an existing data repo, or the user
+creates an empty private GitHub repo themselves (Jeeves creates none) and passes its URL. Nothing checks git,
+GitHub access or the Claude Code version before a step fails. A machine with no data repo gets a
+session-start message pointing to `/jeeves:setup` (0.2.2).
+
+**Builds on:** `skills/setup/SKILL.md`, `jeeves-init`, `jeeves-restore`, the update skill's first sync,
+`find_data_repo` (expands `~/`). From the plugin manifest reference (code.claude.com/docs/en/plugins-reference,
+read 2026-11-17): a `userConfig` option takes `default`, `required` and `type: directory`; non-sensitive
+values go to `settings.json` under `pluginConfigs`. `gh` is the GitHub CLI (version here: 2.46.0).
+
+### Design (proposed)
+
+- **Install:** `data_repo` gets the default `~/jeeves-data`, so the install dialog is accepted with Enter. The
+  README's install becomes: two commands, then `/jeeves:setup` in a new session.
+- **`/jeeves:setup` as a numbered walk-through** ("Step 2 of 5: GitHub access"), each step saying what it
+  checks, what it found, and what comes next; every choice an AskUserQuestion with the recommended option
+  first, so the user picks rather than types:
+  1. **Tools:** git and bash present (Git for Windows on Windows), Claude Code recent enough.
+  2. **GitHub access:** `gh auth status` (signed in as whom); without `gh`, `ssh -T git@github.com`. If `gh`
+     is missing: offer to install it, showing this OS's command (Homebrew, winget, apt) and running it only
+     after the user confirms; then the user signs in with `! gh auth login` (their own interactive login;
+     Claude never handles the token). The manual way stays available. Never search for credentials.
+  3. **Data repo:** with `gh`, look for the user's existing data repos (marked with a GitHub topic, e.g.
+     `jeeves-data`) and offer to clone one: a second device needs no URL. None: offer to create a private one
+     with `gh repo create jeeves-data --private` (another name on request; taken: ask) and `jeeves-init`. Without `gh`: ask for
+     a URL, or explain step by step how to make an empty private repo on github.com.
+  4. **Encryption:** "Secure your data with a passphrase?" (phase 2), for a new data repo; a cloned
+     encrypted one asks for its passphrase here.
+  5. **Restore** another machine's backup (as today: always asked).
+  6. **First sync**, then a short "what happens from now on".
+- **`bin/jeeves-check`** (new, read-only): one line per check (`git`, `bash`, `gh`, `gh-auth`, `ssh-github`,
+  `claude-version`), each `ok`/`missing`/`fail` with a detail, so the skill reads facts instead of guessing,
+  and the tests can fake each tool failing.
+
+### What can fail
+
+No network (each check times out and says so), `gh` installed but signed out, signed in to another account,
+the repo name already taken, a clone refused (no access), a GitHub org that forbids private repos, Windows
+without Git Bash, an old Claude Code (the install fails before setup: README says to update).
+
+### Decisions (2026-11-17, with the user)
+
+- **A. Missing `gh`:** offer to install it (the OS's command, shown and confirmed), manual way still offered.
+- **B/C. Defaults:** folder `~/jeeves-data` on each machine; new GitHub repo `jeeves-data`, private, with a
+  topic so other devices find it.
+
+## 2. Encryption with a passphrase (planned 2026-11-17, from `new.md`)
+
+**Request:** before release and publishing, an easy option to encrypt the user's data in git, so they can
+secure it with a passphrase; research options with better git/GitHub integration than ansible-vault.
+
+**Builds on:** the data repo layout, `hash_of` (already `git hash-object --no-filters`), the update skill's
+merges, `jeeves-scan`, setup (phase 1), the history cleanup (to fold away history encrypted under an old
+key). What it protects: the data on GitHub (a leaked token, a repo made public by mistake). Not a device
+whose account is already open: the plain files are in `~/.claude` anyway.
+
+### Options checked (2026-11-17, primary sources: each project's repo, releases, source, packages)
+
+| Option | Verdict for Jeeves | Evidence |
+|---|---|---|
+| **Our own on age** (chosen) | Fits: passphrase-protected key committed, unattended after one unlock per device | age v1.3.2 (2026-08-29), BSD-3, prebuilt for Windows/macOS/Linux, Homebrew/winget/scoop; its docs recommend a passphrase-encrypted identity file |
+| transcrypt | Best ready-made fit (bash + openssl, passphrase, merge driver) but weak today | v2.3.2 (2026-05-18); key from the password via `openssl enc -md MD5` without PBKDF2 (its script, lines 298-333); fix PR #219 open since 2026-07-13 |
+| git-crypt | No passphrase mode; no Windows build of the current release | 0.8.0 (2025-09-24), only a Linux binary attached; issue #75 (passphrase) open since 2016 |
+| git-remote-gcrypt | Hides names and messages too, but re-uploads the whole history on every push to GitHub and every push is forced | its README; 1.5 released 2022, 1.6 unreleased |
+| sops | Markdown becomes an opaque blob; working tree stays encrypted | v3.13.3 (2026-07-23) |
+| ansible-vault | Python 3.13+, Windows only under WSL | ansible-core 2.22.0 (2026-11-02) |
+| git-secret, git-agecrypt | Manual hide/reveal (2022); author says "you probably shouldn't" use it | their READMEs |
+
+Also checked: `openssl enc` refuses AEAD ciphers ("enc: AEAD ciphers not supported", tested here), so an
+openssl build would need its own HMAC. No GitHub-native client-side encryption was found.
+
+### Design (proposed)
+
+- **Keys:** `jeeves-encrypt` makes an age key pair; the private key is committed as `identity.age`,
+  encrypted with the user's passphrase. Each device enters the passphrase once (setup, or
+  `/jeeves:unlock`); the decrypted private key goes to the **OS credential store** (decision E2): macOS
+  Keychain (`security`), Windows Credential Manager (read through PowerShell, which has no built-in reader),
+  Linux Secret Service (`secret-tool`); WSL probably through Windows' store via `powershell.exe` (to check).
+  The passphrase itself is never stored. Where no store is available, say so and ask (a key file is the
+  fallback to offer).
+- **Git integration:** a clean/smudge filter (`filter.jeeves.required=true`, so a missing key fails rather
+  than committing plain text), a `textconv` for diffs, and a merge driver that decrypts, merges with
+  `git merge-file`, and encrypts, so the working tree stays plain and the update skill's merges keep working.
+  age output differs each run, so the filter keeps a plain-hash → ciphertext cache in `.git/` (otherwise
+  every `git status` sees a change). `jeeves-scan` scans the plain text.
+- **Scope (decision E3):** every file except the repo's own config (`.gitignore`, `.gitattributes`,
+  `README.md`, `jeeves.conf`, `identity.age`). Visible on GitHub still: file names (including project paths
+  under `hosts/`), sizes, commit messages.
+- **Commands:** `/jeeves:encrypt` (turn on for an existing repo: re-commits every file encrypted; older
+  history stays plain until a cleanup folds it), `/jeeves:unlock`, `/jeeves:lock` (removes the key from the
+  store), passphrase change (re-encrypts only `identity.age`).
+- **Locked device:** hooks exit 0 and say once that the data repo is locked and how to unlock.
+
+### What can fail
+
+No age installed (setup offers to install it, like `gh`); no credential store (WSL, a headless Linux); a
+wrong passphrase; the key missing on a device that pulls encrypted commits (filter fails loudly, snapshot
+reports "locked"); the cache out of date; a merge driver failure (falls back to a conflict, never to plain
+text in a commit); CRLF on Windows; speed: git runs the filter per file, and reading the key from a
+credential store each time may be slow (measure; cache the key per process if needed).
+
+### Decisions (2026-11-17, with the user)
+
+- **E1. Approach:** our own, on age.
+- **E2. Key storage:** the OS credential store, unattended after one unlock per device.
+- **E3. Scope:** all data, offered during setup.
+
+## 3. macOS device
 
 The scripts' half is covered: the test workflow runs the suite on macOS with its own bash 3.2 (green since
 run 43981931017, and on tag `v0.2.2`). Done by hand on the Mac (2026-11-17): installed 0.2.1 then 0.2.2 from
@@ -528,7 +645,7 @@ Facts the Mac session needs (from RAIVEN's memory, which does not travel): the d
 `Winuxs-MacBook-Pro`; the user tags releases (or asks Claude to, for one tag at a time; this repo's tags are
 annotated: `git tag -a`); nothing goes to Anthropic's directory without the user's direct command.
 
-## 2. Per-device overlay
+## 4. Per-device overlay
 
 Mostly obsolete since Generic made `settings.json` and `keybindings.json` per host. Only needed if a shared
 file (a `CLAUDE.md` rule, a skill) ever has to differ between hosts: then decide host vs platform scope and
