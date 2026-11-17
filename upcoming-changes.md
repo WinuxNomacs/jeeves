@@ -2,15 +2,14 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** 1. macOS device (a real Mac, by hand; the scripts already pass on macOS in CI). Found so far,
-  fixed: the marketplace's plugin source `"."` refused by older Claude Code (0.2.1, `./`); an older Claude Code
-  refuses `userConfig` (README: update first); setup's restore question was never asked on the Mac, as on
-  Windows before (0.2.2: the hook and status messages on a machine without a data repo point to
-  `/jeeves:setup`, the update skill never clones and sends it there, setup asks the restore question with
-  AskUserQuestion and waits). Synced from the Mac: `hosts/Winuxs-MacBook-Pro/`, and its CLAUDE.md rules merged
-  into the shared one (then made to hold on Windows too: elevated permissions, killing by PID, empty-variable
-  deletes, graceful-then-forced stops). Still to check on the Mac: `/jeeves:restore`, the edit hook.
-- **Later:** 2. Per-device overlay (only if a shared file must differ per host) · Anthropic directory
+- **Up next:** 1. History cleanup (from `new.md`, 2026-11-17): `/jeeves:cleanup <days>` by hand, and an
+  automatic cleanup on a schedule. Planned below, decisions recorded.
+- **Then:** 2. macOS device: finished in a Claude Code session on the Mac (this session is closed here and the
+  work resumes there; see "2. macOS device" for the handoff). Found and fixed so far: the marketplace's plugin
+  source `"."` refused by older Claude Code (0.2.1, `./`); an older Claude Code refuses `userConfig` (README:
+  update first); setup's restore question never asked (0.2.2). Left: the edit hook (a direct edit, not
+  through `/jeeves:update`), the restored settings' paths, the history cleanup on macOS.
+- **Later:** 3. Per-device overlay (only if a shared file must differ per host) · Anthropic directory
   submission (only on the user's direct command)
 
 ## Done
@@ -370,14 +369,125 @@ Verify: `claude plugin validate --strict`; the workflow run by hand on all three
 public; a fresh install from GitHub in a scratch `CLAUDE_CONFIG_DIR` (marketplace add, install with
 `--config data_repo=…`, the version shown), removed afterwards.
 
-## 1. macOS device (was 2)
+## 1. History cleanup (planned 2026-11-17)
+
+**Request** (`new.md`, 2026-11-17): the data repo's history grows forever. (1) A cleanup that removes the
+history older than a number of days the user gives, minimum 1; with 1, take a fresh backup first, then remove
+every commit older than 24 hours. (2) The same cleanup automatically, every so many days, the minimum being
+the cleanup's own number of days.
+
+**Measured** (2026-11-17): `jeeves-cmd` has 45 commits after one day, `.git` is 2.5 MB (mostly loose
+objects; the packed part is 4 KiB). Growth is slow (small text files), so this is housekeeping, not urgent.
+
+**Builds on:** `jeeves-snapshot` (the fresh backup, fetch and fast-forward), `jeeves-scan`, the update skill's
+push, `.sync-state/` (per-device sync record: blob hashes, which a rewrite does not change).
+
+**Conflicts with standing rules, so it needs one narrow exception:** the global CLAUDE.md ("never
+force-push", "only rewrite history that has not been pushed"), this repo's CLAUDE.md ("the scripts never
+push") and the update skill ("never force-push"). Proposed exception: only the cleanup, only the data repo's
+`main`, only with `--force-with-lease` (so a push another device made meanwhile is never overwritten), only
+when the user ran it or turned on the automatic cleanup. The global rule is changed through `/jeeves:update`
+when the phase is built.
+
+### Design (proposed)
+
+- **`bin/jeeves-cleanup <days>`** (our own, git plumbing only; no `git filter-repo`, which would be a Python
+  dependency on every device, Windows included):
+  1. `jeeves-snapshot` (fresh backup; stops if the repo is dirty, not on `main`, or `main` has diverged).
+  2. Cutoff = now − days × 24 h. The newest commit on `main` older than the cutoff becomes the new root: a
+     parentless commit with the same tree, message `history before <date> removed by jeeves-cleanup`.
+  3. Every later commit is recreated in order with `git commit-tree`, same tree, author, dates and message,
+     its parents mapped (an old parent maps to the new root). Trees are identical, so every file and the
+     `.sync-state` hashes stay valid.
+  4. Check: the new `main`'s tree equals the old `main`'s tree, or stop without changing anything.
+  5. The old history is kept locally as a bundle under `.sync-state/` (gitignored) until the next cleanup
+     (decision B), `main` is moved, `jeeves-scan`, then
+     `git push --force-with-lease=main:<the origin/main it started from> origin main`.
+  6. Nothing older than the cutoff: say so and change nothing.
+- **`/jeeves:cleanup <days>`** (skill, only the user starts it): explains what will be removed (how many
+  commits, from which date), asks to confirm, runs `jeeves-cleanup`.
+- **Other devices** after a cleanup: their `main` shares no history with the new `origin/main`. `jeeves-snapshot`
+  detects that (no merge base, and the new root's message), keeps the old `main` as a local ref, resets `main`
+  to `origin/main`, then records disk as usual: everything a device had is on its disk (`~/.claude`), so a
+  commit it had not pushed is re-recorded, not lost.
+- **Automatic cleanup:** the settings live in the data repo (one file, e.g. `jeeves.conf`: `keep_days`,
+  `auto_every_days`), so all devices agree and only one needs to run it (decision A). The last cleanup's
+  date is the root commit's, so no extra state. When due, the session-start hook runs it and pushes (decision C).
+  `auto_every_days` must be ≥ `keep_days` (request (2)); a smaller value is refused with a message.
+- **GitHub caveat:** after the force-push, GitHub no longer shows the old commits, but it may keep them as
+  unreachable objects for a while and in any fork; removing them from GitHub for good is a GitHub support
+  request. A secret already pushed must be revoked, not cleaned up.
+
+### What can fail (it runs unattended in automatic mode)
+
+- Another device pushes between the fetch and the push: `--force-with-lease` refuses; nothing is lost; retry
+  at the next session start.
+- No network, or the push is rejected for any other reason: the local rewrite is undone (`main` back to the
+  old commit, kept in the bundle) and the hook reports it once.
+- Two devices clean up at once: the second one's lease fails; it then sees the first one's new root and
+  resets as any other device does.
+- A device offline during a cleanup with commits it never pushed: re-recorded from its disk at its next
+  snapshot (above); its own old `main` stays as a local ref.
+- Interrupted mid-rewrite (crash, Ctrl+C): the new commits are only objects until `main` moves, which is the
+  last local step; a rerun starts over.
+- A malformed `jeeves.conf`: the automatic cleanup is skipped with a message, never guessed.
+- A merge commit whose parents straddle the cutoff: the old parent maps to the new root (tested).
+
+### Tests (each failure above injected)
+
+Cleanup with nothing old enough; with 1 day (commits older than 24 h gone, newer ones kept, same tree,
+same authors and dates); a merge across the cutoff; the lease refusing (another push meanwhile); the push
+failing (local main restored); another device resetting after a cleanup, with an unpushed commit
+re-recorded; `auto_every_days` < `keep_days` refused; a malformed config skipped; automatic cleanup runs
+only when due. Fake dates with `GIT_COMMITTER_DATE`.
+
+### Decisions (2026-11-17, with the user)
+
+- **A. Settings in the data repo**, one file shared by all devices (`jeeves.conf`: `keep_days`,
+  `auto_every_days`), so they agree and only one device needs to run the cleanup.
+- **B. Keep the removed history locally** as a bundle under `.sync-state/` (never pushed) until the next
+  cleanup replaces it.
+- **C. Fully automatic:** when due, the session-start hook cleans up and force-pushes with a lease; any
+  failure is undone and reported.
+- **D. Two numbers:** `keep_days` (minimum 1) and `auto_every_days` (how often the automatic cleanup runs,
+  at least `keep_days`; unset means no automatic cleanup).
+
+## 2. macOS device (was 1)
 
 The scripts' half is covered: the test workflow runs the suite on macOS with its own bash 3.2 (green since
-run 43981931017). Left: a real Mac with Claude Code, by hand.
+run 43981931017, and on tag `v0.2.2`). Done by hand on the Mac (2026-11-17): installed 0.2.1 then 0.2.2 from
+GitHub, data repo cloned, first sync (its CLAUDE.md rules merged into the shared one), restore of RAIVEN's
+backup run.
 
-Install the plugin, clone the data repo, run `tests/run.sh` (user runs it by hand), first sync, resolve any first-sync conflicts.
+**The work moves to a Claude Code session on the Mac** (the user's decision, 2026-11-17). Only one session
+works on this repo at a time: the one on RAIVEN is closed first. Session transcripts and memory don't move
+between machines (memories are keyed by the project's path, `/home/winux/...` vs `/Users/winux/...`), so the
+handoff is this file and `.claude/CLAUDE.md`; everything the Mac session needs is written here before it
+starts.
 
-## 2. Per-device overlay (was 3)
+Handoff steps:
+1. On RAIVEN: everything committed, merged and pushed; this section current; close the session.
+2. On the Mac: `git clone https://github.com/WinuxNomacs/jeeves.git ~/gitrepos/config/jeeves`; switch the
+   plugin from the GitHub marketplace to that clone so edits load with `/reload-plugins`
+   (`claude plugin marketplace remove jeeves`, `claude plugin marketplace add ~/gitrepos/config/jeeves`,
+   `claude plugin install jeeves@jeeves --config data_repo="$HOME/gitrepos/config/jeeves-cmd"`).
+3. Open Claude Code in `~/gitrepos/config/jeeves` and say "continue the macOS phase in upcoming-changes.md".
+
+The Mac session then:
+- runs `tests/run.sh` on the Mac's own bash and git;
+- checks the edit hook: a direct edit to `~/.claude/CLAUDE.md` (not through `/jeeves:update`) must commit
+  `snapshot(Winuxs-MacBook-Pro): CLAUDE.md` and show the notice;
+- checks the restored `settings.json`: `data_repo` and the marketplace path point at Mac folders;
+- runs the history cleanup on the Mac (if phase 1 is built by then) against a scratch data repo first;
+- fixes what it finds on a branch, merges, pushes `main` (allowed by `.claude/CLAUDE.md`), and moves this
+  phase to Done.
+
+Facts the Mac session needs (from RAIVEN's memory, which does not travel): the data repo is
+`WinuxNomacs/jeeves-cmd` (private), hosts so far `RAIVEN` (Linux, WSL), `RAIVEN-win` (Windows, same PC),
+`Winuxs-MacBook-Pro`; the user tags releases (or asks Claude to, for one tag at a time; this repo's tags are
+annotated: `git tag -a`); nothing goes to Anthropic's directory without the user's direct command.
+
+## 3. Per-device overlay (was 2)
 
 Mostly obsolete since Generic made `settings.json` and `keybindings.json` per host. Only needed if a shared
 file (a `CLAUDE.md` rule, a skill) ever has to differ between hosts: then decide host vs platform scope and
