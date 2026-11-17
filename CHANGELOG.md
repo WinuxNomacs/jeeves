@@ -2,6 +2,18 @@
 
 A new version reaches installed copies only when `version` in `.claude-plugin/plugin.json` changes.
 
+## 0.3.0 (2026-11-17)
+
+- **History cleanup.** `/jeeves:cleanup <days>` folds the data repo's commits older than that many days into
+  one first commit holding the files as they were then; newer commits and every file stay as they were. It
+  asks first, keeps the removed history on that device in `.sync-state/history-before-cleanup.bundle`, and
+  force-pushes `main` with a lease (refused, and `main` put back, if another device pushed meanwhile).
+- **Automatic cleanup:** `jeeves.conf` in the data repo (`keep_days`, `auto_every_days`) turns it on; the
+  session-start hook runs it when due. `/jeeves:cleanup auto <every> [<keep>]` and `off` set it.
+- Other devices switch to a cleaned-up history at their next snapshot, recording again any change they had
+  not pushed (or reporting a conflict).
+- New command `jeeves-cleanup` (`<days>`, `--dry-run <days>`, `--auto`).
+
 ## 0.2.2 (2026-11-17)
 
 - `/jeeves:setup` always asks whether to restore another device's backup, and waits for the answer.
