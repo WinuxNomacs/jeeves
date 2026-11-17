@@ -712,8 +712,10 @@ starts.
 
 Handoff steps:
 1. On RAIVEN: everything committed, merged and pushed; this section current; close the session.
-2. On the Mac: `git clone https://github.com/WinuxNomacs/jeeves.git ~/gitrepos/config/jeeves`; switch the
-   plugin from the GitHub marketplace to that clone so edits load with `/reload-plugins`
+2. On the Mac, in a terminal, **before opening any Claude Code session** (the Mac runs 0.2.2, from the GitHub
+   marketplace, which knows neither encryption nor a cleaned-up history; its `/jeeves:update` could merge
+   unrelated histories and push old history back): `git clone https://github.com/WinuxNomacs/jeeves.git
+   ~/gitrepos/config/jeeves`; switch the plugin from the GitHub marketplace to that clone so edits load with `/reload-plugins`
    (`claude plugin marketplace remove jeeves`, `claude plugin marketplace add ~/gitrepos/config/jeeves`,
    `claude plugin install jeeves@jeeves --config data_repo="$HOME/gitrepos/config/jeeves-cmd"`).
 3. Open Claude Code in `~/gitrepos/config/jeeves` and say "continue the macOS phase in upcoming-changes.md".
@@ -729,12 +731,18 @@ The Mac session then:
   age on the PATH), then the Keychain and the macOS dialog live on a scratch data repo
   (`JEEVES_DATA=<scratch> jeeves-encrypt on`, then `lock` and `unlock`); a Keychain entry is
   `security find-generic-password -s jeeves`; delete the scratch entry afterwards;
+- then, if the user wants it, encrypts the real data repo (`/jeeves:encrypt`, from the Mac or RAIVEN) and
+  unlocks the other device. RAIVEN (WSL) needs age 1.3+ first: apt has only 1.2.1, so the official release
+  download into `~/.local/bin`. Every device that still syncs must run 0.6.0 or later before encrypting;
 - fixes what it finds on a branch, merges, pushes `main` (allowed by `.claude/CLAUDE.md`), and moves this
   phase to Done.
 
 Facts the Mac session needs (from RAIVEN's memory, which does not travel): the data repo is
 `WinuxNomacs/jeeves-cmd` (private), hosts so far `RAIVEN` (Linux, WSL), `RAIVEN-win` (Windows, same PC),
-`Winuxs-MacBook-Pro`; the user tags releases (or asks Claude to, for one tag at a time; this repo's tags are
+`Winuxs-MacBook-Pro`. RAIVEN-win is retired (2026-11-17): its plugin is to be uninstalled and its clones
+deleted by the user; it comes back only for Windows testing, installed fresh from the GitHub marketplace,
+and its last backup stays in `hosts/RAIVEN-win/`. WSL and native Windows on one PC share one Windows
+Credential Manager entry for the key, so `/jeeves:lock` on one locks both. The user tags releases (or asks Claude to, for one tag at a time; this repo's tags are
 annotated: `git tag -a`); nothing goes to Anthropic's directory without the user's direct command.
 
 ## 2. Per-device overlay
