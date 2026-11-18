@@ -2,7 +2,8 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** nothing planned (the Data integrity phase is built, awaiting a release)
+- **Up next:** 1. Memories feed `/jeeves:update`'s review · 2. Settings and keybindings backup opt-in ·
+  3. README tagline (planned 2026-11-18, to build; Data integrity is built, awaiting a release)
 - **Later:** 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
   must differ per host) · Anthropic directory submission (only on the user's direct command)
@@ -1077,6 +1078,46 @@ failing before its fix.
 - A skill with its own `.git` or `.gitignore`: left as today (not fully synced, no notice).
 - Line endings in existing data repos: the snapshot migrates `.gitattributes` to `* -text` once.
 - Same host name: a machine ID per device; the snapshot detects a clash and stops the backup.
+
+## Memories, opt-in settings backup, tagline (planned 2026-11-18, the user's requests)
+
+Purpose, as the user put it: `/jeeves:update` is about improving CLAUDE.md over time, to make it meaningful
+and effective for the current and future models that maintain it (recorded in `.claude/CLAUDE.md`).
+
+### 1. Memories feed the review
+
+Request: the session review reads only the current session; memories (`~/.claude/projects/*/memory/`) hold
+much operational knowledge from other sessions and are never considered for CLAUDE.md. Builds on the
+session review (Done 6) and the memory backups in `hosts/<host>/`.
+
+Design (proposed): when the user runs `/jeeves:update`, the review also reads memory files, sorts each
+item worth keeping as Global, Project or "stays a memory", words it as CLAUDE.md text (revising an
+existing rule in place where one covers it), and offers it in the same AskUserQuestion flow as session
+items. A record of what was reviewed keeps the same memory from being offered every run. Open decisions
+below.
+
+### 2. Settings and keybindings backup opt-in
+
+Request: back up `settings.json` and `keybindings.json` only when the user turns it on (the backup may be
+dropped later). Memories stay backed up by default. Design (proposed): a `jeeves.conf` setting
+(`backup_settings=yes`), off by default; snapshot, restore, setup step 4 and the README follow it.
+
+### 3. README tagline
+
+Request (from `new.md`): a tagline at the top of the README that says Jeeves improves Claude Code's
+operational knowledge across sessions, with backup as secondary.
+
+### Decisions (2026-11-18, with the user)
+
+- Memories read: this machine's `~/.claude/projects/*/memory/` and every other device's backup in the data
+  repo (`hosts/*/projects/*/memory/`).
+- A promoted memory is always kept as it is; the review only records that it was promoted.
+- A shared record in the data repo lists each reviewed memory's hash and outcome (promoted, declined, stays
+  a memory); every device skips those, and a memory that changes is reviewed again.
+- Settings and keybindings backup: off by default, `backup_settings=yes` in `jeeves.conf` turns it on. When
+  off, the next snapshot removes the existing copies from `hosts/<host>/` (git history keeps them until a
+  cleanup folds them) and says so once.
+- Tagline: "Your Claude Code, a little wiser with every session."
 
 ## 4. Per-device overlay
 

@@ -4,6 +4,13 @@ Jeeves (`jeeves`, display name Jeeves) is a Claude Code plugin that versions the
 preferences (`~/.claude/CLAUDE.md`, `settings.json` and friends) in a separate **data repo** (the user's own:
 `WinuxNomacs/jeeves-cmd`). This repo is the plugin code only; it holds no preferences.
 
+## Purpose (the user's, 2026-11-18)
+
+Jeeves exists to improve Claude Code's operational knowledge over time, across many separate sessions and
+devices: `/jeeves:update` keeps the global and project CLAUDE.md (and the skills they point to) meaningful
+and effective for the current and future models that read and maintain them. Backing up settings is
+secondary. Weigh every change against that.
+
 ## Start of every session here
 
 Check `new.md` and `upcoming-changes.md` (phases) as the global rules describe. The SessionStart hook has
