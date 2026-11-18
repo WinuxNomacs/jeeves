@@ -17,7 +17,7 @@ fi
 
 # Find the data repo (the git repo holding home/ and hosts/) and set REPO and the paths inside it.
 # Order: $JEEVES_DATA, then the plugin option data_repo (hooks see it as CLAUDE_PLUGIN_OPTION_DATA_REPO),
-# then the git repo around the current folder if it has a home/ folder (Claude's Bash tool sees no
+# then the git repo around the current folder if it is a data repo (Claude's Bash tool sees no
 # plugin variables, but runs inside the data repo when working on it), then DEFAULT_DATA_REPO (the
 # option's default, which an install without --config may leave unset).
 # Returns 1 with DATA_REPO_PROBLEM set when none is found, or when it is encrypted and this device is locked
@@ -33,7 +33,9 @@ find_data_repo() {
   local candidate top
   candidate=$(expand_path "${JEEVES_DATA:-$CLAUDE_PLUGIN_OPTION_DATA_REPO}")
   if [ -z "$candidate" ]; then
-    top=$(git rev-parse --show-toplevel 2>/dev/null) && [ -d "$top/home" ] && candidate=$top
+    # Only a data repo: home/, and .sync-state/ ignored as jeeves-init writes it (a dotfiles repo has home/ too).
+    top=$(git rev-parse --show-toplevel 2>/dev/null) && [ -d "$top/home" ] &&
+      tr -d '\r' < "$top/.gitignore" 2>/dev/null | grep -qx '\.sync-state/' && candidate=$top
   fi
   if [ -z "$candidate" ]; then
     candidate=$DEFAULT_DATA_REPO
