@@ -64,6 +64,8 @@ already snapshotted the data repo when the plugin is installed.
   could differ there (from WSL: copy the tree to a `C:` folder and run `bash.exe -lc tests/run.sh`). No
   GNU-only flags (no `sed -i`, no `\|` in sed), no `timeout`, no `date -d` or `date -r` (missing or different
   on macOS; format dates with git), no associative arrays, no `set -u`, no `jq`.
+  No `mkdir` as a lock: uutils coreutils (Ubuntu 26.04's default) lets two processes create the same folder
+  at once; `take_lock` in `lib/lib.sh` uses bash's `noclobber` instead.
 - When a test's own git command writes files (switch, merge, checkout), give it `-c core.autocrlf=false`, as
   the scripts' `git_repo` does: Git for Windows would write CRLF and the scripts would see a dirty repo.
 - Hooks must never block a session: hook mode always exits 0 and prints only what needs attention.
