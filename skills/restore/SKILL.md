@@ -14,8 +14,8 @@ allowed-tools:
 
 Host to restore from (or nothing to choose): $ARGUMENTS
 
-Each machine's `settings.json`, `keybindings.json` and memories are backed up in the Jeeves data repo
-under `hosts/<host>/`, laid out as in `~/.claude`; the git history holds earlier versions. The shared files
+Each machine's memories, and its `settings.json` and `keybindings.json` when `jeeves.conf` has
+`backup_settings=yes`, are backed up in the Jeeves data repo under `hosts/<host>/`, laid out as in `~/.claude`; the git history holds earlier versions. The shared files
 (`CLAUDE.md`, `agents/`, `commands/`, `skills/`) are not part of a restore: `/jeeves:update` syncs them.
 
 ## Voice

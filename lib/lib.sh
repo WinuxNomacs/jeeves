@@ -114,8 +114,17 @@ core.trustctime false"
 # for files.
 TRACKED_FILES="CLAUDE.md"
 TRACKED_DIRS="agents commands skills"
-# Per-device files: backed up to hosts/<host>/ (with the memories), never applied automatically.
+# Per-device files: backed up to hosts/<host>/ when jeeves.conf has backup_settings=yes (memories always
+# are), never applied automatically.
 HOST_FILES="settings.json keybindings.json"
+
+# A setting from jeeves.conf at the top of the data repo (shared by all devices), or nothing.
+conf_value() {
+  [ -f "$REPO/jeeves.conf" ] || return 0
+  tr -d '\r' < "$REPO/jeeves.conf" | sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" | sed 's/[[:space:]]*$//' | tail -1
+}
+# settings.json and keybindings.json are backed up only when the user turned it on (backup_settings=yes).
+backup_settings_on() { case "$(conf_value backup_settings)" in yes|true|on|1) return 0 ;; esac; return 1; }
 # Never copied: skills/synced/ is managed by claude.ai; .trash/ holds what Claude Code removed.
 EXCLUDED_PREFIXES="skills/synced/ skills/.trash/ agents/.trash/ commands/.trash/"
 

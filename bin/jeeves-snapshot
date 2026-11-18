@@ -230,9 +230,10 @@ while IFS= read -r p; do
   esac
 done < <(all_tracked)
 
-# This device's backup: mirror its per-device files and memory folders into hosts/<host>/ (laid out as in
-# ~/.claude), so deletions show up in history too. Built aside first, so a failed copy leaves the last
+# This device's backup: mirror its memory folders, and its per-device files when backup_settings=yes, into
+# hosts/<host>/ (laid out as in ~/.claude), so deletions show up in history too. Built aside first, so a failed copy leaves the last
 # backup whole. hosts/<host>/ holds the machine's ID: another machine reporting the same name is stopped.
+dropped=()
 mine=$(machine_id)
 theirs=$(cat "$HOST_DIR/$HOST_MARK" 2>/dev/null)
 if [ -n "$mine" ] && [ -n "$theirs" ] && [ "$theirs" != "$mine" ] && [ $replace_host = 0 ]; then
@@ -242,9 +243,15 @@ else
   host_tmp=$STATE_DIR/host.sync-tmp
   backup_ok=1
   { rm -rf "${host_tmp:?}" && mkdir -p "$host_tmp"; } || backup_ok=0
-  for f in $HOST_FILES; do
-    [ $backup_ok = 1 ] && [ -f "$CLAUDE_HOME/$f" ] && { copy_file "$CLAUDE_HOME/$f" "$host_tmp/$f" || backup_ok=0; }
-  done
+  dropped=()
+  if backup_settings_on; then
+    for f in $HOST_FILES; do
+      [ $backup_ok = 1 ] && [ -f "$CLAUDE_HOME/$f" ] && { copy_file "$CLAUDE_HOME/$f" "$host_tmp/$f" || backup_ok=0; }
+    done
+  else
+    # Off: copies an earlier backup holds go, once (history keeps them until a cleanup folds them away).
+    for f in $HOST_FILES; do [ -f "$HOST_DIR/$f" ] && dropped+=("$f"); done
+  fi
   for dir in "$CLAUDE_HOME"/projects/*/memory; do
     [ $backup_ok = 1 ] || break
     [ -d "$dir" ] || continue
@@ -319,6 +326,10 @@ if [ ${#held[@]} -gt 0 ]; then
       "nowhere), so its $held_count files are not deleted from the shared files; to delete them on every device or" \
       "to put them back, run /jeeves:update"
   status=1
+fi
+if [ ${#dropped[@]} -gt 0 ]; then
+  say "$(printf '%s\n' "${dropped[@]}" | sed 's/^/hosts\/'"$HOST"'\//' | join_lines) removed: settings are backed up only" \
+      "with backup_settings=yes in jeeves.conf (the git history keeps the old copies until a history cleanup)"
 fi
 if [ $host_clash = 1 ]; then
   say "backup skipped: hosts/$HOST/ in the data repo belongs to another machine named $HOST; set JEEVES_HOST to" \

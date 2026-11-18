@@ -1,16 +1,21 @@
 # Jeeves
 
+**Your Claude Code, a little wiser with every session.**
+
 ![Jeeves, a butler in a dark tailcoat and white bow tie](docs/images/jeeves-butler.jpg)
 
-A Claude Code plugin that keeps the version history of your global Claude Code preferences in a git repo of
+A Claude Code plugin that turns what your sessions learn into lasting operational knowledge. `/jeeves:update`
+reviews the session, and the memories Claude saved on any of your devices, for corrections, lessons and
+setups worth keeping, and offers them as rules for your global or project `CLAUDE.md`, revised in place so
+the file stays short and useful to the models that read and maintain it. Everything lives in a git repo of
 your own (the **data repo**), on Linux, macOS and Windows:
 
 - **Shared** by all your devices and kept in sync: `~/.claude/CLAUDE.md`, `agents/`, `commands/`, `skills/`
   (not `skills/synced/`, which claude.ai manages, nor the `.trash/` folders where Claude Code puts what it
-  removed). Copies under `home/` in the data repo.
-- **Backed up per device**, never synced: `settings.json`, `keybindings.json` (they hold paths and key
-  bindings that differ per machine) and each project's memories. Copies under `hosts/<host>/`, which you can
-  restore onto a new machine with `/jeeves:restore`.
+  removed). Copies under `home/` in the data repo, with their full history.
+- **Backed up per device**, never synced: each project's memories, and, if you turn it on
+  (`backup_settings=yes` in `jeeves.conf`), `settings.json` and `keybindings.json`. Copies under
+  `hosts/<host>/`, which you can restore onto a new machine with `/jeeves:restore`.
 - **Encrypted** if you want: with a passphrase, GitHub holds only encrypted copies, while the files on your
   devices stay plain. Each device asks for the passphrase once.
 
@@ -49,7 +54,10 @@ itself when you ask to change a global preference, or when a snapshot reports ne
 
 - **Session review** (only when you run it, not when Claude starts it): first, Claude goes through the
   session, most recent first, for what it learned (your corrections and constraints, approaches you
-  confirmed, mistakes and how to avoid them, setups that took work). It sorts each item into the global
+  confirmed, mistakes and how to avoid them, setups that took work). It also reads the memories no device
+  has reviewed yet (this machine's, and other devices' from their backups; up to 25 files per run), where
+  lessons saved in one project often hold everywhere; a shared record (`hosts/.memory-review`) keeps a
+  memory from being offered twice, and memories themselves are never changed. It sorts each item into the global
   `CLAUDE.md` (holds in any repo), the project's `CLAUDE.md` (anyone working in that repo needs it; nothing
   private, since it may be public) or memory (personal or this machine only), worded as the rule it would
   become, revising an existing rule where one covers it. You pick from a list per file, with "All of these";
@@ -136,6 +144,7 @@ The plugin's `bin/` is on the PATH of Claude's Bash tool, so Claude (or you, by 
 | `jeeves-github find` / `create <name>` | GitHub | Lists your data repos on GitHub (topic `jeeves-data`, or named `jeeves-data`), or creates a private one with that topic, through the GitHub CLI. |
 | `jeeves-init <folder> [<url>]` | (new repo) | Creates an empty data repo (`.gitignore`, `.gitattributes`, README), optionally with a remote. |
 | `jeeves-status` | (read-only) | Lists each path out of sync (`disk`, `repo` or `conflict`) with its disk, repo and last-synced hashes, and how `main` stands against `origin/main`. |
+| `jeeves-memories list` / `record <hash> <outcome>...` | data repo | The memory files the session review has not reviewed yet (this machine's and other devices' backups), and the shared record of those it has, committed on `main`. |
 | `jeeves-scan` | (read-only) | Looks for secrets (private keys, API keys and tokens, password assignments) in each commit a push would send, so one a later commit removed is still caught; lists file, line and commit, never the value. |
 
 Each device keeps a gitignored record (`.sync-state/` in the data repo) of the file hashes at its last sync.
@@ -180,7 +189,12 @@ A git repo with:
 - Never copied: `.credentials.json`, `~/.claude.json`, history, transcripts, caches. `settings.json` is backed
   up as it is, so a token in its `env` block goes into the data repo: keep secrets out of it (an environment
   variable set elsewhere, or a secret manager). `jeeves-scan` stops a push that would send one.
-- `jeeves.conf` (optional): the automatic history cleanup's settings.
+- `hosts/.memory-review`: the memories the session review has reviewed (a hash and what came of it, one per
+  line), so no device offers the same memory twice.
+- `jeeves.conf` (optional), shared by all devices: the automatic history cleanup's settings, and
+  `backup_settings=yes` to back up each device's `settings.json` and `keybindings.json` (off by default;
+  turning it off removes the copies from `hosts/<host>/` at each device's next snapshot, while the git
+  history keeps them until a history cleanup).
 - `.gitignore`: `.sync-state/` and `*.sync-tmp`; `.gitattributes`: `* -text`, so files are kept byte for
   byte, line endings included (and, when encrypted, the filter for `home/` and `hosts/`). A data repo made
   before 1.1 had `* text=auto eol=lf`; its next snapshot changes that in a commit of its own.

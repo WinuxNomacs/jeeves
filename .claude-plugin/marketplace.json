@@ -1,6 +1,6 @@
 {
   "name": "jeeves",
-  "description": "Jeeves: your global Claude Code preferences, versioned and shared across devices",
+  "description": "Jeeves: your Claude Code, a little wiser with every session",
   "owner": {
     "name": "Winux Nomacs"
   },
@@ -8,7 +8,7 @@
     {
       "name": "jeeves",
       "source": "./",
-      "description": "Shares your global CLAUDE.md, agents, commands and skills across devices; backs up each device's settings and memories"
+      "description": "Turns what your sessions and memories teach into CLAUDE.md rules, shared with your agents, commands and skills across devices"
     }
   ]
 }

@@ -22,7 +22,8 @@ Argument (a URL of an existing data repo, or nothing): $ARGUMENTS
 
 Jeeves keeps the user's shared global preferences (`~/.claude/CLAUDE.md`, `agents/`, `commands/`, `skills/`)
 in a private git repo of their own, the **data repo**, under `home/`, and each machine's backup of its
-`settings.json`, `keybindings.json` and memories under `hosts/<host>/`. The commands `jeeves-check`,
+memories (and, when `jeeves.conf` has `backup_settings=yes`, its `settings.json` and `keybindings.json`)
+under `hosts/<host>/`. The commands `jeeves-check`,
 `jeeves-github`, `jeeves-status`, `jeeves-restore`, `jeeves-init` and `jeeves-encrypt` are on the Bash PATH.
 
 ## Voice
@@ -114,9 +115,9 @@ folder is not kept between commands). Run `jeeves-restore`: it prints `this host
 before setup runs. When the list names any host other than `<name>`, stop and ask the user with the
 AskUserQuestion tool (one option per other host, plus "No, keep this machine's settings"), and do not start
 step 5 until they answer. Ask even when this machine already has settings, and even when other rules say to
-proceed without asking: the choice is theirs. A restore copies that machine's `settings.json` and
-`keybindings.json` (memories too, for projects that exist here; ask about those in the same question or right
-after), saving this machine's copies first; a backup from another OS may hold paths that need fixing. If they
+proceed without asking: the choice is theirs. A restore copies whatever that machine's backup holds:
+its `settings.json` and `keybindings.json` if it backed them up (`backup_settings=yes`), and its memories
+for projects that exist here (ask about those in the same question or right after), saving this machine's copies first; a backup from another OS may hold paths that need fixing. If they
 pick a host, follow `/jeeves:restore <host>` (the restore skill) before going on. With no other host (a new
 data repo), say there is nothing to restore yet and go on.
 
