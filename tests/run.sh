@@ -226,7 +226,9 @@ t_a_stalled_remote_does_not_hold_up_the_session_start() {
   start=$(date +%s)
   out=$(JEEVES_REMOTE_DEADLINE=2 snap --hook); rc=$?
   check "exits 0" [ $rc = 0 ]
-  check "gives up on the remote within a few seconds" [ $(( $(date +%s) - start )) -lt 10 ]
+  # The remote stalls for 30 s; well under that means the deadline worked. Not a tighter bound: on a slow
+  # Windows machine the snapshot alone takes about 8 s.
+  check "gives up on the remote long before it answers" [ $(( $(date +%s) - start )) -lt 25 ]
   check "still records locally" [ "$(commits)" = $((n + 1)) ]
   check "the repo is clean" [ -z "$(git -C "$R" status --porcelain)" ]
 }
