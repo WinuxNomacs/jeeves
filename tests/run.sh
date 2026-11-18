@@ -352,7 +352,7 @@ t_data_repo_is_remembered_for_bare_commands() {
   check "and records it for this device" [ "$(cat "$W/claude/jeeves/data-repo")" = "$R" ]
   out=$(cd "$SCRATCH" && "$SRC/bin/jeeves-status")
   check "a later bare command finds it from the record" grep -q "^datarepo	$R\$" <<< "$out"
-  check "jeeves-git runs git in the data repo" [ "$(cd "$SCRATCH" && "$SRC/bin/jeeves-git" rev-parse --show-toplevel)" = "$R" ]
+  check "jeeves-git runs git in the data repo" [ "$(cd "$SCRATCH" && "$SRC/bin/jeeves-git" rev-parse HEAD)" = "$(git -C "$R" rev-parse HEAD)" ]
   echo "rules v2" > "$W/claude/CLAUDE.md"
   out=$(cd "$SCRATCH" && snap)
   check "a bare snapshot commits to it" grep -q "committed CLAUDE.md" <<< "$out"
