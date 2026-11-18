@@ -296,6 +296,17 @@ t_folder_finds_data_repo() {
   check "repo copy updated" grep -q v2 "$R/home/CLAUDE.md"
 }
 
+t_a_project_with_a_home_folder_is_not_taken_for_the_data_repo() {
+  unset JEEVES_DATA; export HOME=$W/userhome; mkdir -p "$HOME"
+  P=$W/project; git init -q -b main "$P"; mkdir -p "$P/home/nix"; echo x > "$P/home/nix/default.nix"
+  echo '{}' > "$P/home/settings.json"; git -C "$P" add -A; git -C "$P" commit -qm proj; n=$(git -C "$P" rev-list --count HEAD)
+  out=$(cd "$P" && snap --hook); rc=$?
+  check "hook exits 0" [ $rc = 0 ]
+  check "the project gets no commit" [ "$(git -C "$P" rev-list --count HEAD)" = "$n" ]
+  check "and keeps its files" [ -f "$P/home/settings.json" ] && [ -z "$(git -C "$P" status --porcelain)" ]
+  check "says Jeeves is not set up" grep -q "not set up on this machine" <<< "$out"
+}
+
 t_no_data_repo() {
   unset JEEVES_DATA; export HOME=$W
   out=$(cd "$SCRATCH" && snap); rc=$?
@@ -1153,6 +1164,7 @@ run_test "an unusable host name touches no backup" t_an_unusable_host_name_touch
 run_test "a new device that differs from the repo gets a conflict, not a guess" t_new_device_first_sync
 run_test "the data repo comes from the plugin option when JEEVES_DATA is unset" t_option_finds_data_repo
 run_test "the data repo is found from the current folder inside it" t_folder_finds_data_repo
+run_test "a project with a home/ folder is not taken for the data repo" t_a_project_with_a_home_folder_is_not_taken_for_the_data_repo
 run_test "without a data repo, the scripts point to /jeeves:setup, hook mode exits 0, and ~/jeeves-data is the default" t_no_data_repo
 run_test "the edit hook snapshots after an edit to the global CLAUDE.md" t_edit_hook_snapshots_claude_md
 run_test "the edit hook ignores edits to other files" t_edit_hook_ignores_other_files
