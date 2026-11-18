@@ -366,6 +366,19 @@ t_data_repo_is_remembered_for_bare_commands() {
   rm -rf "${W:?}/other"
   out=$(cd "$SCRATCH" && "$SRC/bin/jeeves-status")
   check "a recorded data repo that is gone points to /jeeves:setup" grep -q "/jeeves:setup" <<< "$out"
+  echo "$R" > "$W/claude/jeeves/data-repo"
+  git clone -q "$W/remote.git" "$W/elsewhere" 2>/dev/null
+  (cd "$SCRATCH" && JEEVES_DATA=$W/elsewhere "$SRC/bin/jeeves-status" >/dev/null 2>&1)
+  check "a JEEVES_DATA set for one command is not recorded" [ "$(cat "$W/claude/jeeves/data-repo")" = "$R" ]
+  (cd "$SCRATCH" && HOME=$W "$SRC/bin/jeeves-status" --data-repo "" >/dev/null 2>&1)
+  check "an empty --data-repo removes the record, so bare commands find the same repo" [ ! -e "$W/claude/jeeves/data-repo" ]
+  rm -rf "${W:?}/claude/jeeves"; echo x > "$W/claude/jeeves"
+  err=$(cd "$SCRATCH" && "$SRC/bin/jeeves-status" --data-repo "$R" 2>&1 >/dev/null)
+  check "a record that cannot be written is reported" grep -q "could not record the data repo" <<< "$err"
+  rm -f "$W/claude/jeeves"
+  echo notes.md > "$W/global-ignore"; printf '[core]\n\texcludesFile = %s\n' "$W/global-ignore" > "$W/gitconfig"
+  echo private > "$R/home/notes.md"
+  check "jeeves-git sees a file the user's global ignore list names, as jeeves-status does" grep -q "home/notes.md" <<< "$(cd "$SCRATCH" && GIT_CONFIG_GLOBAL=$W/gitconfig "$SRC/bin/jeeves-git" --data-repo "$R" status --porcelain)"
 }
 
 t_no_data_repo() {
