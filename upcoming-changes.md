@@ -2,8 +2,8 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** 1. Memories feed `/jeeves:update`'s review · 2. Settings and keybindings backup opt-in ·
-  3. README tagline (planned 2026-11-18, to build; Data integrity is built, awaiting a release)
+- **Up next:** nothing planned (Data integrity, the memory review, the opt-in settings backup and the tagline
+  are built, awaiting a release)
 - **Later:** 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
   must differ per host) · Anthropic directory submission (only on the user's direct command)
@@ -101,6 +101,13 @@
   takeover, and the lock in cleanup, encrypt and restore. Code in `lib/lib.sh`, `bin/`; update skill step 2
   to 5; README "How the data stays whole". 97 tests in `tests/run.sh` (19 new, each injecting its failure,
   each seen failing on the old scripts). Details below under "Data integrity".
+- Memories feed the review, opt-in settings backup, tagline (2026-11-18, the user's requests):
+  `bin/jeeves-memories` (`list`, `record`) and the shared record `hosts/.memory-review`; the update skill's
+  review reads every device's unreviewed memories (25 files per run) and states its purpose;
+  `backup_settings=yes` in `jeeves.conf` (off by default; old copies removed once, kept in history);
+  `conf_value` in `lib/lib.sh`; README tagline "Your Claude Code, a little wiser with every session." and
+  an introduction that leads with the knowledge loop; manifests likewise. 101 tests in `tests/run.sh`.
+  Details below under "Memories, opt-in settings backup, tagline".
 
 ## Decisions (2026-11-16, with the user)
 
@@ -1079,7 +1086,7 @@ failing before its fix.
 - Line endings in existing data repos: the snapshot migrates `.gitattributes` to `* -text` once.
 - Same host name: a machine ID per device; the snapshot detects a clash and stops the backup.
 
-## Memories, opt-in settings backup, tagline (planned 2026-11-18, the user's requests)
+## Memories, opt-in settings backup, tagline (done 2026-11-18, the user's requests)
 
 Purpose, as the user put it: `/jeeves:update` is about improving CLAUDE.md over time, to make it meaningful
 and effective for the current and future models that maintain it (recorded in `.claude/CLAUDE.md`).
@@ -1118,6 +1125,15 @@ operational knowledge across sessions, with backup as secondary.
   off, the next snapshot removes the existing copies from `hosts/<host>/` (git history keeps them until a
   cleanup folds them) and says so once.
 - Tagline: "Your Claude Code, a little wiser with every session."
+
+### As built (2026-11-18)
+
+- The record holds one line per memory hash: hash, outcome, date, host; sorted by hash. It sits in
+  `hosts/` (a file, not a host folder) so it is encrypted with the backups; it records hashes only, no paths.
+- The review reads at most 25 memory files per run (this machine had 105 on the first count), in list
+  order, and records every file it read, so declined items are not offered again until the file changes.
+- `record` takes its pairs as arguments, so the skill's `Bash(jeeves-memories:*)` permission covers it.
+- An item from a memory goes to Global, or to Project only for the session's own project.
 
 ## 4. Per-device overlay
 
