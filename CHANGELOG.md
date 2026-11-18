@@ -2,6 +2,36 @@
 
 A new version reaches installed copies only when `version` in `.claude-plugin/plugin.json` changes.
 
+## 1.1.0 (2026-11-18)
+
+**Your Claude Code, a little wiser with every session.** The session review now learns from your
+memories too, and your data is guarded at every step.
+
+- **Memories feed the review:** `/jeeves:update` also reads the memories Claude saved on any of your devices
+  (this machine's, and the others' from their backups) and offers what holds everywhere as CLAUDE.md rules,
+  saying which memory each came from. Memories themselves are never changed; a shared record
+  (`hosts/.memory-review`) keeps a memory from being offered twice. Up to 25 files per run, so a long
+  backlog is worked through over a few runs. New command: `jeeves-memories`.
+- **Settings backup is opt-in:** `settings.json` and `keybindings.json` are backed up only with
+  `backup_settings=yes` in `jeeves.conf`. Without it, the next snapshot removes the old copies from
+  `hosts/<host>/` once and says so (the git history keeps them until a history cleanup). Memories are still
+  backed up.
+- **Nothing corrupt is committed:** what a snapshot commits is checked, decrypted, against what it copied; a
+  failed copy or backup stops the run with nothing recorded; a file still being written is left for the next
+  snapshot; files are kept byte for byte (existing data repos get `* -text` in a commit of their own, so a
+  file with Windows line endings is stored as it is). Files holding conflict markers are never recorded,
+  installed or pushed unless you name them (`--force <path>`).
+- **Nothing reaches `~/.claude` from an unfinished state:** `jeeves-apply` installs only from a clean `main`
+  with no merge in progress, re-checks each file just before replacing it, and records only a copy that is
+  in place.
+- **Folders and devices:** a shared folder that vanishes whole (moved, or a link to a missing drive) is held
+  back until you confirm the deletion (`--allow-delete`); two machines with the same name no longer
+  overwrite each other's backup (`--replace-host` when one replaces the other); a host name starting with a
+  dot is refused.
+- **Smaller fixes:** your own git ignore list (`.DS_Store`, `*.swp`) no longer keeps a shared file out of
+  the data repo; a merge of an encrypted file that cannot be decrypted stops with a marked note instead of
+  taking one side; cleanup, encrypt and restore take the lock too, and a stale lock is taken over safely.
+
 ## 1.0.1 (2026-11-17)
 
 Fixes from the first full review for bugs, interaction breakdowns and secret leaks.

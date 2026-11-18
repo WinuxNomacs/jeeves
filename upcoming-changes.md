@@ -2,8 +2,7 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** nothing planned (Data integrity, the memory review, the opt-in settings backup and the tagline
-  are built, awaiting a release)
+- **Up next:** nothing planned
 - **Later:** 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
   must differ per host) · Anthropic directory submission (only on the user's direct command)
@@ -108,6 +107,18 @@
   `conf_value` in `lib/lib.sh`; README tagline "Your Claude Code, a little wiser with every session." and
   an introduction that leads with the knowledge loop; manifests likewise. 101 tests in `tests/run.sh`.
   Details below under "Memories, opt-in settings backup, tagline".
+- Release 1.1.0 (2026-11-18): both phases above. Review by an independent agent and my own pass; fixed on
+  `fix/release-review` (104 tests): a copy refused by the byte-for-byte check was committed unchecked by the
+  next snapshot (leftover home/ copies now go through the same check); the user's `core.excludesFile` kept
+  files out of commits while they were recorded as synced (`git_repo` clears it); a host name starting with a
+  dot (`.memory-review`) is refused; a file deleted while copied is left for the next snapshot; `backup_settings`
+  is case-insensitive; a review record left uncommitted no longer blocks snapshots; the update skill records
+  reviewed memories on `main` and falls back to the session when the memory listing fails. Not fixed: new
+  files under a symlinked shared folder are not synced (Later 2); `Bash(jeeves-snapshot --force:*)` in the
+  update skill's allowed-tools also matches `--allow-delete` and `--replace-host` (the skill runs those only
+  after the user chose); a `merge=union` attribute for `hosts/.memory-review` (the skill merges it by hand).
+  Upgrade rehearsed from v1.0.1's scripts (attributes migrated, settings copies removed once, a CRLF file
+  stored byte for byte, a second snapshot silent).
 
 ## Decisions (2026-11-16, with the user)
 
