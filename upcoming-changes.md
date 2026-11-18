@@ -2,7 +2,7 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** Data integrity (fixes from the 2026-11-18 review; planned, to build)
+- **Up next:** nothing planned (the Data integrity phase is built, awaiting a release)
 - **Later:** 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
   must differ per host) · Anthropic directory submission (only on the user's direct command)
@@ -91,6 +91,15 @@
   Details below under "Pre-release review and release (done)".
 
 ---
+- Data integrity (2026-11-18, from a review of the code and skills): snapshot records what it copied and
+  committed (checked before the commit, decrypted), stops on any failed copy or backup, leaves a file still
+  being written; apply only from a clean `main`, re-checks a file before replacing it, records only a
+  verified copy; `--force <path>`; conflict markers never installed, recorded or pushed unless named; the
+  merge driver fails with a marked note; a vanished tracked folder held until `--allow-delete`; a machine ID
+  in `hosts/<host>/` (`--replace-host`); `* -text` for new and existing data repos; an atomic stale-lock
+  takeover, and the lock in cleanup, encrypt and restore. Code in `lib/lib.sh`, `bin/`; update skill step 2
+  to 5; README "How the data stays whole". 97 tests in `tests/run.sh` (19 new, each injecting its failure,
+  each seen failing on the old scripts). Details below under "Data integrity".
 
 ## Decisions (2026-11-16, with the user)
 
@@ -971,7 +980,7 @@ branch.
 - Releases before 1.0.1 stay untagged (2026-11-17, the user: "still very early on"); the procedure checks
   only the previous release's tag.
 
-## Data integrity (up next; planned 2026-11-18)
+## Data integrity (done 2026-11-18)
 
 From a review of the code and the skills for paths that lose or corrupt data (two passes: mine and an
 independent reviewer's; each finding reproduced in scratch folders or shown in the code). "Recoverable from
@@ -1043,10 +1052,28 @@ a missing folder or dangling symlink; git's index missing a change. Each gets a 
 `cp` that fails or edits the source, read-only folders, a moved key, several takers of a stale lock), seen
 failing before its fix.
 
+### As built (2026-11-18)
+
+- `copy_settled` (lib) copies a `~/.claude` file and retries while its hash changes (three tries, then
+  "still being written"); `staged_is` checks a staged path against the copy's hash through the clean cache
+  (no key read), else `git cat-file --filters`; taken paths are re-added with `git add --renormalize`, so a
+  same-size, same-second change is not missed (finding 9).
+- The `hosts/<host>/` backup is built in `.sync-state/host.sync-tmp/` and moved into place.
+- The machine ID lives in `~/.claude/.jeeves-machine-id` (outside the synced files, so a re-cloned data repo
+  keeps it); it goes into `hosts/<host>/.jeeves-machine` only with a backup that holds something.
+- On git 2.44+ the merge driver's exit status 129 stops the merge with nothing changed; older git reports a
+  conflict whose file carries the "not merged" markers (the test accepts either).
+- For key rotation (Later 1): the clean cache (`.git/jeeves/clean/`) is keyed by the plain text's hash only,
+  so a new key must clear it, as `encrypt on` does.
+- Not changed: the skills' own git commands run outside the lock; nested `.git`/`.gitignore` (the user's
+  decision); `.sync-state/overwritten/` stays local and unpruned.
+
 ### Decisions (2026-11-18, with the user)
 
 - Plan a fix phase, ahead of anything else, rather than quick fixes.
-- A vanished or dangling tracked folder: held until the user confirms in `/jeeves:update`.
+- A vanished or dangling tracked folder: held until the user confirms in `/jeeves:update`. As built, an
+  empty folder that is still there counts as its files deleted (recorded as before); only a missing folder
+  or a link that points nowhere is held.
 - A skill with its own `.git` or `.gitignore`: left as today (not fully synced, no notice).
 - Line endings in existing data repos: the snapshot migrates `.gitattributes` to `* -text` once.
 - Same host name: a machine ID per device; the snapshot detects a clash and stops the backup.
