@@ -2,7 +2,7 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** Autonomous review (planning: decisions open, see "Autonomous review" below)
+- **Up next:** Autonomous review (planned, decisions taken: see "Autonomous review" below)
 - **Later:** 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
   must differ per host) · Anthropic directory submission (only on the user's direct command)
@@ -1146,7 +1146,7 @@ operational knowledge across sessions, with backup as secondary.
 - `record` takes its pairs as arguments, so the skill's `Bash(jeeves-memories:*)` permission covers it.
 - An item from a memory goes to Global, or to Project only for the session's own project.
 
-## Autonomous review (planning, the user's request of 2026-11-18)
+## Autonomous review (planned, the user's request of 2026-11-18)
 
 **The request (new.md):** Jeeves learns from the session and the memories automatically, without
 prompting the user for each item: it judges what operational knowledge improves Claude Code sessions
@@ -1168,15 +1168,15 @@ nothing is ever removed from CLAUDE.md except by revising a rule in place.
    said, and changes what a model would do (something a capable model would do anyway is not a rule). The
    report lists every change, one line each (added, revised, removed, where), with the commit to revert it
    (`git revert <commit>` in the data repo; the project's merge commit).
-2. **Curation pass (cruft removal).** Each run also re-reads the destination files and, within a budget
-   (a few edits per run, so every change stays reviewable), removes or merges: rules that repeat another,
+2. **Curation pass (cruft removal).** Each run also re-reads the destination files and removes or merges: rules that repeat another,
    rules that restate default model behaviour, rules about tools or situations that no longer exist, and
    wording that can be shorter without losing meaning. Never removed or weakened automatically: the
    Security section, and rules the user stated as constraints ("never", "always", "from now on"); those are
    the "extreme case" that asks.
 3. **When it still asks (the only prompts):** a new item or a removal would reverse or weaken a rule the user
    set; two existing rules contradict and the right one is not clear from the session or memories; text
-   would go into a project CLAUDE.md that could be private (depending on decision 3 below).
+   would go into a project CLAUDE.md that is private or true only on this machine (it goes to memory instead,
+   without asking, when that is clearly where it belongs).
 4. **Memories:** decided items are recorded as today (`promoted`, `kept`); a memory superseded by a rule is
    still never changed (decision recorded 2026-11-18: "Always keep it").
 5. The skill's "Never lose text" rule stays for merges (sync), where it protects text a device added.
@@ -1184,18 +1184,17 @@ nothing is ever removed from CLAUDE.md except by revising a rule in place.
    scratch folders (a session with a correction, a duplicate rule, a rule restating default behaviour, a
    user constraint the new item contradicts).
 
-**Open decisions (the user's):**
+**Decisions (2026-11-18, with the user):**
 
-1. **Trigger:** only when the user runs `/jeeves:update` (no per-item questions), or also automatically.
-   An automatic run would need a hook that starts a headless `claude -p` review at session end
-   (unverified: whether a SessionEnd hook can start one, its cost per session, and its permissions), or
-   Claude offering the review at the end of a substantial session.
-2. **Cruft removal:** automatic within the guard above (removals listed in the report, revertible), or
-   proposed only.
-3. **Project CLAUDE.md:** written automatically like the global one (it is committed and may be public),
-   or asked each time, or automatic only when the project's repo is private.
-4. **How much per run:** a cap on edits per run (proposed: about 8 additions or revisions and 5 removals),
-   or no cap.
+1. **Trigger:** on `/jeeves:update` only, with no per-item questions (no hook, no offer at session end).
+2. **Cruft removal:** automatic, within the guard (never the Security section, never a constraint the user
+   stated); every removal listed in the report and revertible from git.
+3. **Project CLAUDE.md:** always automatic, like the global file, keeping the rule that nothing private, no
+   secret and no personal detail goes there (the repo may be public).
+4. **No cap on edits per run** (the user: the first memory review is the big one; later runs come in
+   manageable chunks). The limit of 25 memory files read per run stays: it bounds what one run reads into
+   context, not what it writes. The first curation pass over an existing CLAUDE.md may also be large; its
+   report lists every change, and one revert of that run's commit undoes it.
 
 ## 4. Per-device overlay
 
