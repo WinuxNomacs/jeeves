@@ -31,14 +31,18 @@ already snapshotted the data repo when the plugin is installed.
   runs from the session-start snapshot per `jeeves.conf`; `--all` after encrypting), `jeeves-encrypt`
   (encryption on, unlock, lock, passphrase), `jeeves-crypt` (git's filter, textconv and merge driver for an
   encrypted data repo; git runs it once per file, so it sources only `lib/crypt.sh`), `jeeves-memories`
-  (the memories the session review has not reviewed yet, and the shared record `hosts/.memory-review`).
+  (the memories the session review has not reviewed yet, and the shared record `hosts/.memory-review`),
+  `jeeves-git` (git in the data repo).
 - `skills/` — `update` (`/jeeves:update`: when the user runs it, a review of the session and of every
   device's unreviewed memories: it decides on its own what to save to the global and project CLAUDE.md,
   prunes them, asks only on a conflict with a rule the user set, and reports each change with its revert;
   then sync, or a change to a shared file, then push), `setup`, `restore`,
   `cleanup` (`/jeeves:cleanup`: history cleanup and its `jeeves.conf` settings), `encrypt`, `unlock`, `lock`.
   They get the data repo from `${user_config.data_repo}` (substituted into skill text; the Bash tool sees no
-  plugin variables).
+  plugin variables), passed once as `jeeves-status --data-repo "..."`, which records it in
+  `~/.claude/jeeves/data-repo`; every later command is bare (`jeeves-git` for git), never after a `cd` into
+  the data repo or a `JEEVES_DATA=` prefix: an allow rule does not match past either, so each would prompt
+  in the default permission mode (tested headless with `claude -p --permission-mode default --allowedTools`).
 - Shared files (`home/`, synced) vs per-device files (`hosts/<host>/`, backup only; settings and keybindings
   only with `backup_settings=yes` in `jeeves.conf`): the lists are at the top of `lib/lib.sh`.
 - `lib/lib.sh` — shared code: finding the data repo, tracked paths list, hashes, three-way classification.

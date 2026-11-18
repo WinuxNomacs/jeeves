@@ -2,7 +2,7 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** nothing planned (the next release: the autonomous review, merged since 1.1.0)
+- **Up next:** release 1.2.0 (the autonomous review and the permission prompt fix, merged since 1.1.0)
 - **Later:** 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
   must differ per host) · Anthropic directory submission (only on the user's direct command)
@@ -130,8 +130,20 @@
   passages were fixed: a memory with an unanswered question stays unrecorded; merging into a protected rule
   keeps its words; a global rule is not removed because a tool is missing on one machine; no guessed reasons;
   memories saved before the first snapshot and recorded `kept (new)`; a sync with global items runs change
-  mode in full. Known: `cd ... && jeeves-memories record` does not match the skill's allowed-tools, so it
-  prompts (as in 1.1.0).
+  mode in full. The permission prompt it noted is fixed in the next entry.
+- Permission prompts (2026-11-18): tested with `claude -p --permission-mode default --allowedTools`, every
+  skill command written `cd <data repo> && ...` or `JEEVES_DATA=... jeeves-...` asked for approval (an allow
+  rule matches neither past a `cd` outside the project nor past an unlisted variable; the user runs auto
+  mode, so it went unseen). Now `lib/lib.sh` takes `--data-repo <path>` as any script's first arguments and
+  records the data repo in `~/.claude/jeeves/data-repo` whenever a script is told it (the session-start
+  hook, from the plugin option); later bare commands read that record. New `bin/jeeves-git` runs git in the
+  data repo. All seven skills pass the option once (`jeeves-status --data-repo`, `jeeves-check --data-repo`
+  in setup, `jeeves-memories --data-repo ... list` in the review) and run everything else bare, with
+  `jeeves-git` allow rules that end in `*` (no middle wildcard, which can span arguments; `jeeves-git
+  reset` still asks). Tests: the record and `jeeves-git` (failing on the old `lib.sh`), the skills' commands
+  and allow rules, and a scratch `CLAUDE_HOME` for the whole suite. Checked headless: the update skill's
+  commands pass, `jeeves-git reset` is refused. Not covered: Read and Edit of data repo files outside the
+  project still ask in the default mode.
 
 ## Decisions (2026-11-16, with the user)
 
