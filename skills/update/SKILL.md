@@ -143,15 +143,37 @@ change-mode branch of your own from this session; for anything else, stop and as
 2. **Diverged `main`:** `git merge --no-ff origin/main -m "Merge origin/main: <what came in>"`. Merge
    conflicting text under `home/` by the rules above (keep both sides' additions; ask before dropping text);
    a conflict under `hosts/` takes this device's side for `hosts/<this host>/` and the incoming side for
-   any other host (each host's folder is written only by that host). `git add` the result and commit.
+   any other host (each host's folder is written only by that host). If the merge fails, or a conflicting
+   file says `jeeves: not merged` (the key could not be read), `git merge --abort` and point the user to
+   `/jeeves:unlock`. Before committing, read each file git listed as conflicting: it must hold both sides
+   as you merged them and no `<<<<<<<`, `=======` or `>>>>>>>` lines; a conflicting file with no markers at
+   all was not merged (stop and ask). Then `git add` those files by name and commit.
 3. **Each `conflict` line:** read base, disk (`~/.claude/<path>`) and repo (`home/<path>`). With a base, take
    each side's changes since the base; without one (`none`, a new device), keep everything both sides hold.
    If the changes do not overlap, write the merged text to `home/<path>`, commit
-   (`merge(<host>): <path> from disk and repo`), then `jeeves-apply --force` (it saves the disk copy under
-   `.sync-state/overwritten/`). If they overlap, ask first.
+   (`merge(<host>): <path> from disk and repo`), then `jeeves-apply --force <path>` with that one path (it
+   saves the disk copy under `.sync-state/overwritten/`; without a path it would overwrite every other
+   conflict too). If they overlap, ask first.
 4. `jeeves-apply` installs what is newer in the repo. Then `jeeves-snapshot` again: it must print nothing,
-   and `jeeves-status` must list no paths. If not, go back to the step that applies.
-5. If `main` is ahead: `jeeves-scan`, then `git push origin main`. If the push is rejected, `jeeves-snapshot`
+   and `jeeves-status` must list no paths. If not, go back to the step that applies. Notices the snapshot
+   may print:
+   - `<folder>/ gone from ...`: a shared folder vanished from `~/.claude`, so its files were not deleted.
+     Ask the user (AskUserQuestion), naming the files (`git ls-files home/<folder>`): "Leave them for now"
+     (recommended when the folder may be on a drive or link that is not there), "Put them back"
+     (`jeeves-apply --force <path>` for each), or "Delete them on every device"
+     (`jeeves-snapshot --allow-delete <folder>`, only on a yes that names what is lost).
+   - `... (it holds conflict markers ...)` or `skipped <path> (the repo copy holds conflict markers ...)`: an
+     unfinished merge. Show the user the passage and merge it as in step 3; only if they say the markers
+     belong there, `jeeves-snapshot --force <path>` or `jeeves-apply --force <path>`.
+   - `backup skipped: hosts/<host>/ ... belongs to another machine`: two machines report the same host
+     name. Tell the user; the fix is `export JEEVES_HOST=<a name of its own>` in the shell profile Claude Code
+     starts from on this machine, then a new session, or, only if this machine replaces that one,
+     `jeeves-snapshot --replace-host`. Ask which.
+   - `still being written`: run `jeeves-snapshot` again in a moment.
+   - `could not copy`, `could not back up` or `the commit would not hold`: nothing was recorded. Report it
+     as it is (a full disk, a read-only folder, a `.gitattributes` rule) and stop.
+5. If `main` is ahead: `jeeves-scan`, then `git push origin main` (a conflict marker it reports is
+   handled like a secret: stop and ask). If the push is rejected, `jeeves-snapshot`
    and repeat from step 2 once; if it is rejected again, stop and ask.
 6. Report in one or two lines: what was merged, installed and pushed (or that everything was in sync).
 
