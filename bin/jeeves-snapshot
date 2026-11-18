@@ -3,27 +3,53 @@
 #
 #   jeeves-snapshot           pull (fast-forward only), copy changed shared files into home/, back up this
 #                             device's settings, keybindings and memories to hosts/<host>/, commit
-#   jeeves-snapshot --force   also take the disk copy of files changed on both sides (conflicts)
+#   jeeves-snapshot --force [<path>...]
+#                             also take the disk copy of files changed on both sides (conflicts), or holding
+#                             conflict markers; with paths, only of those (relative to ~/.claude)
 #   jeeves-snapshot --hook    for the hooks: always exits 0, prints only when something needs attention
 #   jeeves-snapshot --no-pull skip contacting the remote
+#   jeeves-snapshot --allow-delete <folder>
+#                             record that agents/, commands/ or skills/ is gone from ~/.claude (a folder that
+#                             vanishes whole is otherwise held back: it may be a moved folder or a dead link)
+#   jeeves-snapshot --replace-host
+#                             back up into hosts/<host>/ even though another machine of that name wrote it
 #
 # The data repo is found as lib/lib.sh describes (JEEVES_DATA, the plugin option, or the current folder).
 #
 # Never pushes (at session start it runs jeeves-cleanup --auto, which may: see there). The hosts/<host>/
 # backup is only ever written by that host and is never applied back (jeeves-restore copies it onto a
 # machine on request). A shared file whose name another OS can't hold is not taken.
+#
+# What is committed is checked to be what was copied (decrypted, byte for byte) before the commit, and that is
+# what the sync record keeps: a copy that fails stops the run with nothing recorded, and a file still being
+# written is left for the next snapshot.
 
 . "$(dirname "$0")/../lib/lib.sh"
 
-hook=0 force=0 pull=1
-for arg in "$@"; do
-  case "$arg" in
+hook=0 force=0 pull=1 replace_host=0 force_paths=() allow_delete=" "
+while [ $# -gt 0 ]; do
+  case "$1" in
     --hook) hook=1 ;;
     --force) force=1 ;;
     --no-pull) pull=0 ;;
-    *) echo "snapshot: unknown option $arg" >&2; exit 2 ;;
+    --replace-host) replace_host=1 ;;
+    --allow-delete)
+      case " $TRACKED_DIRS " in *" ${2%/} "*) allow_delete="$allow_delete${2%/} " ;;
+        *) echo "snapshot: --allow-delete takes one of: $TRACKED_DIRS" >&2; exit 2 ;; esac
+      shift ;;
+    -*) echo "snapshot: unknown option $1" >&2; exit 2 ;;
+    *) [ $force = 1 ] || { echo "snapshot: a path goes after --force" >&2; exit 2; }; force_paths+=("$1") ;;
   esac
+  shift
 done
+# forced <path>: --force covers it (no paths given, or it is one of them).
+forced() {
+  local f
+  [ $force = 1 ] || return 1
+  [ ${#force_paths[@]} = 0 ] && return 0
+  for f in "${force_paths[@]}"; do [ "$f" = "$1" ] && return 0; done
+  return 1
+}
 
 say() { echo "jeeves snapshot: $*"; }
 finish() { if [ $hook = 1 ]; then exit 0; else exit "$1"; fi; }
@@ -71,8 +97,14 @@ fi
 # records them again (or reports a conflict) instead of taking them for older than the repo's.
 switch_to_cleaned_history() {
   local p
-  mkdir -p "$STATE_DIR"
-  git_repo bundle create "$STATE_DIR/$CLEANUP_BUNDLE_NAME" main >/dev/null 2>&1
+  # The old history is dropped below (reset, then gc): without its bundle, keep everything as it is.
+  if ! mkdir -p "$STATE_DIR" || ! git_repo bundle create "$STATE_DIR/$CLEANUP_BUNDLE_NAME.sync-tmp" main >/dev/null 2>&1 ||
+     ! mv "$STATE_DIR/$CLEANUP_BUNDLE_NAME.sync-tmp" "$STATE_DIR/$CLEANUP_BUNDLE_NAME"; then
+    rm -f "${STATE_DIR:?}/$CLEANUP_BUNDLE_NAME.sync-tmp"
+    say "the history was cleaned up on another device, but this device's old history could not be saved" \
+        "(disk full?); nothing switched, recording locally"
+    return 1
+  fi
   if [ -n "$last_origin" ] && git_repo cat-file -e "$last_origin^{commit}" 2>/dev/null; then
     git_repo diff --name-only "$last_origin" HEAD -- home/ | sed 's#^home/##' | while IFS= read -r p; do
       if git_repo cat-file -e "$last_origin:home/$p" 2>/dev/null; then
@@ -127,13 +159,49 @@ fi
 
 if encrypted_at origin/main && plain_history_at origin/main; then say "$PLAIN_HISTORY_MSG"; fi
 
-taken=() pending=() conflicts=() refused=() deleted=()
+# Files are kept byte for byte: a data repo made before 1.1 converts line endings (text=auto eol=lf), which
+# changes what is committed. Its .gitattributes gets "* -text" instead, committed on its own, once.
+if [ -f "$REPO/.gitattributes" ] && tr -d '\r' < "$REPO/.gitattributes" | grep -qx '\* text=auto eol=lf'; then
+  if tr -d '\r' < "$REPO/.gitattributes" | awk '
+       $0 == "# LF everywhere, also in a Windows checkout (Git for Windows sets core.autocrlf=true)." {
+         print "# Byte for byte: no line-ending conversion, also in a Windows checkout (core.autocrlf)."; next }
+       $0 == "* text=auto eol=lf" { print "* -text"; next }
+       { print }' > "$REPO/.gitattributes.sync-tmp" && mv "$REPO/.gitattributes.sync-tmp" "$REPO/.gitattributes" &&
+     git_repo add -- .gitattributes &&
+     git_repo commit -q -m "Keep files byte for byte (no line-ending conversion)" -- .gitattributes; then
+    [ $hook = 1 ] || say "committed .gitattributes: files are now kept byte for byte"
+  else
+    rm -f "${REPO:?}/.gitattributes.sync-tmp"
+    say "could not update .gitattributes to keep files byte for byte; nothing recorded"
+    finish 1
+  fi
+fi
+
+# A shared folder gone from ~/.claude (moved, deleted, or a link to a drive that is not there) while
+# this device synced files in it: its files are not recorded as deleted until the user confirms
+# (/jeeves:update, then --allow-delete).
+held=()
+for dir in $TRACKED_DIRS; do
+  case "$allow_delete" in *" $dir "*) continue ;; esac
+  [ -d "$CLAUDE_HOME/$dir" ] && continue   # an empty folder still there: its files were deleted
+  awk -F'\t' -v d="$dir/" 'index($2, d) == 1' "$STATE_FILE" 2>/dev/null | grep -q . || continue
+  [ -n "$(files_in_dir "$HOME_COPY" "$dir")" ] || continue
+  held+=("$dir")
+done
+held_count=0
+is_held() { local h; for h in ${held[@]+"${held[@]}"}; do case "$1" in "$h"/*) return 0 ;; esac; done; return 1; }
+
+# On a failure, nothing is staged; the copies stay, and the next snapshot recognises them as its own.
+undo_copies() { git_repo reset -q; }
+
+taken=() taken_hash=() pending=() conflicts=() refused=() deleted=() busy=()
 collisions=$(all_tracked | case_collisions)
 while IFS= read -r p; do
   [ -n "$p" ] || continue
   d=$(hash_of "$CLAUDE_HOME/$p"); r=$(hash_of "$HOME_COPY/$p"); b=$(base_of "$p")
   state=$(classify "$d" "$r" "$b")
-  [ "$state" = conflict ] && [ $force = 1 ] && state=disk
+  [ "$state" = conflict ] && forced "$p" && state=disk
+  if [ "$state" = disk ] && [ "$d" = "-" ] && is_held "$p"; then held_count=$((held_count + 1)); continue; fi
   case "$state" in
     insync) set_base "$p" "$d" "$CLAUDE_HOME/$p" ;;
     disk)
@@ -143,34 +211,64 @@ while IFS= read -r p; do
         if [ -z "$why" ] && printf '%s\n' "$collisions" | grep -qxF -- "$p"; then
           why="another file's name differs from it only in case, which collides on Windows and macOS"
         fi
+        if [ -z "$why" ] && has_conflict_markers "$CLAUDE_HOME/$p" && ! forced "$p"; then
+          why="it holds conflict markers from an unfinished merge; if they belong there, take it with 'jeeves-snapshot --force $p'"
+        fi
       fi
       if [ -n "$why" ]; then refused+=("$p ($why)"); continue; fi
-      if [ "$d" = "-" ]; then rm -f "$HOME_COPY/$p"; deleted+=("$p"); else copy_file "$CLAUDE_HOME/$p" "$HOME_COPY/$p"; fi
-      taken+=("$p") ;;
+      if [ "$d" = "-" ]; then
+        rm -f "${HOME_COPY:?}/${p:?}" || { say "could not remove home/$p; nothing recorded"; undo_copies; finish 1; }
+        deleted+=("$p"); h=-
+      else
+        h=$(copy_settled "$CLAUDE_HOME/$p" "$HOME_COPY/$p"); rc=$?
+        if [ $rc = 2 ]; then busy+=("$p"); continue; fi
+        if [ $rc != 0 ]; then say "could not copy $p into the data repo (disk full?); nothing recorded"; undo_copies; finish 1; fi
+      fi
+      taken+=("$p"); taken_hash+=("$h") ;;
     repo) pending+=("$p") ;;
     conflict) conflicts+=("$p") ;;
   esac
 done < <(all_tracked)
 
 # This device's backup: mirror its per-device files and memory folders into hosts/<host>/ (laid out as in
-# ~/.claude), so deletions show up in history too.
-rm -rf "${HOST_DIR:?}"
-for f in $HOST_FILES; do
-  [ -f "$CLAUDE_HOME/$f" ] && copy_file "$CLAUDE_HOME/$f" "$HOST_DIR/$f"
-done
-for dir in "$CLAUDE_HOME"/projects/*/memory; do
-  [ -d "$dir" ] || continue
-  [ -n "$(ls -A "$dir")" ] || continue
-  key=$(basename "$(dirname "$dir")")
-  mkdir -p "$HOST_DIR/projects/$key/memory"
-  cp -pR "$dir"/. "$HOST_DIR/projects/$key/memory"/
-done
+# ~/.claude), so deletions show up in history too. Built aside first, so a failed copy leaves the last
+# backup whole. hosts/<host>/ holds the machine's ID: another machine reporting the same name is stopped.
+mine=$(machine_id)
+theirs=$(cat "$HOST_DIR/$HOST_MARK" 2>/dev/null)
+if [ -n "$mine" ] && [ -n "$theirs" ] && [ "$theirs" != "$mine" ] && [ $replace_host = 0 ]; then
+  host_clash=1
+else
+  host_clash=0
+  host_tmp=$STATE_DIR/host.sync-tmp
+  backup_ok=1
+  { rm -rf "${host_tmp:?}" && mkdir -p "$host_tmp"; } || backup_ok=0
+  for f in $HOST_FILES; do
+    [ $backup_ok = 1 ] && [ -f "$CLAUDE_HOME/$f" ] && { copy_file "$CLAUDE_HOME/$f" "$host_tmp/$f" || backup_ok=0; }
+  done
+  for dir in "$CLAUDE_HOME"/projects/*/memory; do
+    [ $backup_ok = 1 ] || break
+    [ -d "$dir" ] || continue
+    [ -n "$(ls -A "$dir")" ] || continue
+    key=$(basename "$(dirname "$dir")")
+    { mkdir -p "$host_tmp/projects/$key/memory" && cp -pR "$dir"/. "$host_tmp/projects/$key/memory"/; } || backup_ok=0
+  done
+  # The ID goes with a backup that holds something (an empty one has nothing to overwrite).
+  if [ $backup_ok = 1 ] && [ -n "$mine" ] && [ -n "$(ls -A "$host_tmp")" ]; then
+    printf '%s\n' "$mine" > "$host_tmp/$HOST_MARK" || backup_ok=0
+  fi
+  if [ $backup_ok = 1 ]; then
+    { rm -rf "${HOST_DIR:?}" && mkdir -p "$REPO/hosts" && mv "$host_tmp" "$HOST_DIR"; } || backup_ok=0
+  fi
+  if [ $backup_ok = 0 ]; then
+    rm -rf "${host_tmp:?}"
+    say "could not back up this device's settings and memories into hosts/$HOST/ (disk full?); nothing recorded"
+    undo_copies; finish 1
+  fi
+fi
 # Layout before per-device backups: per-device files were shared in home/, memories in memory/<host>/.
 for f in $HOST_FILES; do rm -f "$HOME_COPY/$f"; set_base "$f" -; done
 rm -rf "${REPO:?}/memory/${HOST:?}"
 
-# On a failure, nothing is staged; the copies stay, and the next snapshot recognises them as its own.
-undo_copies() { git_repo reset -q; }
 if ! err=$(git_repo add -A 2>&1); then
   # Encryption failed (the filter is required), or git could not read a file: record nothing, so the next
   # snapshot tries again.
@@ -178,6 +276,26 @@ if ! err=$(git_repo add -A 2>&1); then
   say "could not record the changes: $(printf '%s' "$err" | grep -v '^warning' | head -2 | join_lines)"
   finish 1
 fi
+# What the commit would hold must be what was copied. git compares only size and whole-second times, so a
+# file rewritten with the same size in the same second is added again in full; then each taken file's staged
+# content, decrypted, must hash as its copy did (a line-ending rule or a filter that changed it stops here).
+renorm=()
+for i in ${taken[@]+"${!taken[@]}"}; do [ "${taken_hash[$i]}" = "-" ] || renorm+=("home/${taken[$i]}"); done
+if [ ${#renorm[@]} -gt 0 ] && ! err=$(git_repo add --renormalize -- "${renorm[@]}" 2>&1); then
+  undo_copies
+  say "could not record the changes: $(printf '%s' "$err" | grep -v '^warning' | head -2 | join_lines)"
+  finish 1
+fi
+for i in ${taken[@]+"${!taken[@]}"}; do
+  p=${taken[$i]} h=${taken_hash[$i]}
+  if [ "$h" = "-" ]; then ! git_repo rev-parse -q --verify ":home/$p" >/dev/null && continue
+  else staged_is "home/$p" "$h" && continue
+  fi
+  undo_copies
+  say "the commit would not hold $p as it is in ~/.claude (git would change it: check the data repo's" \
+      ".gitattributes and filters); nothing recorded"
+  finish 1
+done
 if ! git_repo diff --cached --quiet; then
   changed=$(git_repo diff --cached --name-only | sed -e 's#^home/##' -e "s#^hosts/$HOST/projects/.*#memories#" \
     -e "s#^memory/$HOST/.*#memories#" -e "s#^hosts/$HOST/#backup #" | sort -u | join_lines)
@@ -188,10 +306,28 @@ if ! git_repo diff --cached --quiet; then
   [ ${#deleted[@]} -gt 0 ] && say "deleted from the shared files, so from every device at its next sync:" \
     "$(printf '%s\n' "${deleted[@]}" | join_lines)"
 fi
-for p in ${taken[@]+"${taken[@]}"}; do set_base "$p" "$(hash_of "$CLAUDE_HOME/$p")" "$CLAUDE_HOME/$p"; done
+# The base is what was copied and committed, never the disk file as it is now (it may have changed since).
+for i in ${taken[@]+"${!taken[@]}"}; do
+  set_base "${taken[$i]}" "${taken_hash[$i]}" "$HOME_COPY/${taken[$i]}" ||
+    say "could not update the sync record (disk full?); the next snapshot will try again"
+done
 keep_bases
 
 status=0
+if [ ${#held[@]} -gt 0 ]; then
+  say "$(printf '%s/ ' "${held[@]}" | sed 's/ $//') gone from $CLAUDE_HOME (moved or deleted, or a link that points" \
+      "nowhere), so its $held_count files are not deleted from the shared files; to delete them on every device or" \
+      "to put them back, run /jeeves:update"
+  status=1
+fi
+if [ $host_clash = 1 ]; then
+  say "backup skipped: hosts/$HOST/ in the data repo belongs to another machine named $HOST; set JEEVES_HOST to" \
+      "a name of its own for this machine (or, if this machine replaces that one, run jeeves-snapshot --replace-host)"
+  status=1
+fi
+if [ ${#busy[@]} -gt 0 ] && [ $hook = 0 ]; then
+  say "still being written, so left for the next snapshot: $(printf '%s\n' "${busy[@]}" | join_lines)"
+fi
 if [ ${#refused[@]} -gt 0 ]; then
   say "not taken, so every device can hold it: $(printf '%s; ' "${refused[@]}" | sed 's/; $//'); rename it in ~/.claude"
   status=1
@@ -201,7 +337,7 @@ if [ ${#pending[@]} -gt 0 ]; then
 fi
 if [ ${#conflicts[@]} -gt 0 ]; then
   say "changed both on disk and in the repo: $(printf '%s\n' "${conflicts[@]}" | join_lines);" \
-      "merge them with /jeeves:update, or keep the disk copy with 'jeeves-snapshot --force' or the repo copy with 'jeeves-apply --force'"
+      "merge them with /jeeves:update, or keep the disk copy with 'jeeves-snapshot --force <path>' or the repo copy with 'jeeves-apply --force <path>'"
   status=1
 fi
 # At session start, the automatic history cleanup, when jeeves.conf turns it on and one is due.

@@ -69,6 +69,9 @@ already snapshotted the data repo when the plugin is installed.
 - When a test's own git command writes files (switch, merge, checkout), give it `-c core.autocrlf=false`, as
   the scripts' `git_repo` does: Git for Windows would write CRLF and the scripts would see a dirty repo.
 - Hooks must never block a session: hook mode always exits 0 and prints only what needs attention.
+- Data integrity: check every copy (`copy_file`, `copy_settled`) and stop with nothing recorded when one
+  fails; a sync record (`set_base`) holds the hash of what was copied and committed, never of the disk file
+  read again later; nothing reaches `~/.claude` from a data repo that is not on a clean `main`.
 - The scripts never push, with one exception: `jeeves-cleanup` force-pushes the data repo's `main`, always
   with a lease (`--force-with-lease=main:<the origin/main it checked>`), after `jeeves-scan`, and puts `main`
   back if the push fails. Otherwise they contact the remote only for `fetch` + fast-forward in `snapshot`,

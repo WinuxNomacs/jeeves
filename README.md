@@ -127,8 +127,8 @@ The plugin's `bin/` is on the PATH of Claude's Bash tool, so Claude (or you, by 
 
 | Command | Direction | What it does |
 |---|---|---|
-| `jeeves-snapshot` | `~/.claude` → data repo | Fast-forwards `main` from its remote, copies changed shared files into `home/`, mirrors this device's settings, keybindings and memories into `hosts/<host>/`, commits on `main`. Never pushes. |
-| `jeeves-apply` | data repo → `~/.claude` | Installs shared files that changed in the data repo since this device last synced. Never overwrites a file a session edited since then. |
+| `jeeves-snapshot` | `~/.claude` → data repo | Fast-forwards `main` from its remote, copies changed shared files into `home/`, mirrors this device's settings, keybindings and memories into `hosts/<host>/`, commits on `main`. Never pushes. `--force [<path>...]` keeps the disk copy of a conflict; `--allow-delete <folder>` records a folder gone from `~/.claude`; `--replace-host` takes over a host name another machine used. |
+| `jeeves-apply` | data repo → `~/.claude` | Installs shared files that changed in the data repo since this device last synced, from `main` only (not mid-merge, not with uncommitted files under `home/`). Never overwrites a file a session edited since then. `--force [<path>...]` installs the repo copy (of the named files, whatever their state), saving the disk copy first. |
 | `jeeves-restore [<host> [--memories]]` | data repo → `~/.claude` | Copies a device's backup onto this machine, saving replaced files under `.sync-state/overwritten/`. Without a host, prints this machine's host name and the hosts with a backup. |
 | `jeeves-cleanup <days>` | data repo → origin | Folds the history older than `<days>` days into one root commit (same files) and force-pushes `main` with a lease; `--dry-run <days>` only says what it would do; `--all` folds all of it (after encrypting); `--auto` is what the session-start hook runs. |
 | `jeeves-check` | (read-only) | What setup needs to know: OS, git, the GitHub CLI and sign-in, an SSH key GitHub accepts, how to install the CLI and age here, the key store, the data repo folder's state. |
@@ -140,9 +140,26 @@ The plugin's `bin/` is on the PATH of Claude's Bash tool, so Claude (or you, by 
 
 Each device keeps a gitignored record (`.sync-state/` in the data repo) of the file hashes at its last sync.
 This lets the scripts tell "this device changed it" from "the repo changed it". If both changed, they report a
-conflict and change nothing. Settle a conflict with `jeeves-snapshot --force` (keep the disk copy) or
-`jeeves-apply --force` (keep the repo copy; the disk copy is saved under `.sync-state/overwritten/`), or let
-`/jeeves:update` merge the two.
+conflict and change nothing. Settle a conflict with `jeeves-snapshot --force <path>` (keep the disk copy) or
+`jeeves-apply --force <path>` (keep the repo copy; the disk copy is saved under `.sync-state/overwritten/`), or
+let `/jeeves:update` merge the two.
+
+How the data stays whole:
+
+- What a snapshot commits is what it copied, byte for byte: each file is copied, hashed, and checked
+  against the commit (decrypted, when encrypted) before it is made; that hash is what the sync record keeps.
+  A file still being written is left for the next snapshot. A copy that fails (a full disk) stops the run
+  with nothing recorded, so no later step mistakes the old copy for the newer one. The same goes for
+  `jeeves-apply`, which also checks a file again just before replacing it.
+- A file holding git conflict markers (an unfinished merge) is never installed or recorded unless you name
+  it after `--force`, and `jeeves-scan` flags markers in what a push would send.
+- A shared folder that disappears from `~/.claude` (moved, deleted, or a link to a drive that is not
+  there) is not recorded as deleting its files on every device: the snapshot says so, and `/jeeves:update`
+  asks you whether to delete them everywhere or put them back.
+- Each machine has an ID (`~/.claude/.jeeves-machine-id`) that it writes into its `hosts/<host>/` backup;
+  a second machine reporting the same host name is stopped before it overwrites that backup (set
+  `JEEVES_HOST` to give it a name of its own).
+- One Jeeves run at a time per data repo (a lock in `.git/jeeves/`).
 
 `jeeves-snapshot` only commits onto a clean `main`. While the data repo is on another branch or has
 uncommitted changes (other than its own copies from a run that failed or was stopped), it skips and says so.
@@ -164,8 +181,9 @@ A git repo with:
   up as it is, so a token in its `env` block goes into the data repo: keep secrets out of it (an environment
   variable set elsewhere, or a secret manager). `jeeves-scan` stops a push that would send one.
 - `jeeves.conf` (optional): the automatic history cleanup's settings.
-- `.gitignore`: `.sync-state/` and `*.sync-tmp`; `.gitattributes`: `* text=auto eol=lf` (and, when
-  encrypted, the filter for `home/` and `hosts/`).
+- `.gitignore`: `.sync-state/` and `*.sync-tmp`; `.gitattributes`: `* -text`, so files are kept byte for
+  byte, line endings included (and, when encrypted, the filter for `home/` and `hosts/`). A data repo made
+  before 1.1 had `* text=auto eol=lf`; its next snapshot changes that in a commit of its own.
 - When encrypted: `recipient` (the public key) and `identity.age` (the key, encrypted with your passphrase).
 
 `<host>` is the machine's host name; on native Windows it gets `-win` (`mypc-win`), so a WSL and a Windows

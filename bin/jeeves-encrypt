@@ -37,6 +37,11 @@ find_data_repo || { say "$DATA_REPO_PROBLEM"; exit 1; }
 mkdir -p "$CRYPT_DIR" || exit 1
 tmp=$CRYPT_DIR/tmp/encrypt.$$
 mkdir -p "$CRYPT_DIR/tmp" && trap 'rm -f "$tmp".*' EXIT
+# on, unlock and passphrase change the data repo: one Jeeves run at a time.
+case "$cmd" in on|unlock|passphrase)
+  take_lock 30 || { say "another Jeeves run is still at work on $REPO; nothing changed, try again shortly"; exit 1; }
+  trap 'rm -f "$tmp".*; release_lock' EXIT ;;
+esac
 MIN_PASS=12
 
 # A recipient: the working tree's, or origin/main's when another device turned encryption on.

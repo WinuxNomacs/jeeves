@@ -143,6 +143,25 @@ tracked_under() {
   done
 }
 
+# Tracked files in one folder under the given root, following the folder itself when it is a symlink.
+files_in_dir() {
+  (cd "$1/$2" 2>/dev/null && find . -type f) | sed "s#^\./#$2/#" | while IFS= read -r f; do
+    excluded "$f" || printf '%s\n' "$f"
+  done
+}
+
+# This machine's own ID (random, made once, kept in ~/.claude outside the synced files): two devices that
+# report the same host name must not share hosts/<host>/. Empty when it cannot be kept.
+machine_id() {
+  local f=$CLAUDE_HOME/.jeeves-machine-id
+  if [ ! -s "$f" ]; then
+    od -An -N8 -tx1 /dev/urandom 2>/dev/null | tr -d ' \n' > "$f.tmp" && [ -s "$f.tmp" ] && mv "$f.tmp" "$f" ||
+      { rm -f "$f.tmp"; return 0; }
+  fi
+  cat "$f"
+}
+HOST_MARK=.jeeves-machine
+
 # Union of tracked paths on disk and in the repo copy.
 all_tracked() {
   { tracked_under "$CLAUDE_HOME"; tracked_under "$HOME_COPY"; } | sort -u
@@ -166,12 +185,14 @@ set_base() {
   local path=$1 hash=$2 tmp
   [ "$(base_of "$path")" = "$hash" ] && return 0
   [ -n "$3" ] && [ "$hash" != "-" ] && git -C "$REPO" hash-object -w --no-filters -- "$3" >/dev/null
-  mkdir -p "$STATE_DIR"
+  mkdir -p "$STATE_DIR" || return 1
   tmp=$STATE_FILE.tmp
-  { [ -f "$STATE_FILE" ] && awk -F'\t' -v p="$path" '$2 != p' "$STATE_FILE"
-    [ "$hash" = "-" ] || printf '%s\t%s\n' "$hash" "$path"
-  } > "$tmp"
-  mv "$tmp" "$STATE_FILE"
+  # A failed write (a full disk) keeps the old record: a truncated one would lose every other base.
+  if { { [ ! -f "$STATE_FILE" ] || awk -F'\t' -v p="$path" '$2 != p' "$STATE_FILE"; } &&
+       { [ "$hash" = "-" ] || printf '%s\t%s\n' "$hash" "$path"; }; } > "$tmp"; then
+    mv "$tmp" "$STATE_FILE" && return 0
+  fi
+  rm -f "$tmp"; return 1
 }
 
 # Keep every recorded base in git's objects: one local ref (refs/jeeves/bases, never pushed) to a tree of
@@ -186,11 +207,47 @@ keep_bases() {
     git_repo update-ref -m "jeeves: merge bases" refs/jeeves/bases "$t"
 }
 
-# Copy a file atomically (temp file in the target folder, then rename), creating folders.
+# Copy a file atomically (temp file in the target folder, then rename), creating folders. A failed copy
+# leaves the target as it was and returns 1.
 copy_file() {
   local src=$1 dst=$2
-  mkdir -p "$(dirname "$dst")"
-  cp -p "$src" "$dst.sync-tmp" && mv "$dst.sync-tmp" "$dst"
+  mkdir -p "$(dirname "$dst")" && cp -p "$src" "$dst.sync-tmp" && mv "$dst.sync-tmp" "$dst" && return 0
+  rm -f "$dst.sync-tmp"; return 1
+}
+
+# Copy a file that may be being written (a ~/.claude file): the copy must hash the same as the source just
+# after it, or it is tried again. Prints the hash of what was copied. Returns 1 when the copy failed, 2 when
+# the file kept changing (it is still being written; the target is left as it was).
+copy_settled() {
+  local src=$1 dst=$2 i h
+  mkdir -p "$(dirname "$dst")" || return 1
+  for i in 1 2 3; do
+    cp -p "$src" "$dst.sync-tmp" || { rm -f "$dst.sync-tmp"; return 1; }
+    h=$(hash_of "$dst.sync-tmp")
+    if [ "$h" = "$(hash_of "$src")" ]; then
+      mv "$dst.sync-tmp" "$dst" || { rm -f "$dst.sync-tmp"; return 1; }
+      printf '%s\n' "$h"; return 0
+    fi
+    sleep 1
+  done
+  rm -f "$dst.sync-tmp"; return 2
+}
+
+# True when the staged content of a data repo path (decrypted) hashes to the given plain hash: what a commit
+# would record is what was copied. Through the clean cache when the file is stored encrypted, so no key is read.
+staged_is() {
+  local blob c
+  blob=$(git_repo rev-parse -q --verify ":$1") || return 1
+  [ "$blob" = "$2" ] && return 0
+  c=$CRYPT_DIR/clean/$2
+  [ -s "$c" ] && [ "$(git hash-object --no-filters -- "$c")" = "$blob" ] && return 0
+  [ "$(git_repo cat-file --filters ":$1" 2>/dev/null | git hash-object --stdin --no-filters)" = "$2" ]
+}
+
+# True when a file holds git conflict markers (an unfinished merge): such a file is never installed or
+# recorded unless the user names it (--force <path>).
+has_conflict_markers() {
+  [ -f "$1" ] && grep -qE '^<<<<<<<( |$)' "$1" && grep -qE '^>>>>>>>( |$)' "$1" && grep -qx '=======' "$1"
 }
 
 # Classify a path: insync | disk | repo | conflict.
@@ -275,24 +332,39 @@ with_deadline() {
   wait "$pid"
 }
 
-# One snapshot or apply at a time per data repo (two sessions starting together would race on the same temp
-# files and lose sync records). Waits up to <seconds>, then returns 1. The lock is a file holding the PID,
-# created by bash's noclobber (an exclusive open; some mkdir builds, such as uutils', do not fail when
-# another process creates the same folder at the same moment). A lock whose process is gone, or an empty one
-# over a minute old, is taken over. Released when the script exits.
+# One Jeeves run that changes the data repo or ~/.claude at a time per data repo (two sessions starting
+# together would race on the same temp files and lose sync records). Waits up to <seconds>, then returns 1.
+# The lock is a file holding the PID, created by bash's noclobber (an exclusive open; some mkdir builds, such
+# as uutils', do not fail when another process creates the same folder at the same moment). A lock whose
+# process is gone, or an empty one over a minute old, is taken over, by one waiter at a time (a second lock,
+# lock.takeover, held only for that check), so two waiters never both remove it. Released when the script
+# exits, and only if it is still this script's own.
 take_lock() {
   local lock=$CRYPT_DIR/lock i=0 pid
   mkdir -p "$CRYPT_DIR" || return 1
   while ! ( set -o noclobber; echo $$ > "$lock" ) 2>/dev/null; do
-    pid=$(cat "$lock" 2>/dev/null)
-    if { [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; } ||
-       { [ -z "$pid" ] && [ -n "$(find "$lock" -mmin +1 2>/dev/null)" ]; }; then
-      rm -f "$lock"; continue
+    if ( set -o noclobber; echo $$ > "$lock.takeover" ) 2>/dev/null; then
+      # Read again under the takeover lock: another waiter may have replaced the stale lock meanwhile.
+      pid=$(cat "$lock" 2>/dev/null)
+      if { [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; } ||
+         { [ -z "$pid" ] && [ -n "$(find "$lock" -mmin +1 2>/dev/null)" ]; }; then
+        rm -f "$lock"
+      fi
+      rm -f "$lock.takeover"
+    elif [ -n "$(find "$lock.takeover" -mmin +1 2>/dev/null)" ]; then
+      rm -f "$lock.takeover"   # left by a waiter killed during its check, which takes milliseconds
     fi
     [ $i -ge $(( $1 * 10 )) ] && return 1
     sleep 0.1; i=$((i + 1))
   done
-  trap 'rm -f "$CRYPT_DIR/lock"' EXIT
+  LOCK_HELD=1
+  trap release_lock EXIT
+}
+
+# Remove the lock if this script holds it (a script with its own EXIT trap calls this from it).
+release_lock() {
+  [ "$LOCK_HELD" = 1 ] && [ "$(cat "$CRYPT_DIR/lock" 2>/dev/null)" = "$$" ] && rm -f "$CRYPT_DIR/lock"
+  LOCK_HELD=0
 }
 
 # This machine's OS as Jeeves names it: linux, wsl, macos or windows (Git Bash).
