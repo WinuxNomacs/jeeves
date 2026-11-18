@@ -142,21 +142,21 @@ git_repo bundle create "$bundle.sync-tmp" main >/dev/null 2>&1 || fail "could no
 
 undo() { git_repo update-ref -m "jeeves-cleanup: undone" refs/heads/main "$old" "$new"; cleanup_tmp; }
 git_repo update-ref -m "jeeves-cleanup" refs/heads/main "$new" "$old" || fail "could not move main"
-trap 'undo; exit 1' INT TERM
+trap 'undo; exit 1' INT TERM HUP
 
 if [ $has_origin = 1 ]; then
   if ! scan=$("$(dirname "$0")/jeeves-scan"); then
-    undo; trap - INT TERM
+    undo; trap - INT TERM HUP
     printf '%s\n' "$scan"; say "not pushed, because of the possible secrets above; nothing changed"; finish 1
   fi
   if ! err=$(remote_git push -q --force-with-lease="main:$origin" origin main 2>&1); then
-    undo; trap - INT TERM
+    undo; trap - INT TERM HUP
     say "push refused or failed, so main was put back and nothing changed (another device may have pushed" \
         "meanwhile; the cleanup runs again later): $(printf '%s' "$err" | head -3 | join_lines)"
     finish 1
   fi
 fi
-trap - INT TERM
+trap - INT TERM HUP
 mv "$bundle.sync-tmp" "$bundle"; rm -f "$map"
 shrink_repo
 done_msg="folded the $folded commits up to $when into one and kept the $kept newer ones"

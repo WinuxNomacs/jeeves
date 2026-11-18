@@ -272,6 +272,16 @@ t_an_unusable_host_name_touches_no_backup() {
   check "and the other backups stay" [ -f "$R/hosts/other/settings.json" ]
 }
 
+t_the_users_ssh_command_is_kept_and_gets_no_key() {
+  snap >/dev/null
+  printf '#!/bin/sh\necho "called key=[$JEEVES_AGE_KEY]" >> "%s"\nexit 1\n' "$W/ssh.log" > "$W/myssh"; chmod +x "$W/myssh"
+  git -C "$R" remote set-url origin "ssh://git@example.invalid/x.git"
+  git -C "$R" config core.sshCommand "$W/myssh"
+  JEEVES_AGE_KEY=AGE-SECRET-KEY-1TEST snap >/dev/null
+  check "git used the user's ssh command" grep -q called "$W/ssh.log"
+  check "which did not get the key" grep -qx "called key=\[\]" "$W/ssh.log"
+}
+
 t_new_device_first_sync() {
   # A device whose ~/.claude differs from the repo before it ever synced: reported, not guessed.
   echo "this machine" > "$W/claude/CLAUDE.md"
@@ -863,6 +873,8 @@ t_github_creates_a_private_data_repo() {
   : > "$FAKE_LOG"
   ghcmd create 'bad name;rm' 2>/dev/null; rc=$?
   check "an unsafe name is refused before gh runs" bash -c '[ $1 = 2 ] && [ ! -s "$2" ]' _ $rc "$FAKE_LOG"
+  ghcmd create --public 2>/dev/null; rc=$?
+  check "a name that looks like an option is refused before gh runs" bash -c '[ $1 = 2 ] && [ ! -s "$2" ]' _ $rc "$FAKE_LOG"
 }
 
 t_plugin_files() {
@@ -1050,6 +1062,28 @@ t_a_failed_record_is_taken_by_the_next_snapshot() {
   check "a change that is not its own still stops it" grep -q "uncommitted changes" <<< "$(snap)"
 }
 
+t_a_failed_encrypt_on_leaves_nothing_behind_and_a_retry_works() {
+  crypt_env; snap >/dev/null; n=$(commits)
+  printf '#!/bin/sh\nexit 1\n' > "$R/.git/hooks/pre-commit"; chmod +x "$R/.git/hooks/pre-commit"
+  out=$(encrypt on); rc=$?
+  check "a failed commit: exit 1, nothing changed" bash -c '[ $1 = 1 ] && grep -q "commit failed, so nothing changed" <<< "$2"' _ $rc "$out"
+  check "no recipient, clean, no commit" bash -c '[ ! -e "$1/recipient" ] && [ -z "$(git -C "$1" status --porcelain)" ]' _ "$R"
+  check "status says off" grep -q "^encryption	off" <<< "$(encrypt status)"
+  rm "$R/.git/hooks/pre-commit"
+  # An age that fails on one file, after encrypting the others (and caching their ciphertext).
+  real=$(command -v age)
+  printf '#!/bin/sh\nfor a; do last=$a; done\nif [ -f "$last" ] && grep -q "agent v1" "$last"; then exit 1; fi\nexec "%s" "$@"\n' "$real" > "$W/flaky-age"
+  chmod +x "$W/flaky-age"
+  JEEVES_AGE=$W/flaky-age encrypt on >/dev/null
+  check "the flaky run changed nothing" [ ! -e "$R/recipient" ]
+  encrypt on >/dev/null
+  check "the retry encrypts" [ -s "$R/recipient" ] && [ "$(commits)" = $((n + 1)) ]
+  key=$(cat "$W/keys/$(cat "$R/recipient")")
+  for f in home/CLAUDE.md home/agents/a.md hosts/testhost/settings.json; do
+    check "$f opens with the key now in the store" bash -c 'git -C "$1" cat-file blob "HEAD:$2" | age -d -i <(printf "%s\n" "$3") >/dev/null' _ "$R" "$f" "$key"
+  done
+}
+
 t_merges_of_encrypted_files_combine_both_sides_and_show_conflicts_in_plain_text() {
   crypt_env; snap >/dev/null; encrypt on >/dev/null
   printf 'one\ntwo\nthree\n' > "$R/home/agents/m.md"; git -C "$R" add home/agents/m.md; git -C "$R" commit -qm base
@@ -1161,6 +1195,7 @@ run_test "an emptied ~/.claude deletes nothing" t_an_emptied_claude_folder_delet
 run_test "a deletion is reported as one on both devices" t_a_deletion_is_reported_as_one_on_both_devices
 run_test "CLAUDE_CONFIG_DIR is the folder synced" t_claude_config_dir_is_the_folder_synced
 run_test "an unusable host name touches no backup" t_an_unusable_host_name_touches_no_backup
+run_test "the user's ssh command is kept, and gets no key" t_the_users_ssh_command_is_kept_and_gets_no_key
 run_test "a new device that differs from the repo gets a conflict, not a guess" t_new_device_first_sync
 run_test "the data repo comes from the plugin option when JEEVES_DATA is unset" t_option_finds_data_repo
 run_test "the data repo is found from the current folder inside it" t_folder_finds_data_repo
@@ -1210,6 +1245,7 @@ if v=$(age --version 2>/dev/null) && command -v age-plugin-batchpass >/dev/null 
   run_test "a key missing from the store stops the pull and says so" t_a_key_missing_from_the_store_stops_the_pull_and_says_so
   run_test "a failing encryption never commits plain text" t_a_failing_encryption_never_commits_plain_text
   run_test "a failed record is taken by the next snapshot" t_a_failed_record_is_taken_by_the_next_snapshot
+  run_test "a failed encrypt on leaves nothing behind, and a retry works" t_a_failed_encrypt_on_leaves_nothing_behind_and_a_retry_works
   run_test "merges of encrypted files combine both sides and show conflicts in plain text" t_merges_of_encrypted_files_combine_both_sides_and_show_conflicts_in_plain_text
   run_test "scan refuses a file that would be pushed unencrypted" t_scan_refuses_a_file_that_would_be_pushed_unencrypted
   run_test "scan refuses plain text in an earlier outgoing commit, even when a later one removed it" t_scan_refuses_plain_text_in_an_earlier_outgoing_commit

@@ -209,10 +209,16 @@ case_collisions() {
 # Git commands that contact origin: never wait for a password prompt or a credential window, give up on a
 # dead ssh host fast, and stop after a deadline (a stalled HTTPS server would otherwise hold up the
 # session-start hook for as long as it stalls). git runs directly under with_deadline, so a stop reaches it.
-remote_git() {
-  GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=never GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=5" \
-    with_deadline "${JEEVES_REMOTE_DEADLINE:-30}" git -C "$REPO" -c core.autocrlf=false -c core.safecrlf=false "$@"
-}
+# The user's own ssh command (GIT_SSH_COMMAND, core.sshCommand, GIT_SSH) is kept. Fetch and push never
+# decrypt, so the key stays out of them (and of hooks and ssh).
+remote_git() (
+  if [ -z "$GIT_SSH_COMMAND" ] && [ -z "$GIT_SSH" ] && [ -z "$(git -C "$REPO" config core.sshCommand)" ]; then
+    export GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=5"
+  fi
+  unset JEEVES_AGE_KEY
+  export GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=never
+  with_deadline "${JEEVES_REMOTE_DEADLINE:-30}" git -C "$REPO" -c core.autocrlf=false -c core.safecrlf=false "$@"
+)
 
 # The first line jeeves-cleanup gives the parentless commit that replaces the removed history.
 CLEANUP_MARK="jeeves-cleanup:"

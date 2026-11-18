@@ -100,6 +100,12 @@ keep_key() {
   printf '%s\n' "$1" > "$CRYPT_DIR/unlocked"
 }
 
+# Undo a failed `on`: the files, the key and the ciphertext cache (made with a key nobody keeps).
+undo_on() {
+  git_repo reset -q --hard HEAD; rm -f "$REPO/recipient" "$REPO/identity.age" "$CRYPT_DIR/unlocked"
+  rm -rf "$CRYPT_DIR/clean"; store_delete "$1"
+}
+
 on_main_clean() {
   [ "$(git_repo symbolic-ref --short -q HEAD)" = main ] || { say "$REPO is not on main"; exit 1; }
   [ ! -f "$REPO/.git/MERGE_HEAD" ] && [ -z "$(git_repo status --porcelain)" ] ||
@@ -124,6 +130,8 @@ case "$cmd" in
   on)
     if encrypted || encrypted_at origin/main; then say "the data repo is already encrypted"; exit 1; fi
     on_main_clean; check_age; check_store
+    # A cache left by an earlier attempt holds ciphertext for another key.
+    rm -rf "$CRYPT_DIR/clean"
     pass=$(new_passphrase) || exit $?
     key=$("$AGE_KEYGEN" 2>/dev/null | grep '^AGE-SECRET-KEY-') || { say "could not make a key"; exit 1; }
     rec=$(printf '%s\n' "$key" | "$AGE_KEYGEN" -y) || { say "could not make a key"; exit 1; }
@@ -145,14 +153,13 @@ END
       [ "$(git_repo cat-file blob "$blob" | head -c ${#AGE_MAGIC})" = "$AGE_MAGIC" ] || printf '%s\n' "$path"
     done)
     if [ -n "$plain" ]; then
-      git_repo reset -q --hard HEAD; rm -f "$REPO/recipient" "$REPO/identity.age" "$CRYPT_DIR/unlocked"
-      store_delete "$rec"
+      undo_on "$rec"
       say "these files did not encrypt, so nothing changed: $(printf '%s\n' "$plain" | join_lines)"; exit 1
     fi
     n=$(git_repo ls-files -- home hosts | wc -l | tr -d ' ')
     git_repo commit -q -m "Encrypt the data repo with age" \
       -m "home/ and hosts/ are stored encrypted from here on; identity.age holds the key, encrypted with the passphrase." ||
-      { say "commit failed"; exit 1; }
+      { undo_on "$rec"; say "commit failed, so nothing changed"; exit 1; }
     say "encrypted $n files and committed; this device is unlocked (key in its $(keystore_kind) store)" ;;
 
   unlock)

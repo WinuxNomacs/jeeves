@@ -19,7 +19,7 @@ case "$1" in
   find) [ $# = 1 ] || usage ;;
   create)
     [ $# = 2 ] || usage
-    case "$2" in ''|*[!A-Za-z0-9._-]*) say "a repo name uses only letters, digits, '.', '_' and '-'"; exit 2 ;; esac ;;
+    case "$2" in ''|-*|*[!A-Za-z0-9._-]*) say "a repo name uses only letters, digits, '.', '_' and '-', and does not start with '-'"; exit 2 ;; esac ;;
   *) usage ;;
 esac
 command -v "$gh" >/dev/null 2>&1 || { say "the GitHub CLI (gh) is not installed"; exit 1; }
