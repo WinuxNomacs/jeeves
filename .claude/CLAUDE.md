@@ -57,6 +57,9 @@ already snapshotted the data repo when the plugin is installed.
 - To run a `bin/` script by hand against scratch folders, `export CLAUDE_HOME=<scratch>/.claude
   JEEVES_DATA=<scratch>/data` (and `JEEVES_HOST=<name>` to act as another host) first; never put `env ...`
   in a variable and run `$VAR cmd`, which zsh (the macOS shell) does not split.
+- To check a change to skill text, have an agent follow the skill against scratch folders (those variables
+  exported, the worktree's `bin/` on the PATH) with a made-up session and memories that hit each case; it
+  finds unclear passages the tests can't. Some tests grep skill text, so rewording a skill can fail them.
 - **Releases follow `.claude/skills/release/SKILL.md`** (`/release`): readiness, the review for bugs,
   interaction breakdowns and secret leaks, the checks, the release branch, CI, the merge, and the tag on the
   user's word.
