@@ -152,6 +152,7 @@ The plugin's `bin/` is on the PATH of Claude's Bash tool, so Claude (or you, by 
 | `jeeves-init <folder> [<url>]` | (new repo) | Creates an empty data repo (`.gitignore`, `.gitattributes`, README), optionally with a remote. |
 | `jeeves-status` | (read-only) | Lists each path out of sync (`disk`, `repo` or `conflict`) with its disk, repo and last-synced hashes, and how `main` stands against `origin/main`. |
 | `jeeves-memories list` / `record <hash> <outcome>...` | data repo | The memory files the session review has not reviewed yet (this machine's and other devices' backups), and the shared record of those it has, committed on `main`. |
+| `jeeves-git <git arguments>` | data repo | Runs git in the data repo, so the skills never `cd` into it. |
 | `jeeves-scan` | (read-only) | Looks for secrets (private keys, API keys and tokens, password assignments) in each commit a push would send, so one a later commit removed is still caught; lists file, line and commit, never the value. |
 
 Each device keeps a gitignored record (`.sync-state/` in the data repo) of the file hashes at its last sync.
@@ -211,9 +212,13 @@ A git repo with:
 Claude Code on one PC stay apart. `JEEVES_HOST` overrides it. A data repo made before per-device backups
 (with `home/settings.json` and `memory/<host>/`) is moved to this layout by each device's next snapshot.
 
-The scripts find it, in this order: `$JEEVES_DATA`; the plugin option `data_repo`; the git repo around the
-current folder, if it has a `home/` folder; `~/jeeves-data`, the option's default. Hooks see the plugin option; Claude's Bash tool does not, so run
-the commands inside the data repo or export `JEEVES_DATA`.
+The scripts find it, in this order: `$JEEVES_DATA` (or `--data-repo <path>` as a script's first arguments);
+the plugin option `data_repo`; the data repo this device last used, recorded in `~/.claude/jeeves/data-repo`
+whenever a script is given one of the first two (the session-start hook sees the plugin option, so it keeps
+the record current); the git repo around the current folder, if it has a `home/` folder; `~/jeeves-data`, the
+option's default. Claude's Bash tool sees no plugin variables, so each skill passes the option once with
+`--data-repo` and runs everything after it bare: a permission rule does not match past a `cd` outside the
+project or a `JEEVES_DATA=` prefix, so commands written that way would each ask for approval.
 
 ## Install
 

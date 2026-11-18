@@ -7,7 +7,7 @@ argument-hint: "<host>"
 disable-model-invocation: true
 allowed-tools:
   - Bash(jeeves-restore)
-  - Bash(jeeves-status)
+  - Bash(jeeves-status *)
 ---
 
 # Jeeves: restore a host's backup onto this machine
@@ -31,9 +31,10 @@ AskUserQuestion: the obvious options, the recommended one first; they can still 
 
 ## Steps
 
-1. Run `JEEVES_DATA="${user_config.data_repo}" jeeves-status` and note its `datarepo` line; if it says no
-   data repo is set, stop and point the user to `/jeeves:setup`. Start every later command with
-   `cd <datarepo path> &&`.
+1. Run `jeeves-status --data-repo "${user_config.data_repo}"` and note its `datarepo` line; if it says
+   no data repo is set, stop and point the user to `/jeeves:setup`. Later commands find the data repo on
+   their own (that command records it for this device): run the `jeeves-` scripts bare, and git in the data
+   repo as `jeeves-git <arguments>`, never with a `cd` into it.
 2. `jeeves-restore` prints this host's name and the hosts with a backup. Without a host above, ask which
    one. If that backup has memories (`hosts/<host>/projects/*/memory/`), ask whether to restore them too;
    only projects that exist on this machine (`~/.claude/projects/<key>/`) get theirs.

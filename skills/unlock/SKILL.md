@@ -7,7 +7,7 @@ description: >-
 disable-model-invocation: true
 allowed-tools:
   - Bash(jeeves-encrypt status)
-  - Bash(jeeves-status)
+  - Bash(jeeves-status *)
   - Bash(jeeves-snapshot)
 ---
 
@@ -36,9 +36,10 @@ AskUserQuestion: the obvious options, the recommended one first; they can still 
 
 ## Steps
 
-1. Run `JEEVES_DATA="${user_config.data_repo}" jeeves-encrypt status` (it works on a locked device). If it
-   says no data repo is set, point the user to `/jeeves:setup`. Note the data repo folder from the error or
-   from `jeeves-check`'s `datarepo` line, and start every later command with `cd <datarepo path> &&`.
+1. Run `jeeves-status --data-repo "${user_config.data_repo}"`: on a locked device it says so, and it
+   records the data repo all the same. If it says no data repo is set, point the user to `/jeeves:setup`.
+   Later commands find the data repo on their own: run the `jeeves-` scripts bare, and git in the data repo
+   as `jeeves-git <arguments>`, never with a `cd` into it. Then run `jeeves-encrypt status`:
    - `encryption off`: nothing to unlock; say so. `unlocked`: already unlocked; say so.
    - `age missing` or `old`, or `keystore none`: as `/jeeves:encrypt` step 1 says (install age; or
      `--key-file` on the unlock command).

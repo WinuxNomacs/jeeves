@@ -7,9 +7,10 @@ argument-hint: "[passphrase]"
 disable-model-invocation: true
 allowed-tools:
   - Bash(jeeves-encrypt status)
-  - Bash(jeeves-status)
+  - Bash(jeeves-status *)
   - Bash(jeeves-snapshot)
   - Bash(jeeves-scan)
+  - Bash(jeeves-git push origin main)
 ---
 
 # Jeeves: encrypt the data repo
@@ -45,9 +46,10 @@ for them to say it is done. Then run `jeeves-encrypt status`.
 
 ## Steps
 
-1. Run `JEEVES_DATA="${user_config.data_repo}" jeeves-status` and note its `datarepo` line; if it says no
-   data repo is set, stop and point the user to `/jeeves:setup`. Start every later command with
-   `cd <datarepo path> &&`. Run `jeeves-encrypt status`:
+1. Run `jeeves-status --data-repo "${user_config.data_repo}"` and note its `datarepo` line; if it says
+   no data repo is set, stop and point the user to `/jeeves:setup`. Later commands find the data repo on
+   their own (that command records it for this device): run the `jeeves-` scripts bare, and git in the data
+   repo as `jeeves-git <arguments>`, never with a `cd` into it. Run `jeeves-encrypt status`:
    - `age missing` or `age old`: Jeeves needs age 1.3.0 or later. Run `jeeves-check`; offer its
      `age-install` command (run only after the user agrees). With `none`, explain the official download:
      https://github.com/FiloSottile/age/releases, the archive for this system, and putting `age`,
@@ -80,7 +82,7 @@ for them to say it is done. Then run `jeeves-encrypt status`.
    and that this device keeps it in the bundle until the next cleanup. On a yes: `jeeves-cleanup --all`,
    then `jeeves-encrypt status` must show no `history` line.
 4. **`passphrase`** (`encryption unlocked`): `jeeves-encrypt passphrase` (dialogs). It commits a new
-   `identity.age`. Then `jeeves-scan` and `git push origin main` (a rejected push: `jeeves-snapshot`, then
+   `identity.age`. Then `jeeves-scan` and `jeeves-git push origin main` (a rejected push: `jeeves-snapshot`, then
    push again once; still rejected, stop and ask). The key stays the same, so other devices stay unlocked;
    the new passphrase is needed only for the next unlock. The old `identity.age` stays in the history, and
    it still opens with the old passphrase: say so. When the old passphrase may be known to someone (it was

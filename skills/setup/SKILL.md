@@ -7,13 +7,13 @@ description: >-
 argument-hint: "[git URL of an existing data repo]"
 disable-model-invocation: true
 allowed-tools:
-  - Bash(jeeves-check)
+  - Bash(jeeves-check *)
   - Bash(jeeves-github find)
   - Bash(jeeves-encrypt status)
-  - Bash(jeeves-status)
+  - Bash(jeeves-status *)
   - Bash(jeeves-restore)
-  - Bash(git status:*)
-  - Bash(git log:*)
+  - Bash(jeeves-git status *)
+  - Bash(jeeves-git log *)
 ---
 
 # Jeeves: set up this machine
@@ -48,9 +48,9 @@ ask for a password or token: sign-ins are the user's own, in their terminal. Nev
 settings is shown as the exact command and run only after the user agrees. A passphrase never goes through
 the chat: `jeeves-encrypt` asks for it in a window of the OS (see `/jeeves:encrypt` for how to handle that).
 
-Start by running `JEEVES_DATA="${user_config.data_repo}" jeeves-check` (an empty option is fine: it then
-uses `~/jeeves-data`). Its lines (tab-separated) are the facts for the steps below; run it again after
-anything changes. The `datarepo` line gives the data repo folder with `~/` expanded: use that path, quoted,
+Start by running `jeeves-check --data-repo "${user_config.data_repo}"` (an empty option is fine: it then
+uses `~/jeeves-data`). Its lines (tab-separated) are the facts for the steps below; run the same command
+again after anything changes. The `datarepo` line gives the data repo folder with `~/` expanded: use that path, quoted,
 in every command, never `~`.
 
 ## Step 1 of 5: Tools
@@ -102,15 +102,17 @@ The folder on this machine is the `datarepo` path.
   encrypted files; each device asks for the passphrase once; a passphrase lost on every device means the data
   can't be read. Options: "Yes, encrypt it", "Not now (/jeeves:encrypt later)". On a yes, follow
   `/jeeves:encrypt` steps 1 and 2 with these changes: no sync first, no question again, and no
-  `jeeves-cleanup --all` (there is no history to remove yet). Start the commands with
-  `cd "<datarepo path>" &&`.
-- **Unlock** (after a clone): `cd "<datarepo path>" && jeeves-encrypt status`. With `encryption locked`, the
+  `jeeves-cleanup --all` (there is no history to remove yet). First run
+  `jeeves-status --data-repo "<datarepo path>"`: it records the data repo, so the commands find it bare.
+- **Unlock** (after a clone): `jeeves-status --data-repo "<datarepo path>"` (it records the data repo),
+  then `jeeves-encrypt status`. With `encryption locked`, the
   repo is encrypted: follow `/jeeves:unlock` steps 1 and 2 before going on.
 
 ## Step 4 of 5: Settings from another machine
 
-**Always ask; never skip this step.** Start every later command with `cd "<datarepo path>" &&` (the shell's
-folder is not kept between commands). Run `jeeves-restore`: it prints `this host: <name>` and
+**Always ask; never skip this step.** If `jeeves-status --data-repo "<datarepo path>"` has not
+run since step 3, run it now: it records the data repo for this device, so later commands find it bare (run
+git in it as `jeeves-git <arguments>`, never with a `cd` into it). Run `jeeves-restore`: it prints `this host: <name>` and
 `backups: <hosts>`. Whether `<name>` is listed says nothing: the session-start snapshot backs this machine up
 before setup runs. When the list names any host other than `<name>`, stop and ask the user with the
 AskUserQuestion tool (one option per other host, plus "No, keep this machine's settings"), and do not start

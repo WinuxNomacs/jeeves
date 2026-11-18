@@ -5,6 +5,7 @@ description: >-
   machine on); Jeeves then stops syncing here until /jeeves:unlock.
 disable-model-invocation: true
 allowed-tools:
+  - Bash(jeeves-status *)
   - Bash(jeeves-encrypt status)
 ---
 
@@ -23,10 +24,11 @@ AskUserQuestion: the obvious options, the recommended one first; they can still 
 
 ## Steps
 
-1. Run `JEEVES_DATA="${user_config.data_repo}" jeeves-encrypt status`. `encryption off`: nothing to lock;
-   say so and stop. `locked`: already locked; say so and stop.
+1. Run `jeeves-status --data-repo "${user_config.data_repo}"` (it records the data repo for this device;
+   on a locked device it says so), then `jeeves-encrypt status`. `encryption off`: nothing to lock; say so
+   and stop. `locked`: already locked; say so and stop.
 2. Say what locking does and doesn't do. The key leaves this device's credential store, and Jeeves stops
    syncing here until `/jeeves:unlock` with the passphrase. The plain files stay: `~/.claude` and the data
    repo's folder (delete those separately if the machine is being handed on). Changes not yet pushed stay
    on this device only. Ask with AskUserQuestion: "Lock this device?"
-3. On a yes: `cd <datarepo path> && jeeves-encrypt lock`, and report its line.
+3. On a yes: `jeeves-encrypt lock`, and report its line.

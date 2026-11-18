@@ -16,7 +16,9 @@ export GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@example.invalid
 export GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@example.invalid
 export JEEVES_HOST=testhost
 # Settings from the environment that runs the tests must not leak into them.
-unset JEEVES_DATA CLAUDE_PLUGIN_OPTION_DATA_REPO
+unset JEEVES_DATA CLAUDE_PLUGIN_OPTION_DATA_REPO CLAUDE_CONFIG_DIR
+# Never the real ~/.claude, even in a test that forgets setup (the scripts write the data repo pointer there).
+export CLAUDE_HOME=$SCRATCH/claude-home
 
 # Fresh world: $W/remote.git, $W/repo (the data repo, a clone with home/), $W/claude (CLAUDE_HOME).
 setup() {
@@ -327,7 +329,7 @@ t_option_finds_data_repo() {
 
 t_folder_finds_data_repo() {
   snap >/dev/null
-  unset JEEVES_DATA
+  unset JEEVES_DATA; rm -f "$W/claude/jeeves/data-repo"  # the record would find it first
   echo "rules v2" > "$W/claude/CLAUDE.md"
   check "says committed" grep -q "committed CLAUDE.md" <<< "$(cd "$R/home" && snap)"
   check "repo copy updated" grep -q v2 "$R/home/CLAUDE.md"
@@ -342,6 +344,28 @@ t_a_project_with_a_home_folder_is_not_taken_for_the_data_repo() {
   check "the project gets no commit" [ "$(git -C "$P" rev-list --count HEAD)" = "$n" ]
   check "and keeps its files" [ -f "$P/home/settings.json" ] && [ -z "$(git -C "$P" status --porcelain)" ]
   check "says Jeeves is not set up" grep -q "not set up on this machine" <<< "$out"
+}
+
+t_data_repo_is_remembered_for_bare_commands() {
+  snap >/dev/null
+  unset JEEVES_DATA; rm -f "$W/claude/jeeves/data-repo"
+  out=$(cd "$SCRATCH" && "$SRC/bin/jeeves-status" --data-repo "$R")
+  check "--data-repo finds the data repo" grep -q "^datarepo	$R\$" <<< "$out"
+  check "and records it for this device" [ "$(cat "$W/claude/jeeves/data-repo")" = "$R" ]
+  out=$(cd "$SCRATCH" && "$SRC/bin/jeeves-status")
+  check "a later bare command finds it from the record" grep -q "^datarepo	$R\$" <<< "$out"
+  check "jeeves-git runs git in the data repo" [ "$(cd "$SCRATCH" && "$SRC/bin/jeeves-git" rev-parse HEAD)" = "$(git -C "$R" rev-parse HEAD)" ]
+  echo "rules v2" > "$W/claude/CLAUDE.md"
+  out=$(cd "$SCRATCH" && snap)
+  check "a bare snapshot commits to it" grep -q "committed CLAUDE.md" <<< "$out"
+  git clone -q "$W/remote.git" "$W/other" 2>/dev/null
+  (cd "$SCRATCH" && CLAUDE_PLUGIN_OPTION_DATA_REPO=$W/other snap --hook >/dev/null)
+  check "the session-start hook records the plugin option's data repo" [ "$(cat "$W/claude/jeeves/data-repo")" = "$W/other" ]
+  out=$(cd "$SCRATCH" && HOME=$W "$SRC/bin/jeeves-status" --data-repo "")
+  check "an empty --data-repo means the default" grep -q "no data repo at $W/jeeves-data" <<< "$out"
+  rm -rf "${W:?}/other"
+  out=$(cd "$SCRATCH" && "$SRC/bin/jeeves-status")
+  check "a recorded data repo that is gone points to /jeeves:setup" grep -q "/jeeves:setup" <<< "$out"
 }
 
 t_no_data_repo() {
@@ -947,7 +971,6 @@ t_plugin_files() {
   check "update skill exists" [ -f "$sk" ]
   check "update skill is named update" grep -q '^name: update$' "$sk"
   check "Claude may start the update skill" bash -c '! grep -q "^disable-model-invocation: true" "$1"' _ "$sk"
-  check "update skill gets the data repo from the plugin option" grep -q 'JEEVES_DATA="${user_config.data_repo}"' "$sk"
   check "the update skill sends a machine with no data repo to setup, never clones" grep -q 'Never clone or create the data repo here' "$sk"
   check "the update skill reviews the session only when the user ran it" grep -q '## Session review (only when the user ran it)' "$sk"
   check "the session review decides without asking per item, guards the user's rules and reports each revert" bash -c 'grep -q "do not ask about each item" "$1" && grep -q "\*\*Ask only here\*\*" "$1" && grep -q "the \*\*Security\*\* section" "$1" && grep -q "/jeeves:update revert <commit>" "$1" && ! grep -q "Follow-up:" "$1"' _ "$sk"
@@ -970,7 +993,15 @@ t_plugin_files() {
     sk=$SRC/skills/$k/SKILL.md
     check "$k skill is named $k" grep -q "^name: $k\$" "$sk"
     check "only the user starts the $k skill" grep -q '^disable-model-invocation: true$' "$sk"
-    check "$k skill gets the data repo from the plugin option" grep -q 'JEEVES_DATA="${user_config.data_repo}"' "$sk"
+  done
+  for k in update setup restore cleanup encrypt unlock lock; do
+    sk=$SRC/skills/$k/SKILL.md
+    check "$k skill gets the data repo from the plugin option" grep -q -- '--data-repo "${user_config.data_repo}"' "$sk"
+    check "$k skill never runs a command after a cd into the data repo or a JEEVES_DATA= prefix" bash -c '! grep -q "cd <\|cd \"<\|\`JEEVES_DATA=" "$1"' _ "$sk"
+    for sub in $(grep -o '`jeeves-git [a-z-]*' "$sk" | awk '{print $2}' | sort -u); do
+      [ "$sub" = reset ] && continue  # folding away a secret: the user sees that one
+      check "$k skill allows the jeeves-git $sub it runs" grep -q "^  - Bash(jeeves-git $sub" "$sk"
+    done
   done
 }
 
@@ -1604,6 +1635,7 @@ run_test "two snapshots at once take turns" t_two_snapshots_at_once_take_turns
 run_test "a new device that differs from the repo gets a conflict, not a guess" t_new_device_first_sync
 run_test "the data repo comes from the plugin option when JEEVES_DATA is unset" t_option_finds_data_repo
 run_test "the data repo is found from the current folder inside it" t_folder_finds_data_repo
+run_test "a data repo given once by --data-repo or the plugin option is found by later bare commands and jeeves-git" t_data_repo_is_remembered_for_bare_commands
 run_test "a project with a home/ folder is not taken for the data repo" t_a_project_with_a_home_folder_is_not_taken_for_the_data_repo
 run_test "without a data repo, the scripts point to /jeeves:setup, hook mode exits 0, and ~/jeeves-data is the default" t_no_data_repo
 run_test "the edit hook snapshots after an edit to the global CLAUDE.md" t_edit_hook_snapshots_claude_md

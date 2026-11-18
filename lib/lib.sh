@@ -16,13 +16,26 @@ else
 fi
 
 # Find the data repo (the git repo holding home/ and hosts/) and set REPO and the paths inside it.
-# Order: $JEEVES_DATA, then the plugin option data_repo (hooks see it as CLAUDE_PLUGIN_OPTION_DATA_REPO),
-# then the git repo around the current folder if it is a data repo (Claude's Bash tool sees no
-# plugin variables, but runs inside the data repo when working on it), then DEFAULT_DATA_REPO (the
-# option's default, which an install without --config may leave unset).
+# Order: $JEEVES_DATA (or `--data-repo <path>`, below), then the plugin option data_repo (hooks see it as
+# CLAUDE_PLUGIN_OPTION_DATA_REPO), then the path this device last used (DATA_REPO_POINTER), then the git
+# repo around the current folder if it is a data repo, then DEFAULT_DATA_REPO (the option's default, which
+# an install without --config may leave unset).
 # Returns 1 with DATA_REPO_PROBLEM set when none is found, or when it is encrypted and this device is locked
 # (unless ALLOW_LOCKED=1).
 DEFAULT_DATA_REPO=$HOME/jeeves-data
+# The data repo a script was last told about (by JEEVES_DATA, --data-repo or the plugin option), so the
+# skills can run every later command bare: Claude's Bash tool sees no plugin variables, and a permission
+# rule does not match past a `cd` outside the project or a `JEEVES_DATA=` prefix, so either would ask.
+DATA_REPO_POINTER=$CLAUDE_HOME/jeeves/data-repo
+
+# `--data-repo <path>` as a script's first two arguments: the same as JEEVES_DATA. An empty path (the plugin
+# option left empty) means what it does without one, except that the record is neither read nor kept
+# stale. This file is sourced without arguments, so it shares the script's own and the shift is the script's.
+DATA_REPO_GIVEN=
+if [ "$1" = --data-repo ]; then
+  JEEVES_DATA=$2 DATA_REPO_GIVEN=1
+  shift; [ $# -gt 0 ] && shift
+fi
 
 # A path with a leading ~/ (as plugin options are written) made absolute.
 expand_path() {
@@ -30,8 +43,13 @@ expand_path() {
 }
 
 find_data_repo() {
-  local candidate top
+  local candidate top told=
   candidate=$(expand_path "${JEEVES_DATA:-$CLAUDE_PLUGIN_OPTION_DATA_REPO}")
+  [ -n "$candidate" ] || [ -n "$DATA_REPO_GIVEN" ] && told=1
+  if [ -z "$candidate" ] && [ -z "$DATA_REPO_GIVEN" ] && [ -f "$DATA_REPO_POINTER" ]; then
+    IFS= read -r candidate < "$DATA_REPO_POINTER"
+    candidate=${candidate%$'\r'}
+  fi
   if [ -z "$candidate" ]; then
     # Only a data repo: home/, and .sync-state/ ignored as jeeves-init writes it (a dotfiles repo has home/ too).
     top=$(git rev-parse --show-toplevel 2>/dev/null) && [ -d "$top/home" ] &&
@@ -55,6 +73,7 @@ find_data_repo() {
     return 1 ;;
   esac
   REPO=$(cd "$candidate" && pwd)
+  [ -n "$told" ] && remember_data_repo
   HOME_COPY=$REPO/home
   STATE_DIR=$REPO/.sync-state
   STATE_FILE=$STATE_DIR/hashes
@@ -65,6 +84,19 @@ find_data_repo() {
     DATA_REPO_PROBLEM="the data repo is encrypted and this device is locked: run /jeeves:unlock"
     return 1
   fi
+  return 0
+}
+
+# Records REPO in DATA_REPO_POINTER when it differs. Best effort: a pointer that can't be written only
+# means the skills' bare commands fall back to the other ways of finding the data repo.
+remember_data_repo() {
+  local old=
+  [ -f "$DATA_REPO_POINTER" ] && IFS= read -r old < "$DATA_REPO_POINTER"
+  [ "$old" = "$REPO" ] && return 0
+  mkdir -p "${DATA_REPO_POINTER%/*}" 2>/dev/null &&
+    printf '%s\n' "$REPO" > "$DATA_REPO_POINTER.tmp.$$" 2>/dev/null &&
+    mv -f "$DATA_REPO_POINTER.tmp.$$" "$DATA_REPO_POINTER" 2>/dev/null
+  rm -f "$DATA_REPO_POINTER.tmp.$$" 2>/dev/null
   return 0
 }
 
