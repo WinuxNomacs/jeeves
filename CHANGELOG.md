@@ -2,6 +2,28 @@
 
 A new version reaches installed copies only when `version` in `.claude-plugin/plugin.json` changes.
 
+## 1.0.1 (2026-11-17)
+
+Fixes from the first full review for bugs, interaction breakdowns and secret leaks.
+
+- **Secrets:** `jeeves-scan` now checks each commit a push would send, so a secret committed and removed
+  again, or committed on a merged branch, can no longer reach GitHub unnoticed; a finding names its commit,
+  and `/jeeves:update` explains how to fold the unpushed commits once the secret is removed.
+- **Shared files are never deleted by accident:** a moved or emptied `~/.claude` is no longer recorded as
+  "delete everything on every device"; a real deletion is reported as one, by the snapshot and on the other
+  devices. `CLAUDE_CONFIG_DIR` is honoured.
+- **Session start never hangs:** every call to GitHub stops after 30 seconds and opens no credential
+  window; your own SSH command (`core.sshCommand`, `GIT_SSH_COMMAND`) is kept. Two sessions starting
+  together take turns instead of racing. The session-start message no longer reports routine commits.
+- **A project repo is never mistaken for the data repo** (one with a `home/` folder, when `data_repo` is unset).
+- **Recovery:** a snapshot that failed or was stopped half-way is picked up by the next one instead of
+  blocking every later snapshot; an empty host name no longer wipes the device backups.
+- **Encryption:** a failed `/jeeves:encrypt` leaves nothing behind and a retry works (before, a retry could
+  commit files under a key nobody kept); plain history left on GitHub after an encryption whose fold was not
+  pushed is reported until `/jeeves:encrypt` removes it; `/jeeves:encrypt passphrase` says what a new
+  passphrase does not protect and offers to fold the old `identity.age` out of the history; merge bases of
+  encrypted files are no longer pruned; the key store accepts only a real age recipient.
+
 ## 1.0.0 (2026-11-17)
 
 - **First stable release.** Every feature is now checked on Linux, Windows (Git Bash) and macOS (bash 3.2):

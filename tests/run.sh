@@ -236,7 +236,7 @@ t_an_emptied_claude_folder_deletes_nothing() {
   check "no commit" [ "$(commits)" = "$n" ]
   check "the shared files stay in the repo" [ -f "$R/home/CLAUDE.md" ] && [ -f "$R/home/agents/a.md" ]
   check "this device's backup stays" [ -f "$R/hosts/testhost/settings.json" ]
-  check "a new device with an empty folder still syncs" bash -c 'rm -f "$1/.sync-state/hashes"; "$2/bin/jeeves-snapshot" >/dev/null; "$2/bin/jeeves-apply" | grep -q "installed CLAUDE.md"' _ "$R" "$SRC"
+  check "a new device with an empty folder still syncs" bash -c 'rm -f "$1/.sync-state/hashes"; "$2/bin/jeeves-snapshot" >/dev/null; "$2/bin/jeeves-apply" | grep -q "^jeeves apply: installed.*CLAUDE.md"' _ "$R" "$SRC"
 }
 
 t_a_deletion_is_reported_as_one_on_both_devices() {
@@ -268,7 +268,8 @@ t_an_unusable_host_name_touches_no_backup() {
   check "other backups stay" [ -f "$R/hosts/other/settings.json" ] && [ -f "$R/hosts/testhost/settings.json" ]
   fake hostname "exit 127"
   (unset JEEVES_HOST; PATH=$W/fakebin:$PATH "$SRC/bin/jeeves-snapshot" >/dev/null)
-  check "without hostname, uname -n names the device" [ -d "$R/hosts/$(uname -n | cut -d. -f1)" ]
+  # Native Windows adds -win to the name.
+  check "without hostname, uname -n names the device" bash -c 'ls "$1/hosts" | grep -qx "$2\(-win\)\{0,1\}"' _ "$R" "$(uname -n | cut -d. -f1)"
   check "and the other backups stay" [ -f "$R/hosts/other/settings.json" ]
 }
 
@@ -1096,9 +1097,10 @@ t_a_failed_encrypt_on_leaves_nothing_behind_and_a_retry_works() {
   check "the flaky run changed nothing" [ ! -e "$R/recipient" ]
   encrypt on >/dev/null
   check "the retry encrypts" [ -s "$R/recipient" ] && [ "$(commits)" = $((n + 1)) ]
-  key=$(cat "$W/keys/$(cat "$R/recipient")")
+  # The key file itself (a Windows age cannot open a <(...) path).
+  keyfile=$W/keys/$(cat "$R/recipient")
   for f in home/CLAUDE.md home/agents/a.md hosts/testhost/settings.json; do
-    check "$f opens with the key now in the store" bash -c 'git -C "$1" cat-file blob "HEAD:$2" | age -d -i <(printf "%s\n" "$3") >/dev/null' _ "$R" "$f" "$key"
+    check "$f opens with the key now in the store" bash -c 'git -C "$1" cat-file blob "HEAD:$2" | age -d -i "$3" >/dev/null' _ "$R" "$f" "$keyfile"
   done
 }
 
