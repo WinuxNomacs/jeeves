@@ -292,7 +292,7 @@ t_two_snapshots_at_once_take_turns() {
   done
   check "everything recorded" [ "$(cat "$R/home/agents/b3.md")" = "agent v3" ] && [ -z "$(git -C "$R" status --porcelain)" ]
   check "the sync record holds every file" [ "$(grep -c 'agents/b' "$R/.sync-state/hashes")" = 3 ]
-  mkdir -p "$R/.git/jeeves/lock"; echo 999999 > "$R/.git/jeeves/lock/pid"
+  echo 999999 > "$R/.git/jeeves/lock"
   echo "rules v9" > "$W/claude/CLAUDE.md"; snap >/dev/null
   check "a lock left by a process that is gone is taken over" grep -qx "rules v9" "$R/home/CLAUDE.md"
   check "and released" [ ! -e "$R/.git/jeeves/lock" ]

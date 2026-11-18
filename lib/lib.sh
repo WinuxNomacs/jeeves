@@ -267,22 +267,23 @@ with_deadline() {
 }
 
 # One snapshot or apply at a time per data repo (two sessions starting together would race on the same temp
-# files and lose sync records). Waits up to <seconds>, then returns 1. A lock whose process is gone, or one
-# left without a PID for over a minute, is taken over. Released when the script exits.
+# files and lose sync records). Waits up to <seconds>, then returns 1. The lock is a file holding the PID,
+# created by bash's noclobber (an exclusive open; some mkdir builds, such as uutils', do not fail when
+# another process creates the same folder at the same moment). A lock whose process is gone, or an empty one
+# over a minute old, is taken over. Released when the script exits.
 take_lock() {
   local lock=$CRYPT_DIR/lock i=0 pid
   mkdir -p "$CRYPT_DIR" || return 1
-  while ! mkdir "$lock" 2>/dev/null; do
-    pid=$(cat "$lock/pid" 2>/dev/null)
+  while ! ( set -o noclobber; echo $$ > "$lock" ) 2>/dev/null; do
+    pid=$(cat "$lock" 2>/dev/null)
     if { [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; } ||
-       { [ -z "$pid" ] && [ -n "$(find "$lock" -maxdepth 0 -mmin +1 2>/dev/null)" ]; }; then
-      rm -rf "$lock"; continue
+       { [ -z "$pid" ] && [ -n "$(find "$lock" -mmin +1 2>/dev/null)" ]; }; then
+      rm -f "$lock"; continue
     fi
     [ $i -ge $(( $1 * 10 )) ] && return 1
     sleep 0.1; i=$((i + 1))
   done
-  echo $$ > "$lock/pid"
-  trap 'rm -rf "$CRYPT_DIR/lock"' EXIT
+  trap 'rm -f "$CRYPT_DIR/lock"' EXIT
 }
 
 # This machine's OS as Jeeves names it: linux, wsl, macos or windows (Git Bash).
