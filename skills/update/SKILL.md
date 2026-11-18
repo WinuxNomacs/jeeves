@@ -101,7 +101,8 @@ AskUserQuestion: the obvious options, the recommended one first; they can still 
    repeat: a lesson saved as a memory in one project often holds everywhere. A memory that is personal,
    true only on that machine, about one task, or history stays a memory and is not offered. Read at most 25
    files per run, in the order listed; the rest stay unrecorded, so the next run starts with them (say how
-   many are left).
+   many are left). If the command fails (no data repo, a locked device), say why in one line and review the
+   session alone.
 2. **Sort** each item by where it applies, as the global rules' "What goes where" says:
    - **Global** (`home/CLAUDE.md` in the data repo): holds in any repository, on any machine.
    - **Project** (the project's CLAUDE.md): what anyone working in that repo needs. It is committed and may
@@ -130,8 +131,8 @@ AskUserQuestion: the obvious options, the recommended one first; they can still 
      delete the branch. Never push the project unless its own CLAUDE.md allows it. If the project is the
      data repo itself, its CLAUDE.md goes in the same `pref/` branch.
    - Memory: save as Claude Code's memory instructions say.
-   - The memories reviewed: memories themselves are never changed. Once the selected items are written, and
-     before the push, record each memory file reviewed in this run (every file read, whether or not anything
+   - The memories reviewed: memories themselves are never changed. Once the selected items are written (a
+     `pref/` branch merged into `main`: the record is committed only on `main`), and before the push, record each memory file reviewed in this run (every file read, whether or not anything
      came of it; not the files left for a later run) with what came of it:
      `cd <datarepo path> && jeeves-memories record <hash> "<outcome>" [<hash> "<outcome>"...]`, the outcome
      such as `promoted 2, declined 1, kept 3` ("kept": stays a memory). It commits the record on `main`.
