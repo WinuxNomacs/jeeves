@@ -1,44 +1,101 @@
 #!/usr/bin/env bash
 # Install the data repo's home/ copies into ~/.claude (after a merge or a pull).
 #
-#   jeeves-apply           install files that changed in the repo since the last sync on this device
-#   jeeves-apply --force   also overwrite files changed on both sides (the disk copy is saved first)
+#   jeeves-apply                    install files that changed in the repo since the last sync on this device
+#   jeeves-apply --force [<path>...]
+#                                   also overwrite files changed on both sides, and install files holding
+#                                   conflict markers; with paths (relative to ~/.claude), only those, and
+#                                   whatever their state (the disk copy is saved first)
 #
 # A file edited on disk since the last sync is never overwritten without --force: run jeeves-snapshot
-# first to record it. Memories are never applied. The data repo is found as lib/lib.sh describes.
+# first to record it. Memories are never applied. Only from a data repo on main with no merge in progress
+# and nothing uncommitted under home/, so an unfinished merge or another branch never reaches ~/.claude.
+# A file is recorded as synced only once its copy is in place. The data repo is found as lib/lib.sh
+# describes.
 
 . "$(dirname "$0")/../lib/lib.sh"
 
-force=0
+force=0 force_paths=()
 for arg in "$@"; do
   case "$arg" in
     --force) force=1 ;;
-    *) echo "apply: unknown option $arg" >&2; exit 2 ;;
+    -*) echo "apply: unknown option $arg" >&2; exit 2 ;;
+    *) [ $force = 1 ] || { echo "apply: a path goes after --force" >&2; exit 2; }; force_paths+=("$arg") ;;
   esac
 done
+# forced <path>: --force covers it (no paths given, or it is one of them).
+forced() {
+  local f
+  [ $force = 1 ] || return 1
+  [ ${#force_paths[@]} = 0 ] && return 0
+  for f in "${force_paths[@]}"; do [ "$f" = "$1" ] && return 0; done
+  return 1
+}
+# named <path>: the user named it after --force.
+named() { [ ${#force_paths[@]} -gt 0 ] && forced "$1"; }
 
 say() { echo "jeeves apply: $*"; }
 find_data_repo || { say "$DATA_REPO_PROBLEM"; exit 1; }
 take_lock 30 || { say "another Jeeves run is still at work on $REPO; nothing installed, try again shortly"; exit 1; }
-saved_dir=$STATE_DIR/overwritten/$(date +%Y%m%d-%H%M%S)
 
+branch=$(git_repo symbolic-ref --short -q HEAD)
+if [ "$branch" != main ]; then
+  say "$REPO is on '${branch:-detached HEAD}', not main; nothing installed (merge it into main first)"; exit 1
+fi
+if [ -f "$REPO/.git/MERGE_HEAD" ] || [ -n "$(git_repo diff --name-only --diff-filter=U)" ]; then
+  say "$REPO is in the middle of a merge; nothing installed (finish or abort it first)"; exit 1
+fi
+if [ -n "$(git_repo -c core.quotepath=false status --porcelain --untracked-files=all -- home)" ]; then
+  say "$REPO has uncommitted changes under home/; nothing installed (commit them, or run jeeves-snapshot)"; exit 1
+fi
+
+# install <path> <disk hash as classified>: the repo copy into ~/.claude, through a temp file; the disk file
+# must still be the one classified when the copy goes into place (a session may have written it meanwhile).
+# Returns 1 when the copy failed, 2 when the disk file changed.
+install() {
+  local dst=$CLAUDE_HOME/$1
+  { mkdir -p "$(dirname "$dst")" && cp -p "$HOME_COPY/$1" "$dst.sync-tmp"; } || { rm -f "$dst.sync-tmp"; return 1; }
+  if [ "$(hash_of "$dst")" != "$2" ]; then rm -f "$dst.sync-tmp"; return 2; fi
+  mv "$dst.sync-tmp" "$dst" || { rm -f "$dst.sync-tmp"; return 1; }
+}
+
+saved_dir=$STATE_DIR/overwritten/$(date +%Y%m%d-%H%M%S)
 installed=() removed=() skipped=() status=0 saved=0
 while IFS= read -r p; do
   [ -n "$p" ] || continue
   d=$(hash_of "$CLAUDE_HOME/$p"); r=$(hash_of "$HOME_COPY/$p"); b=$(base_of "$p")
   state=$(classify "$d" "$r" "$b")
-  if [ "$state" = conflict ] && [ $force = 1 ]; then
-    [ "$d" = "-" ] || { copy_file "$CLAUDE_HOME/$p" "$saved_dir/$p" && saved=1; }
+  # Named after --force: the repo copy, whatever the state (a disk deletion held back, a merged conflict).
+  if [ "$state" != insync ] && [ "$state" != repo ] && { named "$p" || { [ "$state" = conflict ] && forced "$p"; }; }; then
+    if [ "$d" != "-" ]; then
+      copy_file "$CLAUDE_HOME/$p" "$saved_dir/$p" ||
+        { skipped+=("$p (its disk copy could not be saved first, so it was left as it is)"); continue; }
+      saved=1
+    fi
     state=repo
   fi
   case "$state" in
     insync) set_base "$p" "$d" "$CLAUDE_HOME/$p" ;;
     repo)
-      if [ "$r" = "-" ]; then rm -f "$CLAUDE_HOME/$p"; removed+=("$p")
-      else copy_file "$HOME_COPY/$p" "$CLAUDE_HOME/$p"; installed+=("$p"); fi
-      set_base "$p" "$r" "$HOME_COPY/$p" ;;
+      if [ "$r" != "-" ] && has_conflict_markers "$HOME_COPY/$p" && ! forced "$p"; then
+        skipped+=("$p (the repo copy holds conflict markers from an unfinished merge; if they belong there, run jeeves-apply --force $p)")
+        continue
+      fi
+      if [ "$r" = "-" ]; then
+        if [ "$(hash_of "$CLAUDE_HOME/$p")" != "$d" ]; then skipped+=("$p (changed on disk just now; run jeeves-snapshot first)"); continue; fi
+        rm -f "${CLAUDE_HOME:?}/${p:?}" || { skipped+=("$p (could not be removed)"); continue; }
+        removed+=("$p")
+      else
+        install "$p" "$d"
+        case $? in
+          0) installed+=("$p") ;;
+          2) skipped+=("$p (changed on disk just now; run jeeves-snapshot first)"); continue ;;
+          *) skipped+=("$p (could not be written; disk full or read-only?)"); continue ;;
+        esac
+      fi
+      set_base "$p" "$r" "$HOME_COPY/$p" || say "could not update the sync record for $p (disk full?)" ;;
     disk) skipped+=("$p (changed on disk; run jeeves-snapshot first)") ;;
-    conflict) skipped+=("$p (changed on both sides; compare, then jeeves-snapshot --force or jeeves-apply --force)") ;;
+    conflict) skipped+=("$p (changed on both sides; compare, then jeeves-snapshot --force $p or jeeves-apply --force $p)") ;;
   esac
 done < <(all_tracked)
 keep_bases

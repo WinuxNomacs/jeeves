@@ -60,7 +60,17 @@ case "$1" in
     if is_age "$2"; then decrypt_file "$2"; else cat "$2"; fi ;;
   merge)
     [ $# -ge 4 ] || fail "merge takes <O> <A> <B> <L>"
-    plain "$2" "$t.O" && plain "$3" "$t.A" && plain "$4" "$t.B" || exit 1
+    if ! { plain "$2" "$t.O" && plain "$3" "$t.A" && plain "$4" "$t.B"; }; then
+      # Never leave one side looking like a merge result: the file gets conflict markers and a note (so Jeeves
+      # refuses to install or record it), and the exit status above 128 makes git stop the merge (git 2.44+;
+      # older git reports a conflict).
+      printf '%s\n' "<<<<<<< jeeves: not merged" \
+        "The data repo's key could not be read, so this file could not be decrypted to merge it." \
+        "Abort the merge (git merge --abort), run /jeeves:unlock, then merge again." \
+        "=======" ">>>>>>> jeeves" > "$t.note"
+      encrypt "$t.note" "$t.enc" && cp "$t.enc" "$3"
+      exit 129
+    fi
     git merge-file --marker-size="${5:-7}" -L ours -L base -L theirs "$t.A" "$t.O" "$t.B"
     rc=$?
     [ $rc -lt 128 ] || exit 1

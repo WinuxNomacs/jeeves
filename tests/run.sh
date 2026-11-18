@@ -32,6 +32,8 @@ setup() {
   echo "rules v1" > "$W/claude/CLAUDE.md"
   echo '{"a":1}' > "$W/claude/settings.json"
   mkdir -p "$W/repo/hosts/testhost" && echo '{"a":1}' > "$W/repo/hosts/testhost/settings.json"
+  # This machine's ID, as a snapshot of this version writes it.
+  echo testmachine > "$W/claude/.jeeves-machine-id"; echo testmachine > "$W/repo/hosts/testhost/.jeeves-machine"
   git -C "$W/repo" checkout -q -b main
   git -C "$W/repo" add -A && git -C "$W/repo" commit -q -m init && git -C "$W/repo" push -q origin main 2>/dev/null
   export CLAUDE_HOME=$W/claude JEEVES_DATA=$W/repo
@@ -130,7 +132,7 @@ t_disk_deletion_recorded() {
 
 t_apply_installs_repo_change() {
   snap >/dev/null
-  echo "rules v3" > "$R/home/CLAUDE.md"
+  echo "rules v3" > "$R/home/CLAUDE.md"; git -C "$R" commit -qam "repo edit"
   check "says installed" grep -q "installed CLAUDE.md" <<< "$(apply)"
   check "disk updated" grep -q v3 "$W/claude/CLAUDE.md"
   out=$(apply)
@@ -595,7 +597,7 @@ t_init_creates_a_data_repo() {
   check "says created" grep -q "created $W/new with origin" <<< "$out"
   check "on main" [ "$(git -C "$W/new" symbolic-ref --short HEAD)" = main ]
   check "one commit" [ "$(git -C "$W/new" rev-list --count HEAD)" = 1 ]
-  check "LF line endings everywhere" grep -q 'eol=lf' "$W/new/.gitattributes"
+  check "files kept byte for byte (no line-ending conversion)" grep -qx '\* -text' "$W/new/.gitattributes"
   check "sync record ignored" grep -qx '.sync-state/' "$W/new/.gitignore"
   check "origin set" bash -c '[[ "$(git -C "$1" remote get-url origin)" == */remote.git ]]' _ "$W/new"
   "$SRC/bin/jeeves-init" "$W/new" >/dev/null; rc=$?
@@ -973,7 +975,7 @@ t_encrypt_on_keeps_files_encrypted_in_git_and_plain_in_the_working_tree() {
   crypt_env; snap >/dev/null; n=$(commits)
   out=$(encrypt on); rc=$?
   check "encrypt on succeeds" [ $rc = 0 ]
-  check "says how many files it encrypted" grep -q "encrypted 3 files and committed" <<< "$out"
+  check "says how many files it encrypted" grep -q "encrypted 4 files and committed" <<< "$out"
   check "one commit" [ "$(commits)" = $((n + 1)) ]
   check "CLAUDE.md stored encrypted" is_encrypted_blob "$R" HEAD:home/CLAUDE.md
   check "the host backup stored encrypted" is_encrypted_blob "$R" HEAD:hosts/testhost/settings.json
@@ -1216,6 +1218,268 @@ run_test "snapshot skips when the repo is not on main" t_other_branch_skips
 run_test "agents and own skills are shared, skills/synced and .trash are not, settings and keybindings are backed up per host" t_new_dirs_tracked_synced_excluded
 run_test "memories go under the host folder and are never applied" t_memories_backed_up_never_applied
 run_test "a file deleted on disk is deleted from the repo copy" t_disk_deletion_recorded
+# ---- Data integrity: each failure injected ----
+
+# A stand-in cp on the PATH ($W/fakecp): runs the given shell snippet when its arguments contain the pattern,
+# then (unless the snippet exits) the real cp. "$@" is cp's arguments, $real the real cp.
+fake_cp() { # fake_cp <pattern> <snippet>
+  mkdir -p "$W/fakecp"
+  cat > "$W/fakecp/cp" <<END
+#!/bin/sh
+real="$(command -v cp)"
+case "\$*" in *"$1"*) $2 ;; esac
+exec "\$real" "\$@"
+END
+  chmod +x "$W/fakecp/cp"
+}
+with_fake_cp() { PATH=$W/fakecp:$PATH "$@"; }
+
+t_an_edit_during_the_snapshot_is_recorded_and_never_undone_by_apply() {
+  snap >/dev/null
+  echo "rules v2" > "$W/claude/CLAUDE.md"
+  # The first copy reads v2; the file is written again right after it (once).
+  fake_cp "claude/CLAUDE.md" "if [ ! -e '$W/edited' ]; then \"\$real\" \"\$@\"; echo 'late edit' >> '$W/claude/CLAUDE.md'; touch '$W/edited'; exit 0; fi"
+  with_fake_cp snap >/dev/null
+  check "the repo holds the late edit" grep -q "late edit" "$R/home/CLAUDE.md"
+  check "status lists no paths" [ -z "$("$SRC/bin/jeeves-status" | grep -Ev '^(datarepo|branch|main)	')" ]
+  apply >/dev/null
+  check "apply left the late edit on disk" grep -q "late edit" "$W/claude/CLAUDE.md"
+}
+
+t_a_file_that_keeps_changing_is_left_for_the_next_snapshot() {
+  snap >/dev/null; n=$(commits)
+  echo "rules v2" > "$W/claude/CLAUDE.md"
+  fake_cp "claude/CLAUDE.md" "\"\$real\" \"\$@\"; echo more >> '$W/claude/CLAUDE.md'; exit 0"
+  out=$(with_fake_cp snap)
+  check "says it is still being written" grep -q "still being written.*CLAUDE.md" <<< "$out"
+  check "nothing committed" [ "$(commits)" = "$n" ]
+  check "the repo copy is the old one" grep -qx "rules v1" "$R/home/CLAUDE.md"
+  snap >/dev/null
+  check "the next snapshot takes it" [ "$(cat "$R/home/CLAUDE.md")" = "$(cat "$W/claude/CLAUDE.md")" ]
+}
+
+t_a_failed_copy_records_nothing_and_loses_no_edit() {
+  snap >/dev/null; n=$(commits)
+  echo "rules v2" > "$W/claude/CLAUDE.md"
+  fake_cp "repo/home/CLAUDE.md" "echo 'cp: No space left on device' >&2; exit 1"
+  out=$(with_fake_cp snap); rc=$?
+  check "says it could not copy" grep -q "could not copy CLAUDE.md" <<< "$out"
+  check "exit 1" [ $rc = 1 ]
+  check "nothing committed" [ "$(commits)" = "$n" ]
+  check "no temp file left" [ ! -e "$R/home/CLAUDE.md.sync-tmp" ]
+  apply >/dev/null
+  check "apply did not put the old copy back" grep -qx "rules v2" "$W/claude/CLAUDE.md"
+  snap >/dev/null
+  check "the next snapshot records the edit" grep -qx "rules v2" "$R/home/CLAUDE.md"
+}
+
+t_a_failed_backup_copy_keeps_the_last_backup_whole() {
+  mkdir -p "$W/claude/projects/-p/memory"; echo m1 > "$W/claude/projects/-p/memory/one.md"; echo m2 > "$W/claude/projects/-p/memory/two.md"
+  snap >/dev/null; n=$(commits)
+  echo "rules v2" > "$W/claude/CLAUDE.md"
+  fake_cp "memory" "echo 'cp: No space left on device' >&2; exit 1"
+  out=$(with_fake_cp snap); rc=$?
+  check "says the backup failed" grep -q "could not back up" <<< "$out"
+  check "exit 1" [ $rc = 1 ]
+  check "nothing committed" [ "$(commits)" = "$n" ]
+  check "the last backup is whole in git" git -C "$R" cat-file -e HEAD:hosts/testhost/projects/-p/memory/two.md
+  check "and in the working tree" [ -f "$R/hosts/testhost/projects/-p/memory/two.md" ]
+  snap >/dev/null
+  check "the next snapshot records the edit" grep -qx "rules v2" "$R/home/CLAUDE.md"
+}
+
+t_a_failed_install_is_not_recorded_so_no_old_copy_is_pushed_back() {
+  snap >/dev/null
+  echo "agent v2 from another device" > "$R/home/agents/a.md"; git -C "$R" commit -qam "other device"
+  fake_cp "claude/agents/a.md" "echo 'cp: Read-only file system' >&2; exit 1"
+  out=$(with_fake_cp apply); rc=$?
+  check "says it could not be written" grep -q "skipped agents/a.md (could not be written" <<< "$out"
+  check "exit 1" [ $rc = 1 ]
+  check "no temp file left" [ ! -e "$W/claude/agents/a.md.sync-tmp" ]
+  snap >/dev/null
+  check "the next snapshot keeps the other device's version" grep -q "another device" "$R/home/agents/a.md"
+  apply >/dev/null
+  check "and a working apply installs it" grep -q "another device" "$W/claude/agents/a.md"
+}
+
+t_apply_leaves_a_file_written_while_it_installs() {
+  snap >/dev/null
+  echo "rules v2 from the repo" > "$R/home/CLAUDE.md"; git -C "$R" commit -qam "repo edit"
+  fake_cp "claude/CLAUDE.md.sync-tmp" "echo 'written by a session' > '$W/claude/CLAUDE.md'"
+  out=$(with_fake_cp apply)
+  check "says it changed just now" grep -q "CLAUDE.md (changed on disk just now" <<< "$out"
+  check "the session's write is kept" grep -qx "written by a session" "$W/claude/CLAUDE.md"
+}
+
+two_conflicts() {
+  snap >/dev/null
+  echo "repo side" > "$R/home/CLAUDE.md"; echo "repo side" > "$R/home/agents/a.md"; git -C "$R" commit -qam "repo edits"
+  echo "disk side" > "$W/claude/CLAUDE.md"; echo "disk side" > "$W/claude/agents/a.md"
+}
+
+t_apply_force_with_a_path_overwrites_only_that_file() {
+  two_conflicts
+  apply --force CLAUDE.md >/dev/null
+  check "the named file gets the repo copy" grep -qx "repo side" "$W/claude/CLAUDE.md"
+  check "the other conflict keeps its disk edit" grep -qx "disk side" "$W/claude/agents/a.md"
+  check "and is still a conflict" grep -q "^conflict	agents/a.md" <<< "$("$SRC/bin/jeeves-status")"
+}
+
+t_snapshot_force_with_a_path_takes_only_that_file() {
+  two_conflicts
+  snap --force CLAUDE.md >/dev/null
+  check "the named file gets the disk copy" grep -qx "disk side" "$R/home/CLAUDE.md"
+  check "the other conflict keeps the repo side" grep -qx "repo side" "$R/home/agents/a.md"
+}
+
+t_apply_installs_nothing_mid_merge_from_another_branch_or_with_uncommitted_files() {
+  snap >/dev/null
+  git -C "$R" switch -qc side; echo "side" > "$R/home/CLAUDE.md"; git -C "$R" commit -qam side
+  git -C "$R" switch -q main; echo "main" > "$R/home/CLAUDE.md"; git -C "$R" commit -qam main
+  git -C "$R" -c core.autocrlf=false merge -q side >/dev/null 2>&1
+  out=$(apply); rc=$?
+  check "mid-merge: refused" grep -q "in the middle of a merge" <<< "$out"
+  check "mid-merge: exit 1" [ $rc = 1 ]
+  check "mid-merge: no conflict markers reached ~/.claude" grep -qx "rules v1" "$W/claude/CLAUDE.md"
+  git -C "$R" merge --abort; git -C "$R" switch -q side
+  check "another branch: refused" grep -q "on 'side', not main" <<< "$(apply)"
+  check "another branch: disk unchanged" grep -qx "rules v1" "$W/claude/CLAUDE.md"
+  git -C "$R" switch -q main; echo "uncommitted" > "$R/home/agents/a.md"
+  check "uncommitted home/ files: refused" grep -q "uncommitted changes under home/" <<< "$(apply)"
+}
+
+markers() { printf 'one\n<<<<<<< ours\nmine\n=======\ntheirs\n>>>>>>> theirs\n'; }
+
+t_conflict_markers_are_never_installed_or_recorded_unless_named() {
+  snap >/dev/null
+  markers > "$R/home/agents/a.md"; git -C "$R" commit -qam "a bad merge"
+  out=$(apply)
+  check "apply skips the file with markers" grep -q "agents/a.md (the repo copy holds conflict markers" <<< "$out"
+  check "disk unchanged" grep -qx "agent v1" "$W/claude/agents/a.md"
+  apply --force agents/a.md >/dev/null
+  check "named after --force, it is installed" grep -q "^<<<<<<< ours" "$W/claude/agents/a.md"
+  markers > "$W/claude/CLAUDE.md"; n=$(commits)
+  out=$(snap)
+  check "snapshot does not take a file with markers" grep -q "CLAUDE.md (it holds conflict markers" <<< "$out"
+  check "nothing committed" [ "$(commits)" = "$n" ]
+  snap --force CLAUDE.md >/dev/null
+  check "named after --force, it is taken" grep -q "^<<<<<<< ours" "$R/home/CLAUDE.md"
+}
+
+t_scan_flags_conflict_markers_in_outgoing_commits() {
+  snap >/dev/null; git -C "$R" push -q origin main 2>/dev/null
+  markers > "$R/home/agents/a.md"; git -C "$R" commit -qam "a bad merge"
+  out=$("$SRC/bin/jeeves-scan"); rc=$?
+  check "names the file" grep -q "possible conflict marker (an unfinished merge) at home/agents/a.md:2" <<< "$out"
+  check "exit 1" [ $rc = 1 ]
+}
+
+t_a_vanished_folder_is_held_until_confirmed() {
+  snap >/dev/null; n=$(commits)
+  rm -rf "$W/claude/agents"
+  out=$(snap --hook)
+  check "says agents/ is gone and nothing was deleted" grep -q "agents/ gone from.*not deleted from the shared files" <<< "$out"
+  check "nothing committed" [ "$(commits)" = "$n" ]
+  check "the shared copy stays" [ -f "$R/home/agents/a.md" ]
+  apply --force agents/a.md >/dev/null
+  check "apply --force <path> puts it back" grep -qx "agent v1" "$W/claude/agents/a.md"
+  ln -s "$W/nowhere" "$W/claude/agents.link"; rm -rf "$W/claude/agents"; mv "$W/claude/agents.link" "$W/claude/agents"
+  check "a link that points nowhere is held too" grep -q "agents/ gone from" <<< "$(snap --hook)"
+  check "still nothing committed" [ "$(commits)" = "$n" ]
+  rm "$W/claude/agents"
+  out=$(snap --allow-delete agents)
+  check "--allow-delete records the deletion" grep -q "deleted from the shared files.*agents/a.md" <<< "$out"
+  check "and the shared copy is gone" [ ! -e "$R/home/agents/a.md" ]
+}
+
+t_an_old_data_repo_moves_to_byte_for_byte_line_endings() {
+  printf '# LF everywhere, also in a Windows checkout (Git for Windows sets core.autocrlf=true).\n* text=auto eol=lf\n' > "$R/.gitattributes"
+  git -C "$R" add .gitattributes; git -C "$R" commit -qm "old attributes"
+  snap >/dev/null
+  printf 'line one\r\nline two\r\n' > "$W/claude/agents/a.md"
+  snap >/dev/null
+  check ".gitattributes keeps bytes" grep -qx '\* -text' "$R/.gitattributes"
+  check "in a commit of its own" bash -c 'git -C "$1" log --format=%s | grep -qx "Keep files byte for byte (no line-ending conversion)"' _ "$R"
+  check "the CRLF file is committed byte for byte" [ "$(git -C "$R" cat-file -p HEAD:home/agents/a.md | od -c | grep -c '\\r')" -ge 1 ]
+}
+
+t_a_rule_that_would_change_a_file_stops_the_record() {
+  printf 'home/agents/** text eol=lf\n' >> "$R/.gitattributes"; git -C "$R" add .gitattributes; git -C "$R" commit -qm "a line-ending rule"
+  snap >/dev/null; n=$(commits)
+  printf 'line one\r\nline two\r\n' > "$W/claude/agents/a.md"
+  out=$(snap); rc=$?
+  check "says the commit would not hold the file" grep -q "would not hold agents/a.md as it is" <<< "$out"
+  check "exit 1" [ $rc = 1 ]
+  check "nothing committed" [ "$(commits)" = "$n" ]
+}
+
+t_another_machine_with_the_same_name_keeps_its_backup() {
+  snap >/dev/null
+  echo othermachine > "$R/hosts/testhost/.jeeves-machine"; echo '{"theirs":1}' > "$R/hosts/testhost/settings.json"
+  git -C "$R" commit -qam "the other testhost's backup"
+  echo '{"mine":1}' > "$W/claude/settings.json"
+  out=$(snap); rc=$?
+  check "says the backup belongs to another machine" grep -q "belongs to another machine named testhost; set JEEVES_HOST" <<< "$out"
+  check "exit 1" [ $rc = 1 ]
+  check "its backup is untouched" grep -q theirs "$R/hosts/testhost/settings.json"
+  snap --replace-host >/dev/null
+  check "--replace-host takes the name over" grep -q mine "$R/hosts/testhost/settings.json"
+  check "with this machine's ID" grep -qx testmachine "$R/hosts/testhost/.jeeves-machine"
+}
+
+t_a_cleaned_history_is_not_taken_when_the_old_one_cannot_be_kept() {
+  snap >/dev/null; git -C "$R" push -q origin main 2>/dev/null; git -C "$R" fetch -q origin
+  echo "rules v2 from this device" > "$W/claude/CLAUDE.md"; snap --no-pull >/dev/null
+  other_device_cleans_up
+  before=$(git -C "$R" rev-parse HEAD)
+  mkdir -p "$R/.sync-state/history-before-cleanup.bundle.sync-tmp"   # the bundle cannot be written
+  out=$(snap)
+  check "says the old history could not be saved" grep -q "could not be saved.*nothing switched" <<< "$out"
+  check "main still holds this device's commits" git -C "$R" merge-base --is-ancestor "$before" HEAD
+}
+
+t_a_stale_lock_is_taken_over_by_one_waiter_only() {
+  mkdir -p "$W/lockdir"
+  for round in 1 2 3; do
+    echo 999999 > "$W/lockdir/lock"
+    for i in 1 2 3 4 5 6; do
+      CRYPT_DIR=$W/lockdir bash -c '. "$1/lib/lib.sh"; CRYPT_DIR=$2; take_lock 20 || exit 1
+        echo in >> "$2/log"; sleep 0.2; echo out >> "$2/log"' _ "$SRC" "$W/lockdir" &
+    done
+    wait
+  done
+  check "every run got the lock" [ "$(grep -c in "$W/lockdir/log")" = 18 ]
+  check "never two at once" [ -z "$(uniq -d "$W/lockdir/log")" ]
+  check "released" [ ! -e "$W/lockdir/lock" ]
+}
+
+t_restore_leaves_a_file_whose_disk_copy_cannot_be_saved() {
+  snap >/dev/null
+  echo '{"mine":2}' > "$W/claude/settings.json"
+  mkdir -p "$R/.sync-state"; : > "$R/.sync-state/overwritten"   # a file where the folder of saved copies goes
+  out=$("$SRC/bin/jeeves-restore" testhost); rc=$?
+  check "says it was not restored" grep -q "not restored, left as they were: settings.json" <<< "$out"
+  check "exit 1" [ $rc = 1 ]
+  check "the disk copy is kept" grep -q mine "$W/claude/settings.json"
+}
+
+t_a_merge_that_cannot_decrypt_stops_with_markers_and_never_one_side() {
+  crypt_env; snap >/dev/null; encrypt on >/dev/null
+  printf 'one\n' > "$R/home/agents/m.md"; git -C "$R" add home/agents/m.md; git -C "$R" commit -qm base
+  git -C "$R" switch -qc side; printf 'one\nside\n' > "$R/home/agents/m.md"; git -C "$R" commit -qam side
+  git -C "$R" switch -q main; printf 'main\none\n' > "$R/home/agents/m.md"; git -C "$R" commit -qam main
+  mkdir -p "$W/keys.away"; mv "$W/keys"/* "$W/keys.away"/
+  git -C "$R" -c core.autocrlf=false merge -q --no-ff side -m merged >/dev/null 2>&1; rc=$?
+  check "the merge does not succeed" [ $rc != 0 ]
+  check "no merge commit holding one side" [ "$(git -C "$R" log -1 --format=%s)" = main ]
+  if [ -f "$R/.git/MERGE_HEAD" ]; then
+    check "the file says it was not merged" grep -q "^<<<<<<< jeeves: not merged" "$R/home/agents/m.md"
+    check "apply refuses mid-merge" grep -q "in the middle of a merge" <<< "$(apply)"
+    git -C "$R" merge --abort
+  fi
+  mv "$W/keys.away"/* "$W/keys"/
+}
+
 run_test "apply installs a file changed in the repo" t_apply_installs_repo_change
 run_test "apply refuses a file changed on disk since the last sync" t_apply_refuses_disk_change
 run_test "a file changed on both sides is reported, not merged" t_both_changed_is_conflict
@@ -1270,6 +1534,24 @@ run_test "a deadline stops a hung command by its PID" t_deadline_stops_a_hung_co
 run_test "github find lists the user's data repos once each, and fails cleanly" t_github_finds_data_repos
 run_test "github create makes a private repo with the jeeves-data topic, and reports a taken name" t_github_creates_a_private_data_repo
 run_test "the manifests and hooks.json are valid and wire up the hooks" t_plugin_files
+run_test "an edit during the snapshot is recorded and never undone by apply" t_an_edit_during_the_snapshot_is_recorded_and_never_undone_by_apply
+run_test "a file that keeps changing is left for the next snapshot" t_a_file_that_keeps_changing_is_left_for_the_next_snapshot
+run_test "a failed copy records nothing and loses no edit" t_a_failed_copy_records_nothing_and_loses_no_edit
+run_test "a failed backup copy keeps the last backup whole" t_a_failed_backup_copy_keeps_the_last_backup_whole
+run_test "a failed install is not recorded, so no old copy is pushed back" t_a_failed_install_is_not_recorded_so_no_old_copy_is_pushed_back
+run_test "apply leaves a file written while it installs" t_apply_leaves_a_file_written_while_it_installs
+run_test "apply --force with a path overwrites only that file" t_apply_force_with_a_path_overwrites_only_that_file
+run_test "snapshot --force with a path takes only that file" t_snapshot_force_with_a_path_takes_only_that_file
+run_test "apply installs nothing mid-merge, from another branch or with uncommitted files" t_apply_installs_nothing_mid_merge_from_another_branch_or_with_uncommitted_files
+run_test "conflict markers are never installed or recorded unless named" t_conflict_markers_are_never_installed_or_recorded_unless_named
+run_test "scan flags conflict markers in outgoing commits" t_scan_flags_conflict_markers_in_outgoing_commits
+run_test "a vanished folder is held until confirmed" t_a_vanished_folder_is_held_until_confirmed
+run_test "an old data repo moves to byte-for-byte line endings" t_an_old_data_repo_moves_to_byte_for_byte_line_endings
+run_test "a rule that would change a file stops the record" t_a_rule_that_would_change_a_file_stops_the_record
+run_test "another machine with the same name keeps its backup" t_another_machine_with_the_same_name_keeps_its_backup
+run_test "a cleaned history is not taken when the old one cannot be kept" t_a_cleaned_history_is_not_taken_when_the_old_one_cannot_be_kept
+run_test "a stale lock is taken over by one waiter only" t_a_stale_lock_is_taken_over_by_one_waiter_only
+run_test "restore leaves a file whose disk copy cannot be saved" t_restore_leaves_a_file_whose_disk_copy_cannot_be_saved
 
 # Encryption tests need age 1.3+ with age-plugin-batchpass.
 if v=$(age --version 2>/dev/null) && command -v age-plugin-batchpass >/dev/null 2>&1; then
@@ -1290,6 +1572,7 @@ if v=$(age --version 2>/dev/null) && command -v age-plugin-batchpass >/dev/null 
   run_test "lock removes the key and the scripts then refuse" t_lock_removes_the_key_and_the_scripts_then_refuse
   run_test "the base of an encrypted file stays readable" t_the_base_of_an_encrypted_file_stays_readable
   run_test "a new data repo encrypted before its first snapshot never holds plain text" t_a_new_data_repo_encrypted_before_its_first_snapshot_never_holds_plain_text
+  run_test "a merge that cannot decrypt stops with markers, never one side" t_a_merge_that_cannot_decrypt_stops_with_markers_and_never_one_side
 else
   echo "skip encryption tests: age 1.3 or later with age-plugin-batchpass is not on the PATH"
 fi

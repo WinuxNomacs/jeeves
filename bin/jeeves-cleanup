@@ -65,6 +65,10 @@ elif [ $all = 0 ]; then
 fi
 
 [ $mode = run ] && "$(dirname "$0")/jeeves-snapshot"
+# One Jeeves run at a time (--auto runs inside the session-start snapshot, which holds the lock already).
+if [ $mode = run ] || [ $all = 1 ]; then
+  take_lock 30 || { say "another Jeeves run is still at work on $REPO; nothing changed, try again shortly"; exit 1; }
+fi
 
 # Only a clean main that holds everything origin has.
 branch=$(git_repo symbolic-ref --short -q HEAD)
@@ -140,7 +144,14 @@ done
 # Keep the old history before main moves; it replaces the previous cleanup's only once the push is done.
 git_repo bundle create "$bundle.sync-tmp" main >/dev/null 2>&1 || fail "could not save the old history"
 
-undo() { git_repo update-ref -m "jeeves-cleanup: undone" refs/heads/main "$old" "$new"; cleanup_tmp; }
+# Put main back; refused (and said) if something committed onto the new history meanwhile.
+undo() {
+  if git_repo update-ref -m "jeeves-cleanup: undone" refs/heads/main "$old" "$new"; then cleanup_tmp
+  else
+    rm -f "$map"
+    say "could not put main back (it moved meanwhile); the old history is in .sync-state/$CLEANUP_BUNDLE_NAME.sync-tmp"
+  fi
+}
 git_repo update-ref -m "jeeves-cleanup" refs/heads/main "$new" "$old" || fail "could not move main"
 trap 'undo; exit 1' INT TERM HUP
 

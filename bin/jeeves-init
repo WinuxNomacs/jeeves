@@ -25,8 +25,8 @@ cat > .gitignore <<'END'
 *.sync-tmp
 END
 cat > .gitattributes <<'END'
-# LF everywhere, also in a Windows checkout (Git for Windows sets core.autocrlf=true).
-* text=auto eol=lf
+# Byte for byte: no line-ending conversion, also in a Windows checkout (core.autocrlf).
+* -text
 END
 cat > README.md <<'END'
 # Jeeves data repo

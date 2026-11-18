@@ -4,8 +4,8 @@
 #
 #   jeeves-scan   exit 0: nothing found; exit 1: each finding listed as file:line and the kind of secret
 #
-# Only added lines are checked. The matched text itself is never printed, so a finding does not spread the
-# secret further. In an encrypted data repo it reads the plain text (with the key), and also refuses any file
+# Also conflict markers, so an unfinished merge never reaches other devices. Only added lines are checked.
+# The matched text itself is never printed, so a finding does not spread the secret further. In an encrypted data repo it reads the plain text (with the key), and also refuses any file
 # under home/ or hosts/ that main would send unencrypted. The data repo is found as lib/lib.sh describes.
 
 . "$(dirname "$0")/../lib/lib.sh"
@@ -62,6 +62,8 @@ if [ -n "$added" ]; then
   look "GitHub token" -E 'gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}'
   look "AWS access key" -E 'A(KIA|SIA)[0-9A-Z]{16}'
   look "Slack token" -E 'xox[abprs]-[A-Za-z0-9-]{10,}'
+  # Not a secret, but an unfinished merge would reach every device.
+  look "conflict marker (an unfinished merge)" -E '^(<<<<<<<|>>>>>>>)( |$)'
   look "key, token, secret or password value" -Ei \
     '(api[_-]?key|access[_-]?key|token|secret|passw(or)?d)["'"'"']?[[:space:]]*[:=][[:space:]]*["'"'"']?[A-Za-z0-9_./+=-]{16,}'
 fi
