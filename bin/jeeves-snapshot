@@ -200,5 +200,5 @@ if [ ${#conflicts[@]} -gt 0 ]; then
   status=1
 fi
 # At session start, the automatic history cleanup, when jeeves.conf turns it on and one is due.
-[ $hook = 1 ] && [ $pull = 1 ] && "$(dirname "$0")/jeeves-cleanup" --auto
+[ $hook = 1 ] && [ $pull = 1 ] && JEEVES_AGE_KEY= "$(dirname "$0")/jeeves-cleanup" --auto
 finish $status

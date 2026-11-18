@@ -13,6 +13,8 @@
 # non-zero, so git stops (the filter is required) or reports a conflict: plain text never goes into a commit.
 
 . "$(dirname "$0")/../lib/crypt.sh"
+# Its temp files hold plain text: readable by this user only.
+umask 077
 
 dirs=$(git rev-parse --git-dir --show-toplevel) || exit 1
 CRYPT_DIR=$(printf '%s\n' "$dirs" | sed -n 1p)/jeeves
