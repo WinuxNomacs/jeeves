@@ -38,8 +38,9 @@ Order: session review (steps 1–3) → find the data repo → sync or change mo
 it) → push → report → follow-up on unselected items (review step 5).
 
 The live files are in `~/.claude`. The data repo keeps the shared ones under `home/` (`CLAUDE.md`, `agents/`,
-`commands/`, `skills/` but not `skills/synced/`) and each device's backup of its `settings.json`,
-`keybindings.json` and memories under `hosts/<host>/`, with history in git. The commands `jeeves-status`,
+`commands/`, `skills/` but not `skills/synced/`) and each device's backup of its memories (and,
+with `backup_settings=yes` in `jeeves.conf`, its `settings.json` and `keybindings.json`) under
+`hosts/<host>/`, with history in git. The commands `jeeves-status`,
 `jeeves-snapshot`, `jeeves-apply` and `jeeves-scan` are on the Bash PATH.
 
 ## Voice

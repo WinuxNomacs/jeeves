@@ -32,7 +32,9 @@ setup() {
   echo "rules v1" > "$W/claude/CLAUDE.md"
   echo '{"a":1}' > "$W/claude/settings.json"
   mkdir -p "$W/repo/hosts/testhost" && echo '{"a":1}' > "$W/repo/hosts/testhost/settings.json"
-  # This machine's ID, as a snapshot of this version writes it.
+  # Settings backed up (off by default; most tests check that backup), and this machine's ID, as a snapshot
+  # of this version writes it.
+  echo backup_settings=yes > "$W/repo/jeeves.conf"
   echo testmachine > "$W/claude/.jeeves-machine-id"; echo testmachine > "$W/repo/hosts/testhost/.jeeves-machine"
   git -C "$W/repo" checkout -q -b main
   git -C "$W/repo" add -A && git -C "$W/repo" commit -q -m init && git -C "$W/repo" push -q origin main 2>/dev/null
@@ -592,6 +594,23 @@ t_restore_copies_a_host_backup() {
   check "restore never commits" [ -z "$(git -C "$R" status --porcelain)" ]
 }
 
+t_settings_backup_is_opt_in_and_old_copies_go_once() {
+  mkdir -p "$W/claude/projects/-p/memory"; echo fact > "$W/claude/projects/-p/memory/one.md"
+  snap >/dev/null
+  check "on: settings backed up" [ -f "$R/hosts/testhost/settings.json" ]
+  git -C "$R" rm -q jeeves.conf; git -C "$R" commit -qm "settings backup off"
+  out=$(snap --hook)
+  check "off: says the old copy was removed and where it still is" grep -q "hosts/testhost/settings.json removed: settings are backed up only with backup_settings=yes" <<< "$out"
+  check "off: the copy is gone" [ ! -e "$R/hosts/testhost/settings.json" ]
+  check "off: the git history keeps it" bash -c 'git -C "$1" log --format=%H -- hosts/testhost/settings.json | grep -q .' _ "$R"
+  check "off: memories are still backed up" [ -f "$R/hosts/testhost/projects/-p/memory/one.md" ]
+  echo '{"b":2}' > "$W/claude/settings.json"
+  check "off: a settings change is not recorded, and nothing is said" [ -z "$(snap --hook)" ]
+  echo backup_settings=yes > "$R/jeeves.conf"; git -C "$R" add jeeves.conf; git -C "$R" commit -qm "on again"
+  snap >/dev/null
+  check "on again: backed up" grep -q '"b":2' "$R/hosts/testhost/settings.json"
+}
+
 t_init_creates_a_data_repo() {
   out=$("$SRC/bin/jeeves-init" "$W/new" "$W/remote.git")
   check "says created" grep -q "created $W/new with origin" <<< "$out"
@@ -603,7 +622,7 @@ t_init_creates_a_data_repo() {
   "$SRC/bin/jeeves-init" "$W/new" >/dev/null; rc=$?
   check "refuses a folder that is not empty" [ $rc = 1 ]
   JEEVES_DATA=$W/new snap --no-pull >/dev/null
-  check "the first snapshot fills it" [ -f "$W/new/home/CLAUDE.md" ] && check "and backs up the host" [ -f "$W/new/hosts/testhost/settings.json" ]
+  check "the first snapshot fills it" [ -f "$W/new/home/CLAUDE.md" ] && check "but not the settings, which are opt-in" [ ! -e "$W/new/hosts/testhost/settings.json" ]
 }
 
 # History cleanup. Times are hours after the init commit; JEEVES_NOW puts "now" at hour 240 (day 10).
@@ -746,8 +765,8 @@ t_other_device_switch_reports_a_conflict_when_both_changed() {
 
 t_automatic_cleanup_runs_only_when_due_and_configured() {
   old_history
-  check "without jeeves.conf: nothing" [ -z "$(snap --hook)" ]
-  conf() { printf '%s\n' "$@" > "$R/jeeves.conf"; git -C "$R" add jeeves.conf
+  check "without cleanup settings in jeeves.conf: nothing" [ -z "$(snap --hook)" ]
+  conf() { printf '%s\n' backup_settings=yes "$@" > "$R/jeeves.conf"; git -C "$R" add jeeves.conf
     GIT_AUTHOR_DATE="$(at 236) +0000" GIT_COMMITTER_DATE="$(at 236) +0000" git -C "$R" commit -q -m conf; }
   conf keep_days=1; check "keep_days alone: nothing" [ -z "$(snap --hook)" ]
   conf keep_days=one auto_every_days=10
@@ -1552,6 +1571,7 @@ run_test "another machine with the same name keeps its backup" t_another_machine
 run_test "a cleaned history is not taken when the old one cannot be kept" t_a_cleaned_history_is_not_taken_when_the_old_one_cannot_be_kept
 run_test "a stale lock is taken over by one waiter only" t_a_stale_lock_is_taken_over_by_one_waiter_only
 run_test "restore leaves a file whose disk copy cannot be saved" t_restore_leaves_a_file_whose_disk_copy_cannot_be_saved
+run_test "the settings backup is opt-in, and old copies go once" t_settings_backup_is_opt_in_and_old_copies_go_once
 
 # Encryption tests need age 1.3+ with age-plugin-batchpass.
 if v=$(age --version 2>/dev/null) && command -v age-plugin-batchpass >/dev/null 2>&1; then

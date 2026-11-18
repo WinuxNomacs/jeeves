@@ -180,7 +180,10 @@ A git repo with:
 - Never copied: `.credentials.json`, `~/.claude.json`, history, transcripts, caches. `settings.json` is backed
   up as it is, so a token in its `env` block goes into the data repo: keep secrets out of it (an environment
   variable set elsewhere, or a secret manager). `jeeves-scan` stops a push that would send one.
-- `jeeves.conf` (optional): the automatic history cleanup's settings.
+- `jeeves.conf` (optional), shared by all devices: the automatic history cleanup's settings, and
+  `backup_settings=yes` to back up each device's `settings.json` and `keybindings.json` (off by default;
+  turning it off removes the copies from `hosts/<host>/` at each device's next snapshot, while the git
+  history keeps them until a history cleanup).
 - `.gitignore`: `.sync-state/` and `*.sync-tmp`; `.gitattributes`: `* -text`, so files are kept byte for
   byte, line endings included (and, when encrypted, the filter for `home/` and `hosts/`). A data repo made
   before 1.1 had `* text=auto eol=lf`; its next snapshot changes that in a commit of its own.

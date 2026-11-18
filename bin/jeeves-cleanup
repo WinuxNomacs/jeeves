@@ -43,12 +43,9 @@ find_data_repo || { say "$DATA_REPO_PROBLEM"; finish 1; }
 now=${JEEVES_NOW:-$(date +%s)}
 
 if [ $mode = auto ]; then
-  conf=$REPO/jeeves.conf
-  [ -f "$conf" ] || exit 0
-  value() { tr -d '\r' < "$conf" | sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" | sed 's/[[:space:]]*$//' | tail -1; }
-  every=$(value auto_every_days)
+  every=$(conf_value auto_every_days)
   [ -n "$every" ] || exit 0
-  keep=$(value keep_days)
+  keep=$(conf_value keep_days)
   if ! every=$(count "$every") || ! days=$(count "$keep"); then
     say "automatic cleanup skipped: jeeves.conf needs keep_days and auto_every_days as whole numbers of 1 or more"
     exit 0
