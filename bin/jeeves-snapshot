@@ -125,6 +125,8 @@ if [ -z "$(tracked_under "$CLAUDE_HOME")" ] && [ -n "$(tracked_under "$HOME_COPY
   finish 1
 fi
 
+if encrypted_at origin/main && plain_history_at origin/main; then say "$PLAIN_HISTORY_MSG"; fi
+
 taken=() pending=() conflicts=() refused=() deleted=()
 collisions=$(all_tracked | case_collisions)
 while IFS= read -r p; do

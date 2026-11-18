@@ -292,7 +292,7 @@ t_two_snapshots_at_once_take_turns() {
   done
   check "everything recorded" [ "$(cat "$R/home/agents/b3.md")" = "agent v3" ] && [ -z "$(git -C "$R" status --porcelain)" ]
   check "the sync record holds every file" [ "$(grep -c 'agents/b' "$R/.sync-state/hashes")" = 3 ]
-  mkdir -p "$R/.git/jeeves/lock"; echo 999999 > "$R/.git/jeeves/lock/pid"
+  echo 999999 > "$R/.git/jeeves/lock"
   echo "rules v9" > "$W/claude/CLAUDE.md"; snap >/dev/null
   check "a lock left by a process that is gone is taken over" grep -qx "rules v9" "$R/home/CLAUDE.md"
   check "and released" [ ! -e "$R/.git/jeeves/lock" ]
@@ -1155,6 +1155,17 @@ t_cleanup_all_leaves_one_encrypted_commit_and_another_device_follows() {
   check "B is clean" [ -z "$(git -C "$W/repoB" status --porcelain)" ]
 }
 
+t_plain_history_left_on_github_is_reported_until_folded() {
+  crypt_env; snap >/dev/null; git -C "$R" push -q origin main 2>/dev/null
+  encrypt on >/dev/null
+  git -C "$R" push -q origin main 2>/dev/null   # pushed without the fold, as /jeeves:update would after a failed one
+  check "status says the plain history is on origin" grep -q "^history	plain" <<< "$(encrypt status)"
+  check "the snapshot says so" grep -q "still holds the plain files from before encryption" <<< "$(snap --hook)"
+  "$SRC/bin/jeeves-cleanup" --all >/dev/null
+  check "after the fold, status says nothing of it" bash -c '! grep -q "^history" <<< "$1"' _ "$(encrypt status)"
+  check "nor does the snapshot" [ -z "$(snap --hook)" ]
+}
+
 t_a_new_passphrase_opens_the_key_and_the_old_one_no_longer_does() {
   crypt_env; snap >/dev/null; encrypt on >/dev/null
   rec=$(cat "$R/recipient")
@@ -1272,6 +1283,7 @@ if v=$(age --version 2>/dev/null) && command -v age-plugin-batchpass >/dev/null 
   run_test "scan refuses a file that would be pushed unencrypted" t_scan_refuses_a_file_that_would_be_pushed_unencrypted
   run_test "scan refuses plain text in an earlier outgoing commit, even when a later one removed it" t_scan_refuses_plain_text_in_an_earlier_outgoing_commit
   run_test "cleanup --all leaves one encrypted commit, and another device follows" t_cleanup_all_leaves_one_encrypted_commit_and_another_device_follows
+  run_test "plain history left on GitHub is reported until folded" t_plain_history_left_on_github_is_reported_until_folded
   run_test "a new passphrase opens the key and the old one no longer does" t_a_new_passphrase_opens_the_key_and_the_old_one_no_longer_does
   run_test "lock removes the key and the scripts then refuse" t_lock_removes_the_key_and_the_scripts_then_refuse
   run_test "the base of an encrypted file stays readable" t_the_base_of_an_encrypted_file_stays_readable

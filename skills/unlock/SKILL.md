@@ -19,7 +19,9 @@ is never stored.
 
 **The passphrase never goes through this chat** (it is saved in transcripts): never ask the user to type it
 here or pass it in a command; if they write it here anyway, don't repeat it, say it is now in the transcript
-and suggest changing it (`/jeeves:encrypt passphrase`). Run dialog commands with a 10-minute timeout.
+and suggest changing it (`/jeeves:encrypt passphrase`, which also offers to remove the old `identity.age`
+from GitHub's history; a copy of the repo taken before that still opens with the old passphrase). Run dialog
+commands with a 10-minute timeout.
 
 ## Voice
 

@@ -73,8 +73,18 @@ for them to say it is done. Then run `jeeves-encrypt status`.
      history again.
    - Report what is encrypted, that other devices now need `/jeeves:unlock` with the passphrase (until then
      they say they are locked and don't sync), and that a new device runs `/jeeves:setup` as usual.
-3. **`passphrase`** (`encryption unlocked`): `jeeves-encrypt passphrase` (dialogs). It commits a new
+3. **Plain history still on GitHub** (no request, `encryption unlocked` and a `history plain` line: the fold
+   after turning encryption on did not get pushed): say that GitHub still holds the files as they were
+   before encryption, in its history. Ask with AskUserQuestion: "Remove the plain history from GitHub now?",
+   with "Yes, fold it and remove it permanently" and "Not now", saying as in step 2 what folding removes
+   and that this device keeps it in the bundle until the next cleanup. On a yes: `jeeves-cleanup --all`,
+   then `jeeves-encrypt status` must show no `history` line.
+4. **`passphrase`** (`encryption unlocked`): `jeeves-encrypt passphrase` (dialogs). It commits a new
    `identity.age`. Then `jeeves-scan` and `git push origin main` (a rejected push: `jeeves-snapshot`, then
    push again once; still rejected, stop and ask). The key stays the same, so other devices stay unlocked;
-   the new passphrase is needed only for the next unlock.
-4. Never force-push yourself: only `jeeves-cleanup` does, with a lease.
+   the new passphrase is needed only for the next unlock. The old `identity.age` stays in the history, and
+   it still opens with the old passphrase: say so. When the old passphrase may be known to someone (it was
+   written in a chat, say), offer to fold the history too (`jeeves-cleanup --all`, asked as in step 3), so
+   GitHub no longer holds the old `identity.age`; a copy of the repo someone took before that still opens
+   with the old passphrase, and only a new key would protect against it, which Jeeves does not do yet.
+5. Never force-push yourself: only `jeeves-cleanup` does, with a lease.
