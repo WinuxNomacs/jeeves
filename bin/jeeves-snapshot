@@ -36,7 +36,24 @@ if [ "$branch" != main ]; then
   say "skipped, $REPO is on '${branch:-detached HEAD}', not main; ~/.claude changes are not recorded yet"
   finish 1
 fi
-if [ -f "$REPO/.git/MERGE_HEAD" ] || [ -n "$(git_repo status --porcelain)" ]; then
+# Uncommitted changes that an earlier snapshot left (it failed or was stopped between copying and
+# committing): home/ files that match ~/.claude, and this device's own backup. Anything else is not ours.
+only_own_leftovers() {
+  local line p
+  while IFS= read -r line; do
+    p=${line#???}
+    case "$p" in
+      hosts/"$HOST"/*|memory/"$HOST"/*) ;;
+      home/*)
+        p=${p#home/}
+        if [ -f "$HOME_COPY/$p" ]; then cmp -s "$HOME_COPY/$p" "$CLAUDE_HOME/$p" || return 1
+        else [ ! -e "$CLAUDE_HOME/$p" ] || return 1
+        fi ;;
+      *) return 1 ;;
+    esac
+  done < <(git_repo -c core.quotepath=false status --porcelain --untracked-files=all)
+}
+if [ -f "$REPO/.git/MERGE_HEAD" ] || { [ -n "$(git_repo status --porcelain)" ] && ! only_own_leftovers; }; then
   say "skipped, $REPO has uncommitted changes; ~/.claude changes are not recorded yet"
   finish 1
 fi
@@ -96,7 +113,17 @@ if [ $pull = 1 ] && git_repo remote get-url origin >/dev/null 2>&1; then
   fi
 fi
 
-taken=() pending=() conflicts=() refused=()
+# A ~/.claude with none of the shared files, on a device that has synced them: most likely the folder moved
+# or was emptied, and taking that would delete them on every device. Record nothing and say so.
+if [ -z "$(tracked_under "$CLAUDE_HOME")" ] && [ -n "$(tracked_under "$HOME_COPY")" ] &&
+   [ -n "$(awk -F'\t' '$2 !~ /^(settings|keybindings)\.json$/' "$STATE_FILE" 2>/dev/null)" ]; then
+  say "skipped, $CLAUDE_HOME holds none of the shared files (CLAUDE.md, agents/, commands/, skills/) that" \
+      "this device synced before; recording that would delete them on every device. If that is what you" \
+      "want, remove them from home/ in the data repo with /jeeves:update"
+  finish 1
+fi
+
+taken=() pending=() conflicts=() refused=() deleted=()
 collisions=$(all_tracked | case_collisions)
 while IFS= read -r p; do
   [ -n "$p" ] || continue
@@ -114,7 +141,7 @@ while IFS= read -r p; do
         fi
       fi
       if [ -n "$why" ]; then refused+=("$p ($why)"); continue; fi
-      if [ "$d" = "-" ]; then rm -f "$HOME_COPY/$p"; else copy_file "$CLAUDE_HOME/$p" "$HOME_COPY/$p"; fi
+      if [ "$d" = "-" ]; then rm -f "$HOME_COPY/$p"; deleted+=("$p"); else copy_file "$CLAUDE_HOME/$p" "$HOME_COPY/$p"; fi
       taken+=("$p") ;;
     repo) pending+=("$p") ;;
     conflict) conflicts+=("$p") ;;
@@ -138,10 +165,12 @@ done
 for f in $HOST_FILES; do rm -f "$HOME_COPY/$f"; set_base "$f" -; done
 rm -rf "${REPO:?}/memory/${HOST:?}"
 
+# On a failure, nothing is staged; the copies stay, and the next snapshot recognises them as its own.
+undo_copies() { git_repo reset -q; }
 if ! err=$(git_repo add -A 2>&1); then
   # Encryption failed (the filter is required), or git could not read a file: record nothing, so the next
   # snapshot tries again.
-  git_repo reset -q
+  undo_copies
   say "could not record the changes: $(printf '%s' "$err" | grep -v '^warning' | head -2 | join_lines)"
   finish 1
 fi
@@ -149,8 +178,11 @@ if ! git_repo diff --cached --quiet; then
   changed=$(git_repo diff --cached --name-only | sed -e 's#^home/##' -e "s#^hosts/$HOST/projects/.*#memories#" \
     -e "s#^memory/$HOST/.*#memories#" -e "s#^hosts/$HOST/#backup #" | sort -u | join_lines)
   git_repo commit -q -m "snapshot($HOST): $changed" \
-    -m "Recorded by jeeves-snapshot from $CLAUDE_HOME." || { say "commit failed"; finish 1; }
-  say "committed $changed"
+    -m "Recorded by jeeves-snapshot from $CLAUDE_HOME." || { undo_copies; say "commit failed; nothing recorded"; finish 1; }
+  # At session start, a routine commit needs no attention; a deletion does (it reaches every device).
+  [ $hook = 1 ] || say "committed $changed"
+  [ ${#deleted[@]} -gt 0 ] && say "deleted from the shared files, so from every device at its next sync:" \
+    "$(printf '%s\n' "${deleted[@]}" | join_lines)"
 fi
 for p in ${taken[@]+"${taken[@]}"}; do set_base "$p" "$(hash_of "$CLAUDE_HOME/$p")" "$CLAUDE_HOME/$p"; done
 

@@ -14,15 +14,17 @@ your own (the **data repo**), on Linux, macOS and Windows:
 - **Encrypted** if you want: with a passphrase, GitHub holds only encrypted copies, while the files on your
   devices stay plain. Each device asks for the passphrase once.
 
-The live files stay in `~/.claude`. This plugin brings the scripts that move the copies, and hooks that run
+The live files stay in `~/.claude` (or in `CLAUDE_CONFIG_DIR` when you have moved Claude Code's folder). This plugin brings the scripts that move the copies, and hooks that run
 them for you:
 
 | Hook | When | What it runs |
 |---|---|---|
 | SessionStart | every session start | `jeeves-snapshot --hook`: pulls the data repo, records what changed in `~/.claude`, backs up this device, commits on `main`; then the automatic history cleanup, if it is turned on and due |
-| PostToolUse (`Write\|Edit`) | right after Claude edits `~/.claude/CLAUDE.md` | `jeeves-snapshot --hook --no-pull`, reported as a system message |
+| PostToolUse (`Write\|Edit`) | right after Claude edits `~/.claude/CLAUDE.md` | `jeeves-snapshot --hook --no-pull`, reported as a system message when something needs attention |
 
-In hook mode the scripts print only when something needs attention, and they never block a session.
+In hook mode the scripts print only when something needs attention (a conflict, newer files to install, a
+shared file deleted for every device, a problem), never a routine commit, and they never block a session:
+every call to GitHub stops after 30 seconds.
 
 ## Skills
 
@@ -138,7 +140,10 @@ conflict and change nothing. Settle a conflict with `jeeves-snapshot --force` (k
 `/jeeves:update` merge the two.
 
 `jeeves-snapshot` only commits onto a clean `main`. While the data repo is on another branch or has
-uncommitted changes, it skips and says so. It does not take a shared file whose name another system can't
+uncommitted changes (other than its own copies from a run that failed or was stopped), it skips and says so.
+When `~/.claude` holds none of the shared files a device synced before (the folder moved or was emptied), it
+records nothing rather than delete them on every device. A deleted shared file is reported as such, by the
+snapshot that records it and by `jeeves-apply` on the other devices. It does not take a shared file whose name another system can't
 hold (characters Windows forbids such as `:` or `?`, a name ending in a dot or space, or two names that
 differ only in case), and says which and why.
 

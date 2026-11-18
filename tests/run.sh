@@ -216,15 +216,60 @@ t_offline_records_locally() {
 }
 
 t_a_stalled_remote_does_not_hold_up_the_session_start() {
-  snap >/dev/null
+  snap >/dev/null; n=$(commits)
   git -C "$R" config remote.origin.uploadpack "sleep 30; git-upload-pack"
   echo "rules v2" > "$W/claude/CLAUDE.md"
   start=$(date +%s)
   out=$(JEEVES_REMOTE_DEADLINE=2 snap --hook); rc=$?
   check "exits 0" [ $rc = 0 ]
   check "gives up on the remote within a few seconds" [ $(( $(date +%s) - start )) -lt 10 ]
-  check "still records locally" grep -q "committed CLAUDE.md" <<< "$out"
+  check "still records locally" [ "$(commits)" = $((n + 1)) ]
   check "the repo is clean" [ -z "$(git -C "$R" status --porcelain)" ]
+}
+
+t_an_emptied_claude_folder_deletes_nothing() {
+  snap >/dev/null; n=$(commits)
+  rm -rf "$W/claude"; mkdir "$W/claude"
+  out=$(snap --hook); rc=$?
+  check "hook exits 0" [ $rc = 0 ]
+  check "says why it skipped" grep -q "holds none of the shared files" <<< "$out"
+  check "no commit" [ "$(commits)" = "$n" ]
+  check "the shared files stay in the repo" [ -f "$R/home/CLAUDE.md" ] && [ -f "$R/home/agents/a.md" ]
+  check "this device's backup stays" [ -f "$R/hosts/testhost/settings.json" ]
+  check "a new device with an empty folder still syncs" bash -c 'rm -f "$1/.sync-state/hashes"; "$2/bin/jeeves-snapshot" >/dev/null; "$2/bin/jeeves-apply" | grep -q "installed CLAUDE.md"' _ "$R" "$SRC"
+}
+
+t_a_deletion_is_reported_as_one_on_both_devices() {
+  snap >/dev/null; git -C "$R" push -q origin main 2>/dev/null
+  device_b; as_b snap >/dev/null; as_b apply >/dev/null
+  rm "$W/claude/agents/a.md"
+  out=$(snap --hook)
+  check "the snapshot says it deleted the file for every device" grep -q "deleted from the shared files.*agents/a.md" <<< "$out"
+  git -C "$R" push -q origin main 2>/dev/null
+  as_b snap >/dev/null; out=$(as_b apply)
+  check "apply says removed, not installed" grep -q "removed (deleted in the data repo) agents/a.md" <<< "$out"
+  check "and it is gone on B" [ ! -e "$W/claudeB/agents/a.md" ]
+}
+
+t_claude_config_dir_is_the_folder_synced() {
+  snap >/dev/null
+  mkdir -p "$W/moved" && cp -R "$W/claude/." "$W/moved/" && echo "rules moved" > "$W/moved/CLAUDE.md"
+  (unset CLAUDE_HOME; CLAUDE_CONFIG_DIR=$W/moved "$SRC/bin/jeeves-snapshot" >/dev/null)
+  check "takes CLAUDE.md from CLAUDE_CONFIG_DIR" grep -qx "rules moved" "$R/home/CLAUDE.md"
+}
+
+t_an_unusable_host_name_touches_no_backup() {
+  snap >/dev/null
+  mkdir -p "$R/hosts/other" && echo '{}' > "$R/hosts/other/settings.json"
+  git -C "$R" add -A && git -C "$R" commit -qm other
+  out=$(JEEVES_HOST="a/../.." snap --hook); rc=$?
+  check "hook exits 0" [ $rc = 0 ]
+  check "says the name is the problem" grep -q "this device's name could not be found" <<< "$out"
+  check "other backups stay" [ -f "$R/hosts/other/settings.json" ] && [ -f "$R/hosts/testhost/settings.json" ]
+  fake hostname "exit 127"
+  (unset JEEVES_HOST; PATH=$W/fakebin:$PATH "$SRC/bin/jeeves-snapshot" >/dev/null)
+  check "without hostname, uname -n names the device" [ -d "$R/hosts/$(uname -n | cut -d. -f1)" ]
+  check "and the other backups stay" [ -f "$R/hosts/other/settings.json" ]
 }
 
 t_new_device_first_sync() {
@@ -274,7 +319,7 @@ t_edit_hook_snapshots_claude_md() {
   check "exit status 0" [ $rc = 0 ]
   check "one new commit" [ "$(commits)" = $((n + 1)) ]
   check "repo copy updated" grep -q v2 "$R/home/CLAUDE.md"
-  check "reports through systemMessage" grep -q '^{"systemMessage": "jeeves snapshot: committed CLAUDE.md"}$' <<< "$out"
+  check "a routine commit prints nothing" [ -z "$out" ]
   echo "rules v3" > "$W/claude/CLAUDE.md"
   edit_hook "$W/claude/../claude/CLAUDE.md" >/dev/null
   check "a path written another way still matches" grep -q v3 "$R/home/CLAUDE.md"
@@ -481,7 +526,7 @@ t_edit_hook_takes_a_windows_path() {
   echo "rules v2" > "$W/claude/CLAUDE.md"
   out=$(PATH=$W/fakebin:$PATH edit_hook 'C:\\X\\claude\\CLAUDE.md')
   check "snapshot ran" [ "$(commits)" = $((n + 1)) ]
-  check "reports through systemMessage" grep -q 'committed CLAUDE.md' <<< "$out"
+  check "prints nothing for a routine commit" [ -z "$out" ]
 }
 
 t_restore_copies_a_host_backup() {
@@ -980,6 +1025,20 @@ t_a_failing_encryption_never_commits_plain_text() {
   check "without age, snapshot says so before copying anything" grep -q "age is not installed" <<< "$out"
 }
 
+t_a_failed_record_is_taken_by_the_next_snapshot() {
+  crypt_env; snap >/dev/null; encrypt on >/dev/null; n=$(commits)
+  printf '#!/bin/sh\n[ "$1" = --version ] && echo v1.3.2\nexit 1\n' > "$W/broken-age"; chmod +x "$W/broken-age"
+  echo "rules v2" > "$W/claude/CLAUDE.md"
+  JEEVES_AGE=$W/broken-age snap >/dev/null
+  check "nothing recorded while age fails" [ "$(commits)" = "$n" ]
+  out=$(snap); rc=$?
+  check "the next snapshot records it" [ "$(commits)" = $((n + 1)) ] && [ $rc = 0 ]
+  check "stored encrypted" is_encrypted_blob "$R" HEAD:home/CLAUDE.md
+  check "clean afterwards" [ -z "$(git -C "$R" status --porcelain)" ]
+  echo "hand edit" > "$R/home/agents/a.md"
+  check "a change that is not its own still stops it" grep -q "uncommitted changes" <<< "$(snap)"
+}
+
 t_merges_of_encrypted_files_combine_both_sides_and_show_conflicts_in_plain_text() {
   crypt_env; snap >/dev/null; encrypt on >/dev/null
   printf 'one\ntwo\nthree\n' > "$R/home/agents/m.md"; git -C "$R" add home/agents/m.md; git -C "$R" commit -qm base
@@ -1087,6 +1146,10 @@ run_test "snapshot fast-forwards to another device's push and asks to apply" t_p
 run_test "snapshot still records locally when main has diverged" t_diverged_still_records
 run_test "snapshot records locally when the remote is unreachable" t_offline_records_locally
 run_test "a stalled remote does not hold up the session start" t_a_stalled_remote_does_not_hold_up_the_session_start
+run_test "an emptied ~/.claude deletes nothing" t_an_emptied_claude_folder_deletes_nothing
+run_test "a deletion is reported as one on both devices" t_a_deletion_is_reported_as_one_on_both_devices
+run_test "CLAUDE_CONFIG_DIR is the folder synced" t_claude_config_dir_is_the_folder_synced
+run_test "an unusable host name touches no backup" t_an_unusable_host_name_touches_no_backup
 run_test "a new device that differs from the repo gets a conflict, not a guess" t_new_device_first_sync
 run_test "the data repo comes from the plugin option when JEEVES_DATA is unset" t_option_finds_data_repo
 run_test "the data repo is found from the current folder inside it" t_folder_finds_data_repo
@@ -1134,6 +1197,7 @@ if v=$(age --version 2>/dev/null) && command -v age-plugin-batchpass >/dev/null 
   run_test "a locked device does not take another device's encryption" t_a_locked_device_does_not_take_another_devices_encryption
   run_test "a key missing from the store stops the pull and says so" t_a_key_missing_from_the_store_stops_the_pull_and_says_so
   run_test "a failing encryption never commits plain text" t_a_failing_encryption_never_commits_plain_text
+  run_test "a failed record is taken by the next snapshot" t_a_failed_record_is_taken_by_the_next_snapshot
   run_test "merges of encrypted files combine both sides and show conflicts in plain text" t_merges_of_encrypted_files_combine_both_sides_and_show_conflicts_in_plain_text
   run_test "scan refuses a file that would be pushed unencrypted" t_scan_refuses_a_file_that_would_be_pushed_unencrypted
   run_test "scan refuses plain text in an earlier outgoing commit, even when a later one removed it" t_scan_refuses_plain_text_in_an_earlier_outgoing_commit

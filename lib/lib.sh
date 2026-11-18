@@ -4,12 +4,14 @@
 
 . "$(dirname "${BASH_SOURCE[0]}")/crypt.sh"
 
-CLAUDE_HOME=${CLAUDE_HOME:-$HOME/.claude}
+# Claude Code's own folder: CLAUDE_CONFIG_DIR when the user has moved it.
+CLAUDE_HOME=${CLAUDE_HOME:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}}
 # This device's name in the data repo. Native Windows (Git Bash) gets "-win", so it stays apart from a WSL
 # on the same PC, which reports the same host name.
 if [ -n "$JEEVES_HOST" ]; then HOST=$JEEVES_HOST
 else
-  HOST=$(hostname | cut -d. -f1)
+  HOST=$(hostname 2>/dev/null | cut -d. -f1)
+  [ -n "$HOST" ] || HOST=$(uname -n 2>/dev/null | cut -d. -f1)
   case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) HOST=$HOST-win ;; esac
 fi
 
@@ -44,6 +46,11 @@ find_data_repo() {
     DATA_REPO_PROBLEM="the data repo $candidate is not a git repository: to clone or create it, run /jeeves:setup"
     return 1
   fi
+  # hosts/<host>/ is replaced whole at each snapshot: a missing or odd name must never point elsewhere.
+  case "$HOST" in ''|.|..|*/*|*\\*)
+    DATA_REPO_PROBLEM="this device's name could not be found (hostname and uname -n gave '$HOST'); set JEEVES_HOST"
+    return 1 ;;
+  esac
   REPO=$(cd "$candidate" && pwd)
   HOME_COPY=$REPO/home
   STATE_DIR=$REPO/.sync-state

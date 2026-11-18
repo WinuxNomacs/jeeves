@@ -3,7 +3,7 @@
 # recorded at once. Reads the hook's JSON from stdin; any other file is ignored. Always exits 0, and
 # reports to the user through a systemMessage only when the snapshot printed something.
 
-CLAUDE_HOME=${CLAUDE_HOME:-$HOME/.claude}
+CLAUDE_HOME=${CLAUDE_HOME:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}}
 
 # tool_input.file_path, without jq (portable awk): the first "file_path" string value, with escapes undone
 # for \\, \/ and \" (enough for paths).
