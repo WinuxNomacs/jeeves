@@ -2,7 +2,7 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** nothing planned
+- **Up next:** Data integrity (fixes from the 2026-11-18 review; planned, to build)
 - **Later:** 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
   must differ per host) · Anthropic directory submission (only on the user's direct command)
@@ -970,6 +970,86 @@ branch.
 - The procedure lists untagged releases and gives the commands; tagging stays the user's.
 - Releases before 1.0.1 stay untagged (2026-11-17, the user: "still very early on"); the procedure checks
   only the previous release's tag.
+
+## Data integrity (up next; planned 2026-11-18)
+
+From a review of the code and the skills for paths that lose or corrupt data (two passes: mine and an
+independent reviewer's; each finding reproduced in scratch folders or shown in the code). "Recoverable from
+git" holds only until the next history cleanup folds it away, so none of these count as harmless.
+
+### Findings
+
+1. Snapshot records the base from the live disk file after committing (`jeeves-snapshot:191`) and ignores a
+   failed copy (`:148`): an edit during the snapshot, a torn read or a failed copy leaves base = disk while the
+   repo holds the older copy; the next `jeeves-apply` installs the older copy over the newest edit, no backup.
+2. Apply ignores a failed copy but records the repo version as the base (`jeeves-apply:247-248`): the next
+   snapshot commits the old disk copy over the other device's newer one, which reaches every device.
+3. `jeeves-apply --force` (and `jeeves-snapshot --force`) act on every conflict; update skill step 3 runs it
+   after merging one file, so a second conflict's disk edit is overwritten (kept only in `overwritten/`).
+4. Encrypted repo: a merge driver that cannot read the key exits 1, git marks a conflict holding only our
+   side with no markers; update skill step 2 says "`git add` the result and commit".
+5. `jeeves-apply` checks neither branch nor merge state: it installs conflict markers or an unmerged `pref/`
+   branch into `~/.claude`. Nothing checks for conflict markers before a commit or a push.
+6. A vanished tracked folder, or a symlinked one whose target is gone, is recorded as deleting all its files
+   on every device (the guard covers only "all shared files gone").
+7. A nested `.git` (a skill installed by `git clone`) is committed as an empty gitlink; a nested `.gitignore`
+   keeps files out; `jeeves-status` still says in sync.
+8. The `hosts/<host>/` backup is removed and copied again with no check: a failed copy commits the deletion
+   of memories from the latest backup.
+9. Encrypted repos: `core.checkstat minimal` plus `cp -p` hide a same-size change within the same second;
+   a later pull overwrites it without a conflict.
+10. `jeeves-init` writes `* text=auto eol=lf`: CRLF files are committed as LF, against the byte-for-byte rule
+    (`jeeves-cmd` holds no CRLF file today).
+11. `take_lock`'s takeover of a stale lock is not atomic (two holders in 12 of 15 trials with 6 takers); the
+    EXIT trap removes a lock it may not own; cleanup (by hand), encrypt, restore and the skills' git commands
+    take no lock.
+12. Two devices with the same host name share and wipe one `hosts/<host>/`.
+13. Lesser: `switch_to_cleaned_history` does not check its bundle before `reset --hard` and `gc --prune=now`;
+    cleanup's `undo` can fail silently; a failed write of `.sync-state/hashes` replaces it truncated; apply
+    `--force` and restore overwrite even when saving the old copy failed.
+
+### Design (proposed)
+
+- **Record what was committed.** Copy, then hash the copy; that hash is the base. Any failed copy (shared
+  files, backups) stops the run: nothing staged, no base recorded, the copies left as leftovers. After the
+  commit, each taken path's committed content (decrypted) must hash to its base, or the run stops and says
+  so (also catches findings 9 and 10). Same in apply: base only after a verified copy; just before
+  overwriting a disk file, its hash is checked again.
+- **Guards.** Apply refuses unless the data repo is on `main`, not merging, and `home/` is clean. Snapshot
+  and apply refuse a shared file holding conflict markers; `jeeves-scan` refuses them in outgoing commits.
+  `--force` takes the paths it applies to (the skill passes the one it merged). The merge driver fails so
+  that git stops instead of returning one side, and the skill checks that no file is left unmerged or
+  without its markers before it commits.
+- **Deletions.** A tracked folder that disappears whole, or is a dangling symlink, is not recorded: the
+  snapshot records the rest and prints a notice; `/jeeves:update` asks, and on a yes naming the files runs
+  the snapshot with an option that records that folder's deletion.
+- **What git sees.** Nested `.git` and `.gitignore`: unchanged (the user's decision). `jeeves-init` writes
+  `* -text`; the snapshot replaces an existing `* text=auto eol=lf` line with it once and commits that
+  alone. `core.checkstat minimal` kept only if the post-commit check covers it.
+- **Same host name.** Each device keeps a random machine ID in `.git/jeeves/` (local) and writes it into
+  `hosts/<host>/`; a snapshot that finds another machine's ID there skips the backup and says to set
+  `JEEVES_HOST` to a distinct name (setup does the same check before the first sync).
+- **Locking.** Atomic takeover (rename a fresh lock into place, then check it holds our PID), release only
+  our own lock; cleanup, encrypt and restore take the lock (the auto cleanup inherits the snapshot's).
+  The skills' own git commands stay outside it: the snapshot already skips a dirty or merging repo.
+- Lesser items fixed as listed: bundle checked, `undo` failure reported, `set_base` write checked, no
+  overwrite without its saved copy.
+
+### What can fail (snapshot and apply run unattended from hooks)
+
+Disk full or read-only target (copy, state file, bundle); a file written while it is read; a killed run
+(stale lock, leftover temp files); a second run at once; the key store unreadable (merge driver, smudge);
+a missing folder or dangling symlink; git's index missing a change. Each gets a test that injects it (stand-in
+`cp` that fails or edits the source, read-only folders, a moved key, several takers of a stale lock), seen
+failing before its fix.
+
+### Decisions (2026-11-18, with the user)
+
+- Plan a fix phase, ahead of anything else, rather than quick fixes.
+- A vanished or dangling tracked folder: held until the user confirms in `/jeeves:update`.
+- A skill with its own `.git` or `.gitignore`: left as today (not fully synced, no notice).
+- Line endings in existing data repos: the snapshot migrates `.gitattributes` to `* -text` once.
+- Same host name: a machine ID per device; the snapshot detects a clash and stops the backup.
 
 ## 4. Per-device overlay
 
