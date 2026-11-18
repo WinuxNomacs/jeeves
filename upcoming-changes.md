@@ -2,9 +2,10 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** 1. Pre-release review of the whole plugin, then the release (the `v1.0.0` tag is on hold)
-- **Later:** 4. Per-device overlay (only if a shared file must differ per host) · Anthropic directory
-  submission (only on the user's direct command)
+- **Up next:** nothing planned
+- **Later:** 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
+  `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
+  must differ per host) · Anthropic directory submission (only on the user's direct command)
 
 ## Done
 
@@ -84,6 +85,10 @@
 - 7. Encryption tests everywhere (2026-11-17): the workflow installs age 1.3.2 pinned by SHA-256 and fails
   if the encryption tests skip (run by hand on `ci/age`: 63 passed on Linux, Windows and macOS); age 1.3.2
   in `~/.local/bin` on RAIVEN (63 passed). Details below under "Encryption tests everywhere (done)".
+- 8. Pre-release review and release 1.0.1 (2026-11-17): the whole plugin reviewed by an independent agent
+  and in my own pass; all but three findings fixed on `fix/` branches, each with a test seen failing
+  first where one could be written (78 tests).
+  Details below under "Pre-release review and release (done)".
 
 ---
 
@@ -922,10 +927,39 @@ and puts it on the PATH; the "Tests" step fails if the encryption tests were ski
 the version and the three hashes (from the release's asset digests). RAIVEN: age 1.3.2 (`age`,
 `age-keygen`, `age-plugin-batchpass`) in `~/.local/bin` from the same verified archive; 63 passed there.
 
-### 1. Pre-release review and release
+### Pre-release review and release (done)
 
 Run the procedure on the whole plugin (not only the diff since 0.7.0: no release has had this review),
 fix what it finds, then release (1.0.1 if anything changed, else tag 1.0.0 as merged).
+
+Fixed (branch, test):
+- `fix/scan-every-commit`: the scan read only the origin/main..main tree diff; it now reads each outgoing
+  commit (a merge's combined diff) and checks every outgoing blob for encryption.
+- `fix/remote-deadline`, `fix/crypt-hardening`: `remote_git` under `with_deadline` (30 s), `GCM_INTERACTIVE=never`,
+  the user's ssh command kept, no `JEEVES_AGE_KEY` in fetch, push or `cleanup --auto`.
+- `fix/recipient-check`: `store_*` take only `age1` + bech32 (PowerShell and `security -i` injection, `../`).
+- `fix/snapshot-safety`: an emptied `~/.claude` (with sync records) records nothing; `CLAUDE_CONFIG_DIR`;
+  `uname -n` fallback and a refused odd host name; leftovers of a failed snapshot are its own; deletions
+  reported; no routine commit in hook output.
+- `fix/data-repo-marker`: the current-folder fallback needs `.sync-state/` in `.gitignore`.
+- `fix/crypt-hardening`: the clean cache cleared at `on` and on failure; a failed `on` commit undone;
+  `umask 077` in `jeeves-crypt`; cleanup traps HUP; `jeeves-github create` refuses `-name`.
+- `fix/keep-bases`: `refs/jeeves/bases` (local, never pushed) keeps merge bases from gc.
+- `fix/snapshot-lock`, then in `fix/plain-history`: a lock file by noclobber. uutils mkdir 0.10.0 (Ubuntu
+  26.04's default) let two processes create the same folder, so a mkdir lock failed one time in three.
+- `fix/plain-history`: `plain_history_at`, reported by the snapshot and `jeeves-encrypt status`; the
+  passphrase texts say the old `identity.age` stays in the history.
+- `fix/scan-way-out`: README on `settings.json` `env`; the update skill's way out of a scan finding.
+
+Left for later (in "Later"): key rotation; symlinked folders (files under them are not synced, nothing is
+reported); a cleanup killed with SIGKILL between moving `main` and the push (the next snapshot says
+"diverged" and a merge refuses unrelated histories). Dropped: macOS host names following DHCP (the Mac's
+name stayed `Winuxs-MacBook-Pro`).
+
+Checks: 78 passed, 0 failed (no encryption skip); both validates; upgrade rehearsal (1.0.0's `bin/` wrote a
+plain then encrypted, cleaned-up data repo; the new `bin/` snapshotted, applied, scanned and pushed it, and
+created `refs/jeeves/bases`); Windows Git Bash and macOS bash 3.2 through the test workflow on the release
+branch.
 
 ### Decisions (2026-11-17, with the user)
 
