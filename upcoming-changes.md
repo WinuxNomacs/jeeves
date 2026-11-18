@@ -159,8 +159,8 @@
   Review by an independent agent and my own pass (data repo paths given relative, now in full); 7 findings,
   all fixed except the Edit and Read prompts for data repo files outside the project (deliberate writes).
   Upgrade rehearsed from v1.1.0's scripts (record written by `--data-repo`, bare commands find it, nothing
-  re-recorded, the reviewed memory not listed again, the hook exits 0). Windows Git Bash suite run locally;
-  CI on all three OSes on the release branch.
+  re-recorded, the reviewed memory not listed again, the hook exits 0). CI on the release branch: Linux,
+  Windows and macOS, 105 passed each, encryption tests included.
 
 ## Decisions (2026-11-16, with the user)
 
