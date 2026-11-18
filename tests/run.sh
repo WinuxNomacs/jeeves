@@ -282,6 +282,22 @@ t_the_users_ssh_command_is_kept_and_gets_no_key() {
   check "which did not get the key" grep -qx "called key=\[\]" "$W/ssh.log"
 }
 
+t_two_snapshots_at_once_take_turns() {
+  snap >/dev/null
+  for i in 1 2 3; do
+    echo "rules v$i" > "$W/claude/CLAUDE.md"; echo "agent v$i" > "$W/claude/agents/b$i.md"
+    snap --hook > "$W/o1" 2>&1 & p1=$!; snap --hook > "$W/o2" 2>&1 & p2=$!
+    wait $p1; wait $p2
+    check "round $i: neither printed an error" bash -c '! cat "$1" "$2" | grep -qiE "error|cannot|unable|fatal|no such"' _ "$W/o1" "$W/o2"
+  done
+  check "everything recorded" [ "$(cat "$R/home/agents/b3.md")" = "agent v3" ] && [ -z "$(git -C "$R" status --porcelain)" ]
+  check "the sync record holds every file" [ "$(grep -c 'agents/b' "$R/.sync-state/hashes")" = 3 ]
+  mkdir -p "$R/.git/jeeves/lock"; echo 999999 > "$R/.git/jeeves/lock/pid"
+  echo "rules v9" > "$W/claude/CLAUDE.md"; snap >/dev/null
+  check "a lock left by a process that is gone is taken over" grep -qx "rules v9" "$R/home/CLAUDE.md"
+  check "and released" [ ! -e "$R/.git/jeeves/lock" ]
+}
+
 t_new_device_first_sync() {
   # A device whose ~/.claude differs from the repo before it ever synced: reported, not guessed.
   echo "this machine" > "$W/claude/CLAUDE.md"
@@ -1201,6 +1217,7 @@ run_test "a deletion is reported as one on both devices" t_a_deletion_is_reporte
 run_test "CLAUDE_CONFIG_DIR is the folder synced" t_claude_config_dir_is_the_folder_synced
 run_test "an unusable host name touches no backup" t_an_unusable_host_name_touches_no_backup
 run_test "the user's ssh command is kept, and gets no key" t_the_users_ssh_command_is_kept_and_gets_no_key
+run_test "two snapshots at once take turns" t_two_snapshots_at_once_take_turns
 run_test "a new device that differs from the repo gets a conflict, not a guess" t_new_device_first_sync
 run_test "the data repo comes from the plugin option when JEEVES_DATA is unset" t_option_finds_data_repo
 run_test "the data repo is found from the current folder inside it" t_folder_finds_data_repo
