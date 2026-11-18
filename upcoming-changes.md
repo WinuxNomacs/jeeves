@@ -968,6 +968,8 @@ branch.
 - Encryption tests: in CI and on RAIVEN.
 - The `v1.0.0` tag waits for the review.
 - The procedure lists untagged releases and gives the commands; tagging stays the user's.
+- Releases before 1.0.1 stay untagged (2026-11-17, the user: "still very early on"); the procedure checks
+  only the previous release's tag.
 
 ## 4. Per-device overlay
 

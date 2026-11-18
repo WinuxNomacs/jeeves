@@ -16,19 +16,8 @@ until the user says so for this release.
 - `git fetch --tags origin`, then `git status -sb`: on `main`, clean, and even with `origin/main` (push
   `main` first if it is ahead and its last full suite passed).
 - The data repo is synced (`jeeves-status` lists no paths; otherwise `/jeeves:update`).
-- Release merges without a tag, with the commands for the user:
-
-  ```bash
-  git log --first-parent --merges --format='%H %s' main | grep "Merge branch 'release/" |
-  while read -r h rest; do
-    v=$(printf '%s' "$rest" | sed -n "s/^Merge branch 'release\/\([^']*\)'.*/\1/p")
-    git rev-parse -q --verify "refs/tags/v$v" >/dev/null ||
-      echo "git tag -a v$v -m \"Jeeves $v\" ${h:0:7}"
-  done
-  ```
-
-  Show the output in a code block, with `git push origin --tags` after it, and say that pushing a tag
-  starts the test workflow on that tag's code (old tags fail there if their tests needed tools CI lacked).
+- The previous release has its tag (`git tag -l 'v*'`); if not, mention it once with its command. Releases
+  before 1.0.1 stay untagged (the user's decision, 2026-11-17): never offer to tag them.
 
 ## 2. What changed
 
