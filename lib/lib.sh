@@ -49,7 +49,8 @@ find_data_repo() {
     return 1
   fi
   # hosts/<host>/ is replaced whole at each snapshot: a missing or odd name must never point elsewhere.
-  case "$HOST" in ''|.|..|*/*|*\\*)
+  # A name starting with a dot is refused too: hosts/.memory-review is the shared review record.
+  case "$HOST" in ''|.*|*/*|*\\*)
     DATA_REPO_PROBLEM="this device's name could not be found (hostname and uname -n gave '$HOST'); set JEEVES_HOST"
     return 1 ;;
   esac
@@ -124,13 +125,15 @@ conf_value() {
   tr -d '\r' < "$REPO/jeeves.conf" | sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" | sed 's/[[:space:]]*$//' | tail -1
 }
 # settings.json and keybindings.json are backed up only when the user turned it on (backup_settings=yes).
-backup_settings_on() { case "$(conf_value backup_settings)" in yes|true|on|1) return 0 ;; esac; return 1; }
+backup_settings_on() { case "$(conf_value backup_settings | tr '[:upper:]' '[:lower:]')" in yes|true|on|1) return 0 ;; esac; return 1; }
 # Never copied: skills/synced/ is managed by claude.ai; .trash/ holds what Claude Code removed.
 EXCLUDED_PREFIXES="skills/synced/ skills/.trash/ agents/.trash/ commands/.trash/"
 
 # Files are copied byte for byte, so git must not convert line endings either (Git for Windows sets
 # core.autocrlf=true), and its "LF will be replaced by CRLF" warnings must not reach a hook's message.
-git_repo() { git -C "$REPO" -c core.autocrlf=false -c core.safecrlf=false "$@"; }
+# The user's own ignore list (core.excludesFile: .DS_Store, *.swp...) never applies to the data repo: a file
+# it names would be copied but never committed.
+git_repo() { git -C "$REPO" -c core.autocrlf=false -c core.safecrlf=false -c core.excludesFile= "$@"; }
 
 excluded() {
   local x
@@ -231,7 +234,8 @@ copy_settled() {
   local src=$1 dst=$2 i h
   mkdir -p "$(dirname "$dst")" || return 1
   for i in 1 2 3; do
-    cp -p "$src" "$dst.sync-tmp" || { rm -f "$dst.sync-tmp"; return 1; }
+    # A file deleted meanwhile is left for the next snapshot, which records the deletion.
+    cp -p "$src" "$dst.sync-tmp" || { rm -f "$dst.sync-tmp"; [ -e "$src" ] || return 2; return 1; }
     h=$(hash_of "$dst.sync-tmp")
     if [ "$h" = "$(hash_of "$src")" ]; then
       mv "$dst.sync-tmp" "$dst" || { rm -f "$dst.sync-tmp"; return 1; }

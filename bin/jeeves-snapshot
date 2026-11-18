@@ -71,7 +71,7 @@ only_own_leftovers() {
   while IFS= read -r line; do
     p=${line#???}
     case "$p" in
-      hosts/"$HOST"/*|memory/"$HOST"/*) ;;
+      hosts/"$HOST"/*|memory/"$HOST"/*|hosts/.memory-review) ;;
       home/*)
         p=${p#home/}
         if [ -f "$HOME_COPY/$p" ]; then cmp -s "$HOME_COPY/$p" "$CLAUDE_HOME/$p" || return 1
@@ -195,6 +195,8 @@ is_held() { local h; for h in ${held[@]+"${held[@]}"}; do case "$1" in "$h"/*) r
 undo_copies() { git_repo reset -q; }
 
 taken=() taken_hash=() pending=() conflicts=() refused=() deleted=() busy=()
+# home/ copies an earlier snapshot left uncommitted: checked and recorded below like a copy of this run's.
+leftovers=$(git_repo -c core.quotepath=false status --porcelain --untracked-files=all -- home | cut -c4- | sed 's#^home/##')
 collisions=$(all_tracked | case_collisions)
 while IFS= read -r p; do
   [ -n "$p" ] || continue
@@ -203,7 +205,9 @@ while IFS= read -r p; do
   [ "$state" = conflict ] && forced "$p" && state=disk
   if [ "$state" = disk ] && [ "$d" = "-" ] && is_held "$p"; then held_count=$((held_count + 1)); continue; fi
   case "$state" in
-    insync) set_base "$p" "$d" "$CLAUDE_HOME/$p" ;;
+    insync)
+      if printf '%s\n' "$leftovers" | grep -qxF -- "$p"; then taken+=("$p"); taken_hash+=("$d")
+      else set_base "$p" "$d" "$CLAUDE_HOME/$p"; fi ;;
     disk)
       why=
       if [ "$d" != "-" ]; then

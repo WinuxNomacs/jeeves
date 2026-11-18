@@ -270,6 +270,10 @@ t_an_unusable_host_name_touches_no_backup() {
   check "hook exits 0" [ $rc = 0 ]
   check "says the name is the problem" grep -q "this device's name could not be found" <<< "$out"
   check "other backups stay" [ -f "$R/hosts/other/settings.json" ] && [ -f "$R/hosts/testhost/settings.json" ]
+  mem record "$(printf '%040d' 0)" "kept 1" >/dev/null
+  out=$(JEEVES_HOST=.memory-review snap --hook)
+  check "a name starting with a dot is refused" grep -q "this device's name could not be found" <<< "$out"
+  check "the review record stays" [ -f "$R/hosts/.memory-review" ]
   fake hostname "exit 127"
   (unset JEEVES_HOST; PATH=$W/fakebin:$PATH "$SRC/bin/jeeves-snapshot" >/dev/null)
   # Native Windows adds -win to the name.
@@ -606,7 +610,7 @@ t_settings_backup_is_opt_in_and_old_copies_go_once() {
   check "off: memories are still backed up" [ -f "$R/hosts/testhost/projects/-p/memory/one.md" ]
   echo '{"b":2}' > "$W/claude/settings.json"
   check "off: a settings change is not recorded, and nothing is said" [ -z "$(snap --hook)" ]
-  echo backup_settings=yes > "$R/jeeves.conf"; git -C "$R" add jeeves.conf; git -C "$R" commit -qm "on again"
+  echo "backup_settings = Yes" > "$R/jeeves.conf"; git -C "$R" add jeeves.conf; git -C "$R" commit -qm "on again"
   snap >/dev/null
   check "on again: backed up" grep -q '"b":2' "$R/hosts/testhost/settings.json"
 }
@@ -1430,6 +1434,42 @@ t_a_rule_that_would_change_a_file_stops_the_record() {
   check "says the commit would not hold the file" grep -q "would not hold agents/a.md as it is" <<< "$out"
   check "exit 1" [ $rc = 1 ]
   check "nothing committed" [ "$(commits)" = "$n" ]
+  # The copy left in home/ matches the disk: the next snapshot checks it too, never commits it changed.
+  out=$(snap --hook)
+  check "the next snapshot refuses it again" grep -q "would not hold agents/a.md as it is" <<< "$out"
+  check "still nothing committed" [ "$(commits)" = "$n" ]
+  check "nor recorded as synced" [ "$(awk -F'\t' '$2 == "agents/a.md" { print $1 }' "$R/.sync-state/hashes")" != "$(git hash-object --no-filters "$W/claude/agents/a.md")" ]
+}
+
+t_a_file_the_users_git_ignores_is_still_recorded() {
+  printf '*.swp\n.DS_Store\n' > "$W/ignore"; git config -f "$W/gitconfig" core.excludesFile "$W/ignore"
+  export GIT_CONFIG_GLOBAL=$W/gitconfig
+  snap >/dev/null; n=$(commits)
+  echo "x" > "$W/claude/agents/.DS_Store"; echo "rules v2" > "$W/claude/CLAUDE.md"
+  out=$(snap); rc=$?
+  check "exit 0" [ $rc = 0 ]
+  check "both committed" bash -c 'git -C "$1" cat-file -e HEAD:home/agents/.DS_Store && git -C "$1" show HEAD:home/CLAUDE.md | grep -q v2' _ "$R"
+}
+
+t_a_review_record_left_uncommitted_does_not_stop_the_snapshot() {
+  snap >/dev/null
+  printf '%s\tkept 1\t2026-11-18\ttesthost\n' "$(printf '%040d' 0)" > "$R/hosts/.memory-review"
+  echo "rules v2" > "$W/claude/CLAUDE.md"
+  out=$(snap); rc=$?
+  check "exit 0" [ $rc = 0 ]
+  check "the record is committed" git -C "$R" cat-file -e HEAD:hosts/.memory-review
+  check "and the change" bash -c 'git -C "$1" show HEAD:home/CLAUDE.md | grep -q v2' _ "$R"
+}
+
+t_a_file_deleted_while_it_is_copied_is_left_for_the_next_snapshot() {
+  snap >/dev/null; n=$(commits)
+  echo "agent v2" > "$W/claude/agents/a.md"; echo "rules v2" > "$W/claude/CLAUDE.md"
+  fake_cp "agents/a.md" "rm -f '$W/claude/agents/a.md'; exit 1"
+  out=$(with_fake_cp snap); rc=$?
+  check "no disk-full message" bash -c '! grep -q "disk full" <<< "$1"' _ "$out"
+  check "the other change is committed" bash -c 'git -C "$1" show HEAD:home/CLAUDE.md | grep -q v2' _ "$R"
+  snap >/dev/null
+  check "the next snapshot records the deletion" bash -c '! git -C "$1" cat-file -e HEAD:home/agents/a.md 2>/dev/null' _ "$R"
 }
 
 t_another_machine_with_the_same_name_keeps_its_backup() {
@@ -1554,6 +1594,9 @@ run_test "an emptied ~/.claude deletes nothing" t_an_emptied_claude_folder_delet
 run_test "a deletion is reported as one on both devices" t_a_deletion_is_reported_as_one_on_both_devices
 run_test "CLAUDE_CONFIG_DIR is the folder synced" t_claude_config_dir_is_the_folder_synced
 run_test "an unusable host name touches no backup" t_an_unusable_host_name_touches_no_backup
+run_test "a file the user's git ignores is still recorded" t_a_file_the_users_git_ignores_is_still_recorded
+run_test "a review record left uncommitted does not stop the snapshot" t_a_review_record_left_uncommitted_does_not_stop_the_snapshot
+run_test "a file deleted while it is copied is left for the next snapshot" t_a_file_deleted_while_it_is_copied_is_left_for_the_next_snapshot
 run_test "the user's ssh command is kept, and gets no key" t_the_users_ssh_command_is_kept_and_gets_no_key
 run_test "two snapshots at once take turns" t_two_snapshots_at_once_take_turns
 run_test "a new device that differs from the repo gets a conflict, not a guess" t_new_device_first_sync
