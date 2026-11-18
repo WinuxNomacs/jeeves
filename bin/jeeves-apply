@@ -19,6 +19,7 @@ done
 
 say() { echo "jeeves apply: $*"; }
 find_data_repo || { say "$DATA_REPO_PROBLEM"; exit 1; }
+take_lock 30 || { say "another Jeeves run is still at work on $REPO; nothing installed, try again shortly"; exit 1; }
 saved_dir=$STATE_DIR/overwritten/$(date +%Y%m%d-%H%M%S)
 
 installed=() removed=() skipped=() status=0 saved=0

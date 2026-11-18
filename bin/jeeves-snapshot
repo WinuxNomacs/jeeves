@@ -29,6 +29,8 @@ say() { echo "jeeves snapshot: $*"; }
 finish() { if [ $hook = 1 ]; then exit 0; else exit "$1"; fi; }
 
 find_data_repo || { say "skipped, $DATA_REPO_PROBLEM"; finish 1; }
+# Another session's snapshot is running: it records the same changes, so the hook stays quiet.
+take_lock 30 || { [ $hook = 1 ] || say "skipped, another Jeeves run is still at work on $REPO; try again shortly"; finish 1; }
 
 # Guard: only commit onto a clean main, never in the middle of other work.
 branch=$(git_repo symbolic-ref --short -q HEAD)
