@@ -25,7 +25,8 @@ AskUserQuestion: the obvious options, the recommended one first; they can still 
 ## Steps
 
 1. Run `jeeves-status --data-repo "${user_config.data_repo}"` (it records the data repo for this device;
-   on a locked device it says so), then `jeeves-encrypt status`. `encryption off`: nothing to lock; say so
+   on a locked device it says so; if it says no data repo is set, point the user to `/jeeves:setup`), then
+   `jeeves-encrypt status`. `encryption off`: nothing to lock; say so
    and stop. `locked`: already locked; say so and stop.
 2. Say what locking does and doesn't do. The key leaves this device's credential store, and Jeeves stops
    syncing here until `/jeeves:unlock` with the passphrase. The plain files stay: `~/.claude` and the data

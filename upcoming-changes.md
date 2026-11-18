@@ -144,6 +144,17 @@
   and allow rules, and a scratch `CLAUDE_HOME` for the whole suite. Checked headless: the update skill's
   commands pass, `jeeves-git reset` is refused. Not covered: Read and Edit of data repo files outside the
   project still ask in the default mode.
+- Release 1.2.0 review fixes (2026-11-18): the data repo record is written only from an explicit path
+  (`--data-repo <path>` or the plugin option, not a one-off `JEEVES_DATA`), an empty `--data-repo` removes
+  it, and a record that can't be written is reported; `jeeves-git` uses `git_repo`'s options (the user's
+  global ignore list no longer hides files from it). Skills: allow rules narrowed to the forms used
+  (`switch main`, `switch -c pref/*`, `add -- *`, `commit -m *`, `merge --no-ff *`, ...; checked headless:
+  `switch -C`, `add -f`, `merge -s ours`, `commit --amend` are refused), the project half pre-approved and
+  committing only CLAUDE.md (`git commit -m ... -- <file>`), a revert whose hash a cleanup changed is found
+  by its message, a conflicting revert aborts and asks, AskUserQuestion's 4-question limit, data repo paths
+  read in full, lock's missing data repo. During that check a `claude -p` session's own hook committed a
+  scratch `CLAUDE.md` into the real data repo (unpushed; reset with the user's approval, and the repo
+  CLAUDE.md now warns against it).
 
 ## Decisions (2026-11-16, with the user)
 

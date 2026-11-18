@@ -23,14 +23,15 @@ fi
 # Returns 1 with DATA_REPO_PROBLEM set when none is found, or when it is encrypted and this device is locked
 # (unless ALLOW_LOCKED=1).
 DEFAULT_DATA_REPO=$HOME/jeeves-data
-# The data repo a script was last told about (by JEEVES_DATA, --data-repo or the plugin option), so the
-# skills can run every later command bare: Claude's Bash tool sees no plugin variables, and a permission
+# The data repo a script was last told about explicitly (by --data-repo with a path, or the plugin option;
+# not a JEEVES_DATA set for one command), so the skills can run every later command bare: Claude's Bash tool sees no plugin variables, and a permission
 # rule does not match past a `cd` outside the project or a `JEEVES_DATA=` prefix, so either would ask.
 DATA_REPO_POINTER=$CLAUDE_HOME/jeeves/data-repo
 
-# `--data-repo <path>` as a script's first two arguments: the same as JEEVES_DATA. An empty path (the plugin
-# option left empty) means what it does without one, except that the record is neither read nor kept
-# stale. This file is sourced without arguments, so it shares the script's own and the shift is the script's.
+# `--data-repo <path>` as a script's first two arguments: the same as JEEVES_DATA, and recorded. An empty path
+# (the plugin option left empty) means what it does without one, except that the record is not read and is
+# removed, so later bare commands find the same repo. This file is sourced without arguments, so it shares
+# the script's own and the shift is the script's.
 DATA_REPO_GIVEN=
 if [ "$1" = --data-repo ]; then
   JEEVES_DATA=$2 DATA_REPO_GIVEN=1
@@ -45,7 +46,11 @@ expand_path() {
 find_data_repo() {
   local candidate top told=
   candidate=$(expand_path "${JEEVES_DATA:-$CLAUDE_PLUGIN_OPTION_DATA_REPO}")
-  [ -n "$candidate" ] || [ -n "$DATA_REPO_GIVEN" ] && told=1
+  if [ -n "$DATA_REPO_GIVEN" ]; then
+    if [ -n "$JEEVES_DATA" ]; then told=1; else rm -f "$DATA_REPO_POINTER" 2>/dev/null; fi
+  elif [ -z "$JEEVES_DATA" ] && [ -n "$CLAUDE_PLUGIN_OPTION_DATA_REPO" ]; then
+    told=1
+  fi
   if [ -z "$candidate" ] && [ -z "$DATA_REPO_GIVEN" ] && [ -f "$DATA_REPO_POINTER" ]; then
     IFS= read -r candidate < "$DATA_REPO_POINTER"
     candidate=${candidate%$'\r'}
@@ -73,7 +78,9 @@ find_data_repo() {
     return 1 ;;
   esac
   REPO=$(cd "$candidate" && pwd)
-  [ -n "$told" ] && remember_data_repo
+  if [ -n "$told" ] && ! remember_data_repo && [ -n "$DATA_REPO_GIVEN" ]; then
+    echo "jeeves: could not record the data repo in $DATA_REPO_POINTER: later commands without --data-repo may not find it" >&2
+  fi
   HOME_COPY=$REPO/home
   STATE_DIR=$REPO/.sync-state
   STATE_FILE=$STATE_DIR/hashes
@@ -87,17 +94,17 @@ find_data_repo() {
   return 0
 }
 
-# Records REPO in DATA_REPO_POINTER when it differs. Best effort: a pointer that can't be written only
-# means the skills' bare commands fall back to the other ways of finding the data repo.
+# Records REPO in DATA_REPO_POINTER when it differs; returns 1 if it could not (find_data_repo warns when a
+# skill passed --data-repo; the hook stays quiet).
 remember_data_repo() {
-  local old=
+  local old= rc=0
   [ -f "$DATA_REPO_POINTER" ] && IFS= read -r old < "$DATA_REPO_POINTER"
   [ "$old" = "$REPO" ] && return 0
-  mkdir -p "${DATA_REPO_POINTER%/*}" 2>/dev/null &&
-    printf '%s\n' "$REPO" > "$DATA_REPO_POINTER.tmp.$$" 2>/dev/null &&
-    mv -f "$DATA_REPO_POINTER.tmp.$$" "$DATA_REPO_POINTER" 2>/dev/null
+  { mkdir -p "${DATA_REPO_POINTER%/*}" &&
+    printf '%s\n' "$REPO" > "$DATA_REPO_POINTER.tmp.$$" &&
+    mv -f "$DATA_REPO_POINTER.tmp.$$" "$DATA_REPO_POINTER"; } 2>/dev/null || rc=1
   rm -f "$DATA_REPO_POINTER.tmp.$$" 2>/dev/null
-  return 0
+  return $rc
 }
 
 # ---- Encryption (lib/crypt.sh has the rest) ----

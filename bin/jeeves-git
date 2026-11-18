@@ -5,4 +5,5 @@
 . "$(dirname "$0")/../lib/lib.sh"
 ALLOW_LOCKED=1
 find_data_repo || { echo "jeeves git: $DATA_REPO_PROBLEM" >&2; exit 1; }
-exec git -C "$REPO" "$@"
+# The same options as the scripts' git_repo, so jeeves-git and jeeves-status agree on what is dirty.
+exec git -C "$REPO" -c core.autocrlf=false -c core.safecrlf=false -c core.excludesFile= "$@"

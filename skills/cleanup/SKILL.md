@@ -12,11 +12,12 @@ allowed-tools:
   - Bash(jeeves-scan)
   - Bash(jeeves-git status *)
   - Bash(jeeves-git log *)
-  - Bash(jeeves-git switch *)
-  - Bash(jeeves-git add *)
-  - Bash(jeeves-git commit *)
-  - Bash(jeeves-git merge *)
-  - Bash(jeeves-git branch -d *)
+  - Bash(jeeves-git switch main)
+  - Bash(jeeves-git switch -c conf/*)
+  - Bash(jeeves-git add -- *)
+  - Bash(jeeves-git commit -m *)
+  - Bash(jeeves-git merge --no-ff *)
+  - Bash(jeeves-git branch -d conf/*)
   - Bash(jeeves-git push origin main)
 ---
 
@@ -65,7 +66,8 @@ AskUserQuestion: the obvious options, the recommended one first; they can still 
    none. Refuse if either is not a whole number of 1 or more, or `<every>` is below `<keep>`.
    **`off`:** remove the `auto_every_days` line (keep `keep_days`).
    Change `jeeves.conf` like any data repo change: `jeeves-git switch -c conf/cleanup`, write the file
-   (`keep_days=<keep>` and `auto_every_days=<every>`, one per line), commit, `jeeves-git switch main`,
+   (`<datarepo path>/jeeves.conf`: `keep_days=<keep>` and `auto_every_days=<every>`, one per line),
+   `jeeves-git add -- jeeves.conf`, `jeeves-git commit -m "<message>"`, `jeeves-git switch main`,
    `jeeves-git merge --no-ff conf/cleanup -m "Merge branch 'conf/cleanup': <summary>"`, `jeeves-git branch -d conf/cleanup`,
    then `jeeves-scan` and `jeeves-git push origin main` (a rejected push: `jeeves-snapshot`, then push again once;
    still rejected, stop and ask). Say when the first automatic cleanup will run: when the history's first

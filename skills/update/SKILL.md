@@ -25,13 +25,23 @@ allowed-tools:
   - Bash(jeeves-git show *)
   - Bash(jeeves-git cat-file *)
   - Bash(jeeves-git ls-files *)
-  - Bash(jeeves-git switch *)
-  - Bash(jeeves-git add *)
-  - Bash(jeeves-git commit *)
-  - Bash(jeeves-git merge *)
-  - Bash(jeeves-git revert *)
-  - Bash(jeeves-git branch -d *)
+  - Bash(jeeves-git switch main)
+  - Bash(jeeves-git switch -c pref/*)
+  - Bash(jeeves-git add -- *)
+  - Bash(jeeves-git commit -m *)
+  - Bash(jeeves-git merge --no-ff *)
+  - Bash(jeeves-git merge --abort)
+  - Bash(jeeves-git revert --no-edit *)
+  - Bash(jeeves-git revert --abort)
+  - Bash(jeeves-git branch -d pref/*)
   - Bash(jeeves-git push origin main)
+  - Bash(git rev-parse --show-toplevel)
+  - Bash(git switch -c claude-md/*)
+  - Bash(git switch -)
+  - Bash(git add -- *)
+  - Bash(git commit -m *)
+  - Bash(git merge --no-ff claude-md/*)
+  - Bash(git branch -d claude-md/*)
 ---
 
 # Jeeves: update the global preferences
@@ -139,9 +149,9 @@ AskUserQuestion: the obvious options, the recommended one first; they can still 
    curation (only moved, or merged with a rule that repeats it, keeping every word of the protected one;
    the other's useful details, such as examples, may be added to it): the **Security** section, any rule the user
    stated as a constraint ("never", "always", "from now on", or recorded as the user's decision), and text
-   the user asked for in this session.
+   the user asked for in this session (a revert they requested included).
 
-   **Ask only here** (AskUserQuestion, all such cases in one call, before anything is written; the
+   **Ask only here** (AskUserQuestion, all such cases together, up to 4 per call, before anything is written; the
    recommended option first): when a new item or a curation change would reverse or weaken one of those
    protected rules (unless the user changed that rule in this session: then revise it to their new words
    without asking), or when two existing rules contradict and neither the session nor the memories show
@@ -151,12 +161,13 @@ AskUserQuestion: the obvious options, the recommended one first; they can still 
    - Global: in change mode's `pref/` branch of the data repo (with the requested change, if any), even
      when the request was only a sync: change mode then runs in full (its step 1 is the sync). Commit the items learned and the curation separately (messages
      `learn: <what>` and `curate: <what>`), so either can be reverted alone.
-   - Project: edit its CLAUDE.md (create `CLAUDE.md` at the top if it has none) and stage only that file, by
-     name. If that file already has uncommitted changes, they are the user's: stop and ask first. On a
-     branch other than the default one, commit there. On the default branch,
-     `git switch -c claude-md/<short-name>`, commit (`learn:` and `curate:` separately, as above), switch
-     back, `git merge --no-ff claude-md/<short-name> -m "Merge branch 'claude-md/<short-name>': <summary>"`,
-     and delete the branch. Never push the project unless its own CLAUDE.md allows it. If the project is
+   - Project: edit its CLAUDE.md (create `CLAUDE.md` at the top if it has none). If that file already has
+     uncommitted changes, they are the user's: stop and ask first. Commit only that file, so nothing else
+     the user staged goes with it: `git add -- <file>` (for a new file), then
+     `git commit -m "<message>" -- <file>`. On a branch other than the default one, commit there. On the
+     default branch, `git switch -c claude-md/<short-name>`, commit (`learn:` and `curate:` separately, as
+     above), `git switch -`, `git merge --no-ff claude-md/<short-name> -m "Merge branch
+     'claude-md/<short-name>': <summary>"`, and `git branch -d claude-md/<short-name>`. Never push the project unless its own CLAUDE.md allows it. If the project is
      the data repo itself, its CLAUDE.md goes in the same `pref/` branch.
    - Memory: save as Claude Code's memory instructions say, before the sync's first `jeeves-snapshot`, so
      it backs them up in the same run. A memory saved here is then listed by `jeeves-memories list`:
@@ -172,7 +183,8 @@ AskUserQuestion: the obvious options, the recommended one first; they can still 
 5. **Report**, after the sync or change report: every change, one line each (added, revised, merged or
    removed; in which file; the rule in a few words), grouped by destination, then how many memories were
    reviewed and how many are left. Below it, how to undo each commit, as a copy block: for the global file,
-   `/jeeves:update revert <commit>` (with each `learn:` and `curate:` commit's short hash); for a project,
+   `/jeeves:update revert <commit>` (with each `learn:` and `curate:` commit's short hash, which a history
+   cleanup changes; the revert then finds the commit by its message); for a project,
    `git revert <commit>` in that project (`-m 1` for its merge commit). Nothing written: say so in one line.
 
 ## Find the data repo
@@ -183,8 +195,11 @@ repo is not a git repository, stop and tell the user to run `/jeeves:setup` (aft
 `data_repo` if it is empty). Never clone or create the data repo here: setup also offers to restore another
 machine's backup, which only it can do before the first sync. Otherwise go on: that command also records
 the data repo for this device, so later commands find it on their own. Run the `jeeves-` scripts bare, and
-git in the data repo as `jeeves-git <arguments>`. Never `cd` into the data repo or set `JEEVES_DATA` before a
-command: a permission rule does not match past either, so each command would ask the user.
+git in the data repo as `jeeves-git <arguments>`: stage with `jeeves-git add -- <paths>` and commit with
+`jeeves-git commit -m "<message>"`. Never `cd` into the data repo or set `JEEVES_DATA` before a command: a
+permission rule does not match past either, so each command would ask the user. Paths such as `home/<path>`
+and `jeeves.conf` are inside the data repo: read and write them at their full path under the folder on the
+`datarepo` line.
 
 `jeeves-status` prints tab-separated lines:
 - `<state> <path> <disk> <repo> <base>` for each tracked path not in sync. `disk`: only `~/.claude` changed
@@ -211,7 +226,7 @@ change-mode branch of your own from this session; for anything else, stop and as
    file says `jeeves: not merged` (the key could not be read), `jeeves-git merge --abort` and point the user to
    `/jeeves:unlock`. Before committing, read each file git listed as conflicting: it must hold both sides
    as you merged them and no `<<<<<<<`, `=======` or `>>>>>>>` lines; a conflicting file with no markers at
-   all was not merged (stop and ask). Then `jeeves-git add` those files by name and commit.
+   all was not merged (stop and ask). Then `jeeves-git add -- <those files>` and commit.
 3. **Each `conflict` line:** read base, disk (`~/.claude/<path>`) and repo (`home/<path>`). With a base, take
    each side's changes since the base; without one (`none`, a new device), keep everything both sides hold.
    If the changes do not overlap, write the merged text to `home/<path>`, commit
@@ -251,8 +266,12 @@ change-mode branch of your own from this session; for anything else, stop and as
    up), not here. Shared files must work on Linux, macOS and Windows: no absolute paths, a skill runs its
    scripts as `bash <script>` (Windows keeps no executable bit), and file names without `: * ? " < > | \`.
    A request to revert a commit (`revert <commit>`, from a session review's report): `jeeves-git revert --no-edit
-   <commit>` on the `pref/` branch (`-m 1` when it is a merge commit), instead of editing by hand.
-3. Commit with a message saying what changed and why. `jeeves-git switch main`, then
+   <commit>` on the `pref/` branch (`-m 1` when it is a merge commit), instead of editing by hand. If the hash
+   is not found (a history cleanup since gave every commit a new hash), find the commit on `main` by its
+   `learn:` or `curate:` message (`jeeves-git log --format="%h %s" main`) and revert that one; if none or
+   several match, say so and ask. A revert that conflicts: `jeeves-git revert --abort`, show the passage
+   and ask.
+3. Commit (`jeeves-git commit -m "<message>"`) with a message saying what changed and why. `jeeves-git switch main`, then
    `jeeves-git merge --no-ff pref/<short-name> -m "Merge branch 'pref/<short-name>': <summary>"`, and
    `jeeves-git branch -d pref/<short-name>`.
 4. `jeeves-apply` (installs it into `~/.claude`), then `jeeves-snapshot` (must print nothing).
