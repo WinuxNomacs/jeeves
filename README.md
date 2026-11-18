@@ -6,8 +6,9 @@
 
 A Claude Code plugin that turns what your sessions learn into lasting operational knowledge. `/jeeves:update`
 reviews the session, and the memories Claude saved on any of your devices, for corrections, lessons and
-setups worth keeping, and offers them as rules for your global or project `CLAUDE.md`, revised in place so
-the file stays short and useful to the models that read and maintain it. Everything lives in a git repo of
+setups worth keeping, and writes them as rules into your global or project `CLAUDE.md` on its own judgement,
+revised in place and pruned of what no longer helps, so the file stays short and useful to the models that
+read and maintain it. Every change is reported and can be undone with one revert. Everything lives in a git repo of
 your own (the **data repo**), on Linux, macOS and Windows:
 
 - **Shared** by all your devices and kept in sync: `~/.claude/CLAUDE.md`, `agents/`, `commands/`, `skills/`
@@ -57,13 +58,19 @@ itself when you ask to change a global preference, or when a snapshot reports ne
   confirmed, mistakes and how to avoid them, setups that took work). It also reads the memories no device
   has reviewed yet (this machine's, and other devices' from their backups; up to 25 files per run), where
   lessons saved in one project often hold everywhere; a shared record (`hosts/.memory-review`) keeps a
-  memory from being offered twice, and memories themselves are never changed. It sorts each item into the global
+  memory from being reviewed twice, and memories themselves are never changed. It sorts each item into the global
   `CLAUDE.md` (holds in any repo), the project's `CLAUDE.md` (anyone working in that repo needs it; nothing
   private, since it may be public) or memory (personal or this machine only), worded as the rule it would
-  become, revising an existing rule where one covers it. You pick from a list per file, with "All of these";
-  the global ones are written and pushed with the sync, the project ones committed in the project (on your
-  feature branch, or a short branch merged into the default one; never pushed). Afterwards it offers to
-  discuss the ones you left out.
+  become, revising an existing rule where one covers it. Claude decides without asking you about each item:
+  a rule is written only when it is true, general for its file, actionable, not already there, and changes
+  what a capable model would do anyway. Each run also prunes both `CLAUDE.md` files: duplicates merged,
+  rules that restate default model behaviour or name tools that no longer exist removed, wording shortened.
+  The Security section, rules you set as constraints ("never", "always", "from now on") and what you asked
+  for in the session are never removed or weakened; Claude asks only when a change would reverse one of
+  them, or when two rules contradict and nothing shows which is right. The global changes are written and
+  pushed with the sync, the project ones committed in the project (on your feature branch, or a short
+  branch merged into the default one; never pushed). The report lists every change, one line each, with
+  what undoes it: `/jeeves:update revert <commit>` for the global file, `git revert` in the project.
 
 - **Sync:** snapshot, merge another device's diverged `main`, merge files changed both on disk and in the repo
   (three-way, from the version both last shared), install what is newer in the repo, then push.

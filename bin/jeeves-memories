@@ -10,8 +10,8 @@
 #                            This machine's live memories come first; MEMORY.md (an index) is left out, and a
 #                            file found in several places is listed once.
 #   jeeves-memories record <hash> <outcome> [<hash> <outcome>...]
-#                            adds each reviewed memory and what came of it (such as "promoted 2, declined 1,
-#                            kept 3") to the record, and commits it on main
+#                            adds each reviewed memory and what came of it (such as "promoted 2, kept 3,
+#                            left out 1") to the record, and commits it on main
 #
 # The data repo is found as lib/lib.sh describes.
 
