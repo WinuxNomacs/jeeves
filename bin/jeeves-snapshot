@@ -185,6 +185,7 @@ if ! git_repo diff --cached --quiet; then
     "$(printf '%s\n' "${deleted[@]}" | join_lines)"
 fi
 for p in ${taken[@]+"${taken[@]}"}; do set_base "$p" "$(hash_of "$CLAUDE_HOME/$p")" "$CLAUDE_HOME/$p"; done
+keep_bases
 
 status=0
 if [ ${#refused[@]} -gt 0 ]; then
