@@ -720,7 +720,9 @@ t_other_device_switch_reports_a_conflict_when_both_changed() {
   check "says it switched" grep -q "switched to it" <<< "$out"
   check "reports a conflict, not an install" grep -q "changed both on disk and in the repo: CLAUDE.md" <<< "$out"
   check "the disk copy is untouched" grep -q "from this device" "$W/claude/CLAUDE.md"
-  check "the base is the version both last shared" [ "$("$SRC/bin/jeeves-status" | awk -F'\t' '$1 == "conflict" { print $5 }')" = "$(printf 'rules v1\n' | git hash-object --stdin)" ]
+  base=$("$SRC/bin/jeeves-status" | awk -F'\t' '$1 == "conflict" { print $5 }')
+  check "the base is the version both last shared" [ "$base" = "$(printf 'rules v1\n' | git hash-object --stdin)" ]
+  check "and it is still readable after the switch pruned the old history" git -C "$R" cat-file -e "$base"
 }
 
 t_automatic_cleanup_runs_only_when_due_and_configured() {
@@ -1173,6 +1175,9 @@ t_the_base_of_an_encrypted_file_stays_readable() {
   base=$("$SRC/bin/jeeves-status" | awk -F'\t' '$2 == "CLAUDE.md" { print $5 }')
   check "status gives a base" [ -n "$base" ] && [ "$base" != none ]
   check "git cat-file -p reads the base as plain text" grep -qx "rules only ever stored encrypted" <<< "$(git -C "$R" cat-file -p "$base")"
+  git -C "$R" reflog expire --expire=now --all; git -C "$R" gc -q --prune=now
+  check "and still does after git prunes unreachable objects" grep -qx "rules only ever stored encrypted" <<< "$(git -C "$R" cat-file -p "$base")"
+  check "the ref keeping it is not pushed" bash -c '! git -C "$1" show-ref | grep -q jeeves' _ "$W/remote.git"
 }
 
 run_test "snapshot does nothing when disk matches the repo" t_nothing_changed

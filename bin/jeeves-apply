@@ -40,6 +40,7 @@ while IFS= read -r p; do
     conflict) skipped+=("$p (changed on both sides; compare, then jeeves-snapshot --force or jeeves-apply --force)") ;;
   esac
 done < <(all_tracked)
+keep_bases
 
 if [ ${#installed[@]} -gt 0 ]; then say "installed $(printf '%s\n' "${installed[@]}" | join_lines)"; fi
 if [ ${#removed[@]} -gt 0 ]; then say "removed (deleted in the data repo) $(printf '%s\n' "${removed[@]}" | join_lines)"; fi

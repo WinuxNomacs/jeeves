@@ -165,6 +165,18 @@ set_base() {
   mv "$tmp" "$STATE_FILE"
 }
 
+# Keep every recorded base in git's objects: one local ref (refs/jeeves/bases, never pushed) to a tree of
+# them, so gc does not prune them (they are unreachable otherwise: git stores the file encrypted, or a cleanup
+# folded the commit that held it).
+keep_bases() {
+  local t
+  [ -f "$STATE_FILE" ] || return 0
+  t=$(awk -F'\t' '{ print $1 }' "$STATE_FILE" | sort -u | git_repo cat-file --batch-check |
+      awk '$2 == "blob" { print "100644 blob " $1 "\t" $1 }' | git_repo mktree) || return 0
+  [ "$(git_repo rev-parse -q --verify refs/jeeves/bases)" = "$t" ] ||
+    git_repo update-ref -m "jeeves: merge bases" refs/jeeves/bases "$t"
+}
+
 # Copy a file atomically (temp file in the target folder, then rename), creating folders.
 copy_file() {
   local src=$1 dst=$2
@@ -234,6 +246,7 @@ cleaned_root() {
 
 # Drop the objects no branch reaches any more (removed history, kept in the bundle), so .git shrinks.
 shrink_repo() {
+  keep_bases
   git_repo reflog expire --expire=now --all && git_repo gc -q --prune=now 2>/dev/null
 }
 
