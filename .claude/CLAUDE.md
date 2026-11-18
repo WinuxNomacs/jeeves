@@ -43,6 +43,9 @@ already snapshotted the data repo when the plugin is installed.
   `~/.claude/jeeves/data-repo`; every later command is bare (`jeeves-git` for git), never after a `cd` into
   the data repo or a `JEEVES_DATA=` prefix: an allow rule does not match past either, so each would prompt
   in the default permission mode (tested headless with `claude -p --permission-mode default --allowedTools`).
+  Such a `claude -p` session runs the installed plugin's hooks with the real `data_repo` option: never give
+  it a scratch `CLAUDE_HOME` or `JEEVES_HOST` (one test did, and its session-start snapshot committed the
+  scratch `CLAUDE.md` into the real data repo); point only `PATH` at a worktree's `bin/`.
 - Shared files (`home/`, synced) vs per-device files (`hosts/<host>/`, backup only; settings and keybindings
   only with `backup_settings=yes` in `jeeves.conf`): the lists are at the top of `lib/lib.sh`.
 - `lib/lib.sh` — shared code: finding the data repo, tracked paths list, hashes, three-way classification.
