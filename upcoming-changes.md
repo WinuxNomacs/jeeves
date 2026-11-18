@@ -2,7 +2,7 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** Autonomous review (planned, decisions taken: see "Autonomous review" below)
+- **Up next:** nothing planned (the next release: the autonomous review, merged since 1.1.0)
 - **Later:** 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
   must differ per host) · Anthropic directory submission (only on the user's direct command)
@@ -119,6 +119,19 @@
   after the user chose); a `merge=union` attribute for `hosts/.memory-review` (the skill merges it by hand).
   Upgrade rehearsed from v1.0.1's scripts (attributes migrated, settings copies removed once, a CRLF file
   stored byte for byte, a second snapshot silent).
+- Autonomous review (2026-11-18): `skills/update/SKILL.md` steps 3 to 5 (decide against the written bar,
+  curate both CLAUDE.md files within the guard, ask only on a protected rule or an unclear contradiction,
+  `learn:` and `curate:` commits, a report with each revert; `/jeeves:update revert <commit>` in change
+  mode). README and the repo CLAUDE.md updated. No script change (a comment in `bin/jeeves-memories`).
+  Checked by an agent running the skill against scratch folders (a session with a correction, a new user
+  constraint, a private detail, a one-off task; memories repeated across two projects, one contradicting a
+  user constraint, one personal; a global file with a duplicate, default-behaviour rules and a missing
+  script): everything decided as designed, one question held back, report with reverts. Its seven unclear
+  passages were fixed: a memory with an unanswered question stays unrecorded; merging into a protected rule
+  keeps its words; a global rule is not removed because a tool is missing on one machine; no guessed reasons;
+  memories saved before the first snapshot and recorded `kept (new)`; a sync with global items runs change
+  mode in full. Known: `cd ... && jeeves-memories record` does not match the skill's allowed-tools, so it
+  prompts (as in 1.1.0).
 
 ## Decisions (2026-11-16, with the user)
 
@@ -1146,7 +1159,7 @@ operational knowledge across sessions, with backup as secondary.
 - `record` takes its pairs as arguments, so the skill's `Bash(jeeves-memories:*)` permission covers it.
 - An item from a memory goes to Global, or to Project only for the session's own project.
 
-## Autonomous review (planned, the user's request of 2026-11-18)
+## Autonomous review (built 2026-11-18, the user's request of the same day)
 
 **The request (new.md):** Jeeves learns from the session and the memories automatically, without
 prompting the user for each item: it judges what operational knowledge improves Claude Code sessions

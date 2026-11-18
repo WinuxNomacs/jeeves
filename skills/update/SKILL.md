@@ -6,8 +6,9 @@ description: >-
   change a global rule, agent, command or personal skill (pass the request as the argument), when a "jeeves
   snapshot" message reports newer repo files, a conflict or a diverged main, or when the user asks to sync
   their preferences. Without an argument it syncs; with one it makes that change. When the user runs it, it
-  first reviews the session, and the memories of every device, for what was learned and offers to save it
-  to the global and project CLAUDE.md. Not for settings.json or keybindings.json: those are per device.
+  first reviews the session, and the memories of every device, for what was learned, saves it to the global
+  and project CLAUDE.md on its own judgement, prunes what no longer helps, and reports every change. Not for
+  settings.json or keybindings.json: those are per device.
 argument-hint: "[change to make, or nothing to sync]"
 allowed-tools:
   - Bash(jeeves-status)
@@ -33,17 +34,19 @@ Request: $ARGUMENTS
 No request above means **sync mode**; a request means **change mode** (a sync first, then the change).
 
 When the user ran this (typed `/jeeves:update`, with or without a request), it starts with a **session
-review**: what this session taught, and what memories on any device hold that CLAUDE.md should, is collected
-and offered to the user, then written along with the sync or change. When you started this skill yourself
+review**: what this session taught, and what memories on any device hold that CLAUDE.md should, is collected,
+decided on by you, written along with the sync or change, and reported. When you started this skill yourself
 (to settle a snapshot notice, say), skip the review.
 
 The review's purpose: CLAUDE.md, global and per project, is the operational knowledge that current and
 future models read at the start of every session and keep maintaining. Each run should leave it more
 useful to them: rules that are true, general, short and actionable, with the reason where it is not
-obvious, revised in place rather than piled up, and never contradicting one another.
+obvious, revised in place rather than piled up, and never contradicting one another. The user has handed
+these decisions to you: do not ask about each item. Choose what leads to more professional, accurate,
+polished and intelligent work, and ask only in the cases step 3 names.
 
-Order: session review (steps 1–3) → find the data repo → sync or change mode (the selected items written in
-it) → push → report → follow-up on unselected items (review step 5).
+Order: session review (steps 1–3) → find the data repo → sync or change mode (the decided items written
+in it) → push → report (review step 5).
 
 The live files are in `~/.claude`. The data repo keeps the shared ones under `home/` (`CLAUDE.md`, `agents/`,
 `commands/`, `skills/` but not `skills/synced/`) and each device's backup of its memories (and,
@@ -64,9 +67,10 @@ AskUserQuestion: the obvious options, the recommended one first; they can still 
 
 ## Rules
 
-- **Never lose text.** Ask the user (show both versions of the passage) before anything that would drop or
-  rewrite text that one side added: a true conflict, where both sides changed the same passage in different
-  ways. Additions on both sides are not a conflict: keep both.
+- **Never lose text in a merge.** Ask the user (show both versions of the passage) before anything that
+  would drop or rewrite text that one side added: a true conflict, where both sides changed the same passage
+  in different ways. Additions on both sides are not a conflict: keep both. (Curation, review step 3, is
+  separate: deliberate, reported and revertible.)
 - **Push without asking** when the steps below end cleanly. Do not show diffs unless the user asks for them;
   everything is in git.
 - **Never force-push**, never rewrite pushed commits, never tag (only `/jeeves:cleanup`, which the user
@@ -99,7 +103,7 @@ AskUserQuestion: the obvious options, the recommended one first; they can still 
    this machine's own first, then other devices' backups (as of the data repo's last pull). Read each file.
    Look for the same kinds of knowledge, and especially for what several memories, projects or devices
    repeat: a lesson saved as a memory in one project often holds everywhere. A memory that is personal,
-   true only on that machine, about one task, or history stays a memory and is not offered. Read at most 25
+   true only on that machine, about one task, or history stays a memory and is not promoted. Read at most 25
    files per run, in the order listed; the rest stay unrecorded, so the next run starts with them (say how
    many are left). If the command fails (no data repo, a locked device), say why in one line and review the
    session alone.
@@ -110,37 +114,59 @@ AskUserQuestion: the obvious options, the recommended one first; they can still 
    - **Memory**: personal or true only on this machine, or history (what was tried and why it was decided).
    An item from a memory goes to Global, or to Project only when it is a memory of this session's project
    (never back to Memory: it is one already).
-   Word each item as the text it would become, in the file's own style, and say where it goes: preferably
+   Word each item as the text it would become, in the file's own style (a reason only when the session or
+   the memories establish it; never a guessed one), and say where it goes: preferably
    revising an existing rule in place (name it), so the file stays short; otherwise new, under which section.
    Where an item would contradict or repeat an existing rule, word it as the revision of that rule. If
-   nothing is found, say so in one line and go on to the sync.
-3. **Ask** with AskUserQuestion (`multiSelect: true`), one question per destination, headed "Global",
-   "Project" or "Memory": one option per item (label: a few words; description: the full text, where it
-   goes, and for an item from a memory, which memory: "from memory: <project> on <source>"), and a last
-   option "All of these" (it covers the items of its own question). A question holds at
-   most 4 options, so more than 3 items for one destination are split over several questions; at most 4
-   questions per call, then another call.
-4. **Write** what was selected, during the sync or change below:
+   nothing is found, say so in one line and go on to the curation (step 3).
+3. **Decide.** Write an item only when it passes every test: it is true (backed by the session or the
+   memories, not a guess), it holds wherever its destination applies, it tells a model what to do, the file
+   does not already say it, and it changes what a capable current model would do (what such a model does
+   anyway is not a rule). Leave out the rest without asking.
+
+   Then **curate** the global `home/CLAUDE.md` and the project's CLAUDE.md as a whole, so they stay short
+   and sharp: merge rules that say the same thing, remove rules that only restate what a capable current
+   model does by default, rules about tools, files or situations that no longer exist (shown by the session,
+   the memories or the repo; for a global rule, missing on this machine alone is not enough); shorten
+   wording that loses no meaning. When in doubt, keep the rule. Never removed, weakened or reworded by
+   curation (only moved, or merged with a rule that repeats it, keeping every word of the protected one;
+   the other's useful details, such as examples, may be added to it): the **Security** section, any rule the user
+   stated as a constraint ("never", "always", "from now on", or recorded as the user's decision), and text
+   the user asked for in this session.
+
+   **Ask only here** (AskUserQuestion, all such cases in one call, before anything is written; the
+   recommended option first): when a new item or a curation change would reverse or weaken one of those
+   protected rules (unless the user changed that rule in this session: then revise it to their new words
+   without asking), or when two existing rules contradict and neither the session nor the memories show
+   which is right. Show both texts. Everything else proceeds without asking: an item that would put
+   something private or true only on this machine into a project CLAUDE.md goes to memory instead.
+4. **Write** what was decided, during the sync or change below:
    - Global: in change mode's `pref/` branch of the data repo (with the requested change, if any), even
-     when the request was only a sync.
+     when the request was only a sync: change mode then runs in full (its step 1 is the sync). Commit the items learned and the curation separately (messages
+     `learn: <what>` and `curate: <what>`), so either can be reverted alone.
    - Project: edit its CLAUDE.md (create `CLAUDE.md` at the top if it has none) and stage only that file, by
      name. If that file already has uncommitted changes, they are the user's: stop and ask first. On a
      branch other than the default one, commit there. On the default branch,
-     `git switch -c claude-md/<short-name>`, commit, switch back,
-     `git merge --no-ff claude-md/<short-name> -m "Merge branch 'claude-md/<short-name>': <summary>"`, and
-     delete the branch. Never push the project unless its own CLAUDE.md allows it. If the project is the
-     data repo itself, its CLAUDE.md goes in the same `pref/` branch.
-   - Memory: save as Claude Code's memory instructions say.
-   - The memories reviewed: memories themselves are never changed. Once the selected items are written (a
-     `pref/` branch merged into `main`: the record is committed only on `main`), and before the push, record each memory file reviewed in this run (every file read, whether or not anything
-     came of it; not the files left for a later run) with what came of it:
+     `git switch -c claude-md/<short-name>`, commit (`learn:` and `curate:` separately, as above), switch
+     back, `git merge --no-ff claude-md/<short-name> -m "Merge branch 'claude-md/<short-name>': <summary>"`,
+     and delete the branch. Never push the project unless its own CLAUDE.md allows it. If the project is
+     the data repo itself, its CLAUDE.md goes in the same `pref/` branch.
+   - Memory: save as Claude Code's memory instructions say, before the sync's first `jeeves-snapshot`, so
+     it backs them up in the same run. A memory saved here is then listed by `jeeves-memories list`:
+     record it too, outcome `kept (new)`, so no later run reviews it again.
+   - The memories reviewed: memories themselves are never changed. Once the decided items are written (a
+     `pref/` branch merged into `main`: the record is committed only on `main`), and before the push,
+     record each memory file reviewed in this run (every file read, whether or not anything came of it;
+     not the files left for a later run; a memory whose question the user left unanswered stays unrecorded,
+     so the next run asks again) with what came of it, the user's answer included where one was asked:
      `cd <datarepo path> && jeeves-memories record <hash> "<outcome>" [<hash> "<outcome>"...]`, the outcome
-     such as `promoted 2, declined 1, kept 3` ("kept": stays a memory). It commits the record on `main`.
-   The report names each item written, one line per destination, and how many memories were reviewed.
-5. **Follow-up:** after the report, if any items were left unselected, ask (AskUserQuestion,
-   `multiSelect: true`) whether the user wants to discuss any of them further, with an option per item and
-   "No, leave them". Talk the chosen ones through; whatever comes of it is written as in step 4 (another
-   change-mode run for global text).
+     such as `promoted 2, kept 3, left out 1` ("kept": stays a memory; "left out": did not pass step 3).
+     It commits the record on `main`.
+5. **Report**, after the sync or change report: every change, one line each (added, revised, merged or
+   removed; in which file; the rule in a few words), grouped by destination, then how many memories were
+   reviewed and how many are left. Below it, how to undo each commit, as a copy block: for the global file,
+   `/jeeves:update revert <commit>` (with each `learn:` and `curate:` commit's short hash); for a project,
+   `git revert <commit>` in that project (`-m 1` for its merge commit). Nothing written: say so in one line.
 
 ## Find the data repo
 
@@ -216,6 +242,8 @@ change-mode branch of your own from this session; for anything else, stop and as
    `settings.json` or `keybindings.json` is per device: make it in `~/.claude` (the next snapshot backs it
    up), not here. Shared files must work on Linux, macOS and Windows: no absolute paths, a skill runs its
    scripts as `bash <script>` (Windows keeps no executable bit), and file names without `: * ? " < > | \`.
+   A request to revert a commit (`revert <commit>`, from a session review's report): `git revert --no-edit
+   <commit>` on the `pref/` branch (`-m 1` when it is a merge commit), instead of editing by hand.
 3. Commit with a message saying what changed and why. `git switch main`, then
    `git merge --no-ff pref/<short-name> -m "Merge branch 'pref/<short-name>': <summary>"`, and
    `git branch -d pref/<short-name>`.
