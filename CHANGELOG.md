@@ -2,6 +2,27 @@
 
 A new version reaches installed copies only when `version` in `.claude-plugin/plugin.json` changes.
 
+## 1.2.0 (2026-11-18)
+
+**The session review decides for itself, and Jeeves stops asking permission at every step.**
+
+- **The review acts on its own judgement:** `/jeeves:update` no longer asks about each item. It writes a rule
+  only when it is backed by the session or your memories, holds wherever it goes, says what to do, is not
+  already there, and would change what a capable model does. It also prunes both CLAUDE.md files (merges
+  duplicates, drops rules about default behaviour or tools that are gone), but never removes or weakens the
+  Security section, a rule you set as a constraint, or what you asked for in the session. It asks only when
+  a change would reverse one of those, or two rules contradict with nothing to show which is right.
+- **Every change is reported with its undo:** new rules and pruning are committed separately (`learn:` and
+  `curate:`), and the report lists each change with `/jeeves:update revert <commit>` for the global file or
+  `git revert` for a project. After a history cleanup the revert finds the commit by its message.
+- **No permission prompt at each step:** in the default permission mode, the skills' commands used to ask for
+  approval one by one (a `cd` into the data repo, or a `JEEVES_DATA=` prefix, matches no allow rule). Each
+  skill now names the data repo once (`--data-repo`, recorded in `~/.claude/jeeves/data-repo`) and runs
+  every later command bare. New command: `jeeves-git`, git in the data repo. The pre-approved git commands
+  are only the forms the skills use, so a force or a discard still asks.
+- **Project commits take only CLAUDE.md:** the review commits the project's CLAUDE.md alone, so files you
+  had staged stay out of its commit.
+
 ## 1.1.0 (2026-11-18)
 
 **Your Claude Code, a little wiser with every session.** The session review now learns from your

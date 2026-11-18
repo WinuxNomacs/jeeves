@@ -2,7 +2,7 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** release 1.2.0 (the autonomous review and the permission prompt fix, merged since 1.1.0)
+- **Up next:** nothing planned
 - **Later:** 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
   must differ per host) · Anthropic directory submission (only on the user's direct command)
@@ -155,6 +155,12 @@
   read in full, lock's missing data repo. During that check a `claude -p` session's own hook committed a
   scratch `CLAUDE.md` into the real data repo (unpushed; reset with the user's approval, and the repo
   CLAUDE.md now warns against it).
+- Release 1.2.0 (2026-11-18): the autonomous review, the permission prompt fix and the review fixes above.
+  Review by an independent agent and my own pass (data repo paths given relative, now in full); 7 findings,
+  all fixed except the Edit and Read prompts for data repo files outside the project (deliberate writes).
+  Upgrade rehearsed from v1.1.0's scripts (record written by `--data-repo`, bare commands find it, nothing
+  re-recorded, the reviewed memory not listed again, the hook exits 0). Windows Git Bash suite run locally;
+  CI on all three OSes on the release branch.
 
 ## Decisions (2026-11-16, with the user)
 
