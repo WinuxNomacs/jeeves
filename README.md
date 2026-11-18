@@ -102,8 +102,13 @@ Still visible on GitHub: file names (including the project paths of memories), s
 - **Your passphrase** is asked for in a window of the system (macOS dialog, Windows credential prompt, zenity
   or kdialog on Linux; elsewhere, Jeeves gives you a command for your own terminal), never in the chat,
   which is saved in transcripts. It is never stored. Losing it on every device means the data on GitHub can't
-  be read; a device that is still unlocked can set a new one (`/jeeves:encrypt passphrase`). Generating it
-  with a password manager is recommended.
+  be read; a device that is still unlocked can set a new one (`/jeeves:encrypt passphrase`). A new
+  passphrase does not change the key: the old `identity.age` stays in the history and still opens with the old
+  passphrase, so after a leak `/jeeves:encrypt passphrase` offers to fold the history as well (a copy someone
+  took before that stays readable with the old passphrase). Generating it with a password manager is
+  recommended.
+- **If the fold after turning encryption on is not pushed** (offline, say), the session-start message and
+  `/jeeves:encrypt` say that GitHub still holds the plain history, and `/jeeves:encrypt` removes it.
 - **Each device unlocks once** (`/jeeves:unlock`, or during `/jeeves:setup`): the key then stays in its
   credential store (macOS Keychain, Windows Credential Manager, a Linux Secret Service through
   `secret-tool`; where there is none, a file only you can read, if you choose it). Jeeves reads it from there

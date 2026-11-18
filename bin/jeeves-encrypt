@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Encrypt the data repo with age, and unlock or lock this device.
 #
-#   jeeves-encrypt status       encryption off | locked | unlocked, the key store, and age (tab-separated lines)
+#   jeeves-encrypt status       encryption off | locked | unlocked, the key store, age, and "history plain" when
+#                               origin still holds the plain history from before encryption (tab-separated lines)
 #   jeeves-encrypt on           make a key, ask for a new passphrase (twice), encrypt home/ and hosts/, commit
 #   jeeves-encrypt unlock       ask for the passphrase, put the key in this device's key store
 #   jeeves-encrypt lock         remove the key from this device's key store
@@ -121,6 +122,8 @@ case "$cmd" in
     fi
     printf 'encryption\t%s\n' "$state"
     printf 'keystore\t%s\n' "$(keystore_kind)"
+    # The plain history from before encryption is still on origin (the fold did not get there).
+    if encrypted_at origin/main && plain_history_at origin/main; then printf 'history\tplain\n'; fi
     v=$(age_version)
     if [ -z "$v" ]; then printf 'age\tmissing\n'
     elif version_at_least "$v" "$AGE_MIN_VERSION" && command -v age-plugin-batchpass >/dev/null 2>&1; then printf 'age\tok\t%s\n' "$v"
