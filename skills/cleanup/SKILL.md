@@ -7,9 +7,17 @@ argument-hint: "<days> | auto <every days> [<keep days>] | off"
 disable-model-invocation: true
 allowed-tools:
   - Bash(jeeves-cleanup)
-  - Bash(jeeves-status)
+  - Bash(jeeves-status *)
   - Bash(jeeves-snapshot)
   - Bash(jeeves-scan)
+  - Bash(jeeves-git status *)
+  - Bash(jeeves-git log *)
+  - Bash(jeeves-git switch *)
+  - Bash(jeeves-git add *)
+  - Bash(jeeves-git commit *)
+  - Bash(jeeves-git merge *)
+  - Bash(jeeves-git branch -d *)
+  - Bash(jeeves-git push origin main)
 ---
 
 # Jeeves: clean up the data repo's history
@@ -40,9 +48,10 @@ AskUserQuestion: the obvious options, the recommended one first; they can still 
 
 ## Steps
 
-1. Run `JEEVES_DATA="${user_config.data_repo}" jeeves-status` and note its `datarepo` line; if it says no
-   data repo is set, stop and point the user to `/jeeves:setup`. Start every later command with
-   `cd <datarepo path> &&`.
+1. Run `jeeves-status --data-repo "${user_config.data_repo}"` and note its `datarepo` line; if it says
+   no data repo is set, stop and point the user to `/jeeves:setup`. Later commands find the data repo on
+   their own (that command records it for this device): run the `jeeves-` scripts bare, and git in the data
+   repo as `jeeves-git <arguments>`, never with a `cd` into it.
 2. **No request:** show `jeeves.conf` (or say there is none, so no automatic cleanup) and ask what to do.
 3. **`<days>`** (a whole number, 1 or more): run `jeeves-cleanup --dry-run <days>` and show its line. If it
    finds nothing to remove, say so and stop. Otherwise make sure the user understands what they lose before
@@ -55,10 +64,10 @@ AskUserQuestion: the obvious options, the recommended one first; they can still 
 4. **`auto <every> [<keep>]`:** `<keep>` defaults to the current `keep_days`, or to `<every>` when there is
    none. Refuse if either is not a whole number of 1 or more, or `<every>` is below `<keep>`.
    **`off`:** remove the `auto_every_days` line (keep `keep_days`).
-   Change `jeeves.conf` like any data repo change: `git switch -c conf/cleanup`, write the file
-   (`keep_days=<keep>` and `auto_every_days=<every>`, one per line), commit, `git switch main`,
-   `git merge --no-ff conf/cleanup -m "Merge branch 'conf/cleanup': <summary>"`, `git branch -d conf/cleanup`,
-   then `jeeves-scan` and `git push origin main` (a rejected push: `jeeves-snapshot`, then push again once;
+   Change `jeeves.conf` like any data repo change: `jeeves-git switch -c conf/cleanup`, write the file
+   (`keep_days=<keep>` and `auto_every_days=<every>`, one per line), commit, `jeeves-git switch main`,
+   `jeeves-git merge --no-ff conf/cleanup -m "Merge branch 'conf/cleanup': <summary>"`, `jeeves-git branch -d conf/cleanup`,
+   then `jeeves-scan` and `jeeves-git push origin main` (a rejected push: `jeeves-snapshot`, then push again once;
    still rejected, stop and ask). Say when the first automatic cleanup will run: when the history's first
-   commit (`git log --reverse --format=%ci main | head -1`) is `<every>` days old.
+   commit (`jeeves-git log --reverse --format=%ci main | head -1`) is `<every>` days old.
 5. Never force-push yourself, and never run `jeeves-cleanup` without the user's confirmation in step 3.

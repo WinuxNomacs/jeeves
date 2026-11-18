@@ -11,7 +11,7 @@ description: >-
   settings.json or keybindings.json: those are per device.
 argument-hint: "[change to make, or nothing to sync]"
 allowed-tools:
-  - Bash(jeeves-status)
+  - Bash(jeeves-status *)
   - Bash(jeeves-snapshot)
   - Bash(jeeves-snapshot --no-pull)
   - Bash(jeeves-snapshot --force:*)
@@ -19,12 +19,19 @@ allowed-tools:
   - Bash(jeeves-apply --force:*)
   - Bash(jeeves-memories:*)
   - Bash(jeeves-scan)
-  - Bash(git status:*)
-  - Bash(git log:*)
-  - Bash(git diff:*)
-  - Bash(git show:*)
-  - Bash(git cat-file:*)
-  - Bash(git push origin main)
+  - Bash(jeeves-git status *)
+  - Bash(jeeves-git log *)
+  - Bash(jeeves-git diff *)
+  - Bash(jeeves-git show *)
+  - Bash(jeeves-git cat-file *)
+  - Bash(jeeves-git ls-files *)
+  - Bash(jeeves-git switch *)
+  - Bash(jeeves-git add *)
+  - Bash(jeeves-git commit *)
+  - Bash(jeeves-git merge *)
+  - Bash(jeeves-git revert *)
+  - Bash(jeeves-git branch -d *)
+  - Bash(jeeves-git push origin main)
 ---
 
 # Jeeves: update the global preferences
@@ -80,8 +87,8 @@ AskUserQuestion: the obvious options, the recommended one first; they can still 
   value) and ask how to proceed. Never search files, transcripts or the environment for credentials. The
   way out, once the user agrees: they remove the secret where it lives (`~/.claude/<path>`; for a host's
   `settings.json`, its `env` block), then `jeeves-snapshot`, then the commits not yet pushed are folded
-  into one so the secret leaves the history: `git reset --soft origin/main` and
-  `git commit -m "snapshot(<host>): <paths> (folded to remove a secret)"`, and `jeeves-scan` again. A
+  into one so the secret leaves the history: `jeeves-git reset --soft origin/main` and
+  `jeeves-git commit -m "snapshot(<host>): <paths> (folded to remove a secret)"`, and `jeeves-scan` again. A
   finding that is not a secret (a false positive) is the user's call: it can be pushed only after they say
   so, naming it.
 - Edit `home/…` in the data repo, never `~/.claude` directly; `jeeves-apply` installs the result. Never edit
@@ -98,7 +105,7 @@ AskUserQuestion: the obvious options, the recommended one first; they can still 
    and checks that took work to find. Leave out what those files already say, one-off details of the task,
    and what the code or git history records.
 
-   Then the **memories**: `JEEVES_DATA="${user_config.data_repo}" jeeves-memories list` prints the memory
+   Then the **memories**: `jeeves-memories --data-repo "${user_config.data_repo}" list` prints the memory
    files no device has reviewed yet (or changed since): `<hash> <source> <project> <file>`, tab-separated,
    this machine's own first, then other devices' backups (as of the data repo's last pull). Read each file.
    Look for the same kinds of knowledge, and especially for what several memories, projects or devices
@@ -159,7 +166,7 @@ AskUserQuestion: the obvious options, the recommended one first; they can still 
      record each memory file reviewed in this run (every file read, whether or not anything came of it;
      not the files left for a later run; a memory whose question the user left unanswered stays unrecorded,
      so the next run asks again) with what came of it, the user's answer included where one was asked:
-     `cd <datarepo path> && jeeves-memories record <hash> "<outcome>" [<hash> "<outcome>"...]`, the outcome
+     `jeeves-memories record <hash> "<outcome>" [<hash> "<outcome>"...]`, the outcome
      such as `promoted 2, kept 3, left out 1` ("kept": stays a memory; "left out": did not pass step 3).
      It commits the record on `main`.
 5. **Report**, after the sync or change report: every change, one line each (added, revised, merged or
@@ -170,23 +177,24 @@ AskUserQuestion: the obvious options, the recommended one first; they can still 
 
 ## Find the data repo
 
-Run `JEEVES_DATA="${user_config.data_repo}" jeeves-status`. If it says the data repo is encrypted and this
+Run `jeeves-status --data-repo "${user_config.data_repo}"`. If it says the data repo is encrypted and this
 device is locked, stop and point the user to `/jeeves:unlock`. If it says no data repo is set, or that the data
 repo is not a git repository, stop and tell the user to run `/jeeves:setup` (after setting the plugin option
 `data_repo` if it is empty). Never clone or create the data repo here: setup also offers to restore another
-machine's backup, which only it can do before the first sync. Otherwise start every later command
-with `cd <the path on its datarepo line> &&` (the shell may not keep its folder between commands), so the
-scripts and git act on the data repo.
+machine's backup, which only it can do before the first sync. Otherwise go on: that command also records
+the data repo for this device, so later commands find it on their own. Run the `jeeves-` scripts bare, and
+git in the data repo as `jeeves-git <arguments>`. Never `cd` into the data repo or set `JEEVES_DATA` before a
+command: a permission rule does not match past either, so each command would ask the user.
 
 `jeeves-status` prints tab-separated lines:
 - `<state> <path> <disk> <repo> <base>` for each tracked path not in sync. `disk`: only `~/.claude` changed
   since this device last synced; `repo`: only the repo copy changed; `conflict`: both. The hashes are git
   blobs; `-` means no file, `none` means never synced on this device. Read the base with
-  `git cat-file -p <base>`.
+  `jeeves-git cat-file -p <base>`.
 - `branch <name> clean|dirty|merging` and `main even|ahead|behind|diverged|no-remote <ahead> <behind>`
   (compared with `origin/main` as last fetched).
 
-If the branch is not `main`, or is dirty or merging: look at what is there (`git status`, `git log`). Finish a
+If the branch is not `main`, or is dirty or merging: look at what is there (`jeeves-git status`, `jeeves-git log`). Finish a
 change-mode branch of your own from this session; for anything else, stop and ask.
 
 ## Sync mode
@@ -194,16 +202,16 @@ change-mode branch of your own from this session; for anything else, stop and as
 1. `jeeves-snapshot`: fetches and fast-forwards `main`, records what changed on disk, commits. Then
    `jeeves-status`. If the snapshot says a file was "not taken" (a name another OS can't hold), tell the
    user which file and why; renaming it is theirs to decide.
-2. **Diverged `main`:** `git merge --no-ff origin/main -m "Merge origin/main: <what came in>"`. Merge
+2. **Diverged `main`:** `jeeves-git merge --no-ff origin/main -m "Merge origin/main: <what came in>"`. Merge
    conflicting text under `home/` by the rules above (keep both sides' additions; ask before dropping text);
    a conflict under `hosts/` takes this device's side for `hosts/<this host>/` and the incoming side for
    any other host (each host's folder is written only by that host); a conflict in `hosts/.memory-review`
    (the record of reviewed memories, one line per memory hash) keeps every line from both sides, one per
    hash, sorted. If the merge fails, or a conflicting
-   file says `jeeves: not merged` (the key could not be read), `git merge --abort` and point the user to
+   file says `jeeves: not merged` (the key could not be read), `jeeves-git merge --abort` and point the user to
    `/jeeves:unlock`. Before committing, read each file git listed as conflicting: it must hold both sides
    as you merged them and no `<<<<<<<`, `=======` or `>>>>>>>` lines; a conflicting file with no markers at
-   all was not merged (stop and ask). Then `git add` those files by name and commit.
+   all was not merged (stop and ask). Then `jeeves-git add` those files by name and commit.
 3. **Each `conflict` line:** read base, disk (`~/.claude/<path>`) and repo (`home/<path>`). With a base, take
    each side's changes since the base; without one (`none`, a new device), keep everything both sides hold.
    If the changes do not overlap, write the merged text to `home/<path>`, commit
@@ -214,7 +222,7 @@ change-mode branch of your own from this session; for anything else, stop and as
    and `jeeves-status` must list no paths. If not, go back to the step that applies. Notices the snapshot
    may print:
    - `<folder>/ gone from ...`: a shared folder vanished from `~/.claude`, so its files were not deleted.
-     Ask the user (AskUserQuestion), naming the files (`git ls-files home/<folder>`): "Leave them for now"
+     Ask the user (AskUserQuestion), naming the files (`jeeves-git ls-files home/<folder>`): "Leave them for now"
      (recommended when the folder may be on a drive or link that is not there), "Put them back"
      (`jeeves-apply --force <path>` for each), or "Delete them on every device"
      (`jeeves-snapshot --allow-delete <folder>`, only on a yes that names what is lost).
@@ -228,7 +236,7 @@ change-mode branch of your own from this session; for anything else, stop and as
    - `still being written`: run `jeeves-snapshot` again in a moment.
    - `could not copy`, `could not back up` or `the commit would not hold`: nothing was recorded. Report it
      as it is (a full disk, a read-only folder, a `.gitattributes` rule) and stop.
-5. If `main` is ahead: `jeeves-scan`, then `git push origin main` (a conflict marker it reports is
+5. If `main` is ahead: `jeeves-scan`, then `jeeves-git push origin main` (a conflict marker it reports is
    handled like a secret: stop and ask). If the push is rejected, `jeeves-snapshot`
    and repeat from step 2 once; if it is rejected again, stop and ask.
 6. Report in one or two lines: what was merged, installed and pushed (or that everything was in sync).
@@ -236,17 +244,17 @@ change-mode branch of your own from this session; for anything else, stop and as
 ## Change mode
 
 1. Sync first (sync mode, steps 1–4), so the change starts from files that match on disk and in the repo.
-2. `git switch -c pref/<short-name>`, then make the requested change in `home/<path>`. For `CLAUDE.md`, follow
+2. `jeeves-git switch -c pref/<short-name>`, then make the requested change in `home/<path>`. For `CLAUDE.md`, follow
    its own rules on wording and where a rule goes: edit a rule in place rather than adding one that
    contradicts it. A file goes in `home/` only if it is one of the shared paths above; a change to
    `settings.json` or `keybindings.json` is per device: make it in `~/.claude` (the next snapshot backs it
    up), not here. Shared files must work on Linux, macOS and Windows: no absolute paths, a skill runs its
    scripts as `bash <script>` (Windows keeps no executable bit), and file names without `: * ? " < > | \`.
-   A request to revert a commit (`revert <commit>`, from a session review's report): `git revert --no-edit
+   A request to revert a commit (`revert <commit>`, from a session review's report): `jeeves-git revert --no-edit
    <commit>` on the `pref/` branch (`-m 1` when it is a merge commit), instead of editing by hand.
-3. Commit with a message saying what changed and why. `git switch main`, then
-   `git merge --no-ff pref/<short-name> -m "Merge branch 'pref/<short-name>': <summary>"`, and
-   `git branch -d pref/<short-name>`.
+3. Commit with a message saying what changed and why. `jeeves-git switch main`, then
+   `jeeves-git merge --no-ff pref/<short-name> -m "Merge branch 'pref/<short-name>': <summary>"`, and
+   `jeeves-git branch -d pref/<short-name>`.
 4. `jeeves-apply` (installs it into `~/.claude`), then `jeeves-snapshot` (must print nothing).
-5. `jeeves-scan`, `git push origin main`, as in sync mode step 5.
+5. `jeeves-scan`, `jeeves-git push origin main`, as in sync mode step 5.
 6. Report the change in one line and that it is pushed. Show the diff only if the user asks.
