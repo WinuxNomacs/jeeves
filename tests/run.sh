@@ -762,6 +762,18 @@ t_check_reports_each_data_repo_state() {
   check "other files" [ "$(HOME=$W JEEVES_DATA='~/jeeves-data' check_cmd | field datarepo)" = "$W/jeeves-data	other" ]
 }
 
+t_the_key_store_takes_only_an_age_recipient() {
+  . "$SRC/lib/lib.sh"
+  JEEVES_KEYSTORE=file KEY_DIR=$W/keys
+  mkdir -p "$W/keys" && echo victim > "$W/victim"
+  store_delete "../victim"
+  check "a recipient with ../ deletes nothing outside the key folder" [ -f "$W/victim" ]
+  check "nor is a key read through it" bash -c '. "$1/lib/lib.sh"; JEEVES_KEYSTORE=file KEY_DIR=$2/keys; ! store_get ../victim' _ "$SRC" "$W"
+  check "nor written" bash -c '. "$1/lib/lib.sh"; JEEVES_KEYSTORE=file KEY_DIR=$2/keys; ! echo k | store_set "age1x y"' _ "$SRC" "$W"
+  echo AGE-SECRET-KEY-1TEST | store_set age1qyqszqgpqyqszqgpqyqszqgpqyqszqgp
+  check "a real recipient still works" [ "$(store_get age1qyqszqgpqyqszqgpqyqszqgpqyqszqgp)" = AGE-SECRET-KEY-1TEST ]
+}
+
 t_deadline_stops_a_hung_command() {
   . "$SRC/lib/lib.sh"
   start=$(date +%s)
@@ -1108,6 +1120,7 @@ run_test "check reports a signed-in machine: git, gh, GitHub login, protocol, SS
 run_test "check reports a missing gh, a signed-out gh, no SSH key and an unknown host key" t_check_reports_what_is_missing_or_failing
 run_test "check reports the data repo folder as missing, empty or other, with ~/ expanded and ~/jeeves-data by default" t_check_reports_each_data_repo_state
 run_test "check reports age as missing, too old or ok" t_check_reports_age_as_missing_old_or_ok
+run_test "the key store takes only an age recipient" t_the_key_store_takes_only_an_age_recipient
 run_test "a deadline stops a hung command by its PID" t_deadline_stops_a_hung_command
 run_test "github find lists the user's data repos once each, and fails cleanly" t_github_finds_data_repos
 run_test "github create makes a private repo with the jeeves-data topic, and reports a taken name" t_github_creates_a_private_data_repo

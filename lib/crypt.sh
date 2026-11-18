@@ -57,6 +57,10 @@ keystore_kind() {
 
 KEY_DIR=${JEEVES_KEY_DIR:-$HOME/.config/jeeves/keys}
 
+# True for an age recipient (age1 and lower-case bech32). The store functions take only that: the recipient
+# comes from the data repo, and goes into PowerShell code, `security -i` input and a key file's path.
+valid_recipient() { case "$1" in age1?*) case "${1#age1}" in *[!0-9a-z]*) return 1 ;; esac ;; *) return 1 ;; esac; }
+
 # Windows Credential Manager through PowerShell, which has no built-in reader: a small type over advapi32's
 # CredRead/CredWrite/CredDelete. Generic credentials, kept on this machine only (not roamed). The secret goes
 # in and out on stdin/stdout, never on a command line.
@@ -96,6 +100,7 @@ run_powershell() {
 # store_get <recipient>: print the private key, or return 1.
 store_get() {
   local key
+  valid_recipient "$1" || return 1
   case "$(keystore_kind)" in
     keychain) key=$(security find-generic-password -s jeeves -a "$1" -w 2>/dev/null) ;;
     secret-service) key=$(secret-tool lookup service jeeves account "$1" 2>/dev/null) ;;
@@ -109,6 +114,7 @@ store_get() {
 # store_set <recipient>: the private key comes on stdin.
 store_set() {
   local key
+  valid_recipient "$1" || return 1
   IFS= read -r key || [ -n "$key" ] || return 1
   case "$(keystore_kind)" in
     keychain)
@@ -124,6 +130,7 @@ store_set() {
 
 # store_delete <recipient>
 store_delete() {
+  valid_recipient "$1" || return 1
   case "$(keystore_kind)" in
     keychain) security delete-generic-password -s jeeves -a "$1" >/dev/null 2>&1 ;;
     secret-service) secret-tool clear service jeeves account "$1" ;;
