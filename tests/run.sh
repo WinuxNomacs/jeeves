@@ -1482,6 +1482,14 @@ t_restore_leaves_a_file_whose_disk_copy_cannot_be_saved() {
   check "the disk copy is kept" grep -q mine "$W/claude/settings.json"
 }
 
+t_the_memory_review_record_is_stored_encrypted() {
+  crypt_env; snap >/dev/null; encrypt on >/dev/null
+  mem record "$(printf '%040d' 1)" "declined 1" >/dev/null
+  check "committed" git -C "$R" cat-file -e HEAD:hosts/.memory-review
+  check "stored encrypted" is_encrypted_blob "$R" HEAD:hosts/.memory-review
+  check "plain in the working tree" grep -q "declined 1" "$R/hosts/.memory-review"
+}
+
 t_a_merge_that_cannot_decrypt_stops_with_markers_and_never_one_side() {
   crypt_env; snap >/dev/null; encrypt on >/dev/null
   printf 'one\n' > "$R/home/agents/m.md"; git -C "$R" add home/agents/m.md; git -C "$R" commit -qm base
@@ -1497,6 +1505,40 @@ t_a_merge_that_cannot_decrypt_stops_with_markers_and_never_one_side() {
     git -C "$R" merge --abort
   fi
   mv "$W/keys.away"/* "$W/keys"/
+}
+
+mem() { "$SRC/bin/jeeves-memories" "$@"; }
+
+t_memories_lists_what_is_not_reviewed_yet_from_this_machine_and_other_devices() {
+  mkdir -p "$W/claude/projects/-p/memory"
+  echo "fact a" > "$W/claude/projects/-p/memory/a.md"; echo "- [a](a.md)" > "$W/claude/projects/-p/memory/MEMORY.md"
+  snap >/dev/null
+  mkdir -p "$R/hosts/laptop/projects/-q/memory"
+  echo "fact b" > "$R/hosts/laptop/projects/-q/memory/b.md"; echo "fact a" > "$R/hosts/laptop/projects/-q/memory/same.md"
+  git -C "$R" add -A; git -C "$R" commit -qm "laptop's backup"
+  out=$(mem list)
+  check "two files: this machine's and the laptop's" [ "$(printf '%s\n' "$out" | wc -l | tr -d ' ')" = 2 ]
+  check "this machine's live memory, with its project" grep -q "	this-machine	-p	$W/claude/projects/-p/memory/a.md$" <<< "$out"
+  check "the other device's, from its backup" grep -q "	laptop	-q	$R/hosts/laptop/projects/-q/memory/b.md$" <<< "$out"
+  check "no MEMORY.md index" bash -c '! grep -q MEMORY.md <<< "$1"' _ "$out"
+  mem record $(printf '%s promoted-1 ' $(printf '%s\n' "$out" | cut -f1)) >/dev/null
+  check "recorded in a commit" bash -c 'git -C "$1" log -1 --format=%s | grep -qx "memory review(testhost): 2 memories reviewed"' _ "$R"
+  check "the data repo is clean" [ -z "$(git -C "$R" status --porcelain)" ]
+  check "nothing left to review" [ -z "$(mem list)" ]
+  echo "fact a, refined" > "$W/claude/projects/-p/memory/a.md"
+  check "a changed memory is listed again" grep -q "a.md$" <<< "$(mem list)"
+  check "the snapshot after a record has no leftovers to refuse" bash -c '"$1/bin/jeeves-snapshot" >/dev/null; [ -z "$(git -C "$2" status --porcelain)" ]' _ "$SRC" "$R"
+}
+
+t_memories_record_refuses_bad_input_and_another_branch() {
+  snap >/dev/null; n=$(commits)
+  out=$(mem record "not a hash" promoted); rc=$?
+  check "bad input: refused" grep -q "nothing recorded" <<< "$out"
+  check "bad input: exit 1" [ $rc = 1 ]
+  git -C "$R" switch -qc side
+  check "another branch: refused" grep -q "not on main" <<< "$(mem record "$(printf '%040d' 1)" declined)"
+  git -C "$R" switch -q main
+  check "nothing committed" [ "$(commits)" = "$n" ]
 }
 
 run_test "apply installs a file changed in the repo" t_apply_installs_repo_change
@@ -1572,6 +1614,8 @@ run_test "a cleaned history is not taken when the old one cannot be kept" t_a_cl
 run_test "a stale lock is taken over by one waiter only" t_a_stale_lock_is_taken_over_by_one_waiter_only
 run_test "restore leaves a file whose disk copy cannot be saved" t_restore_leaves_a_file_whose_disk_copy_cannot_be_saved
 run_test "the settings backup is opt-in, and old copies go once" t_settings_backup_is_opt_in_and_old_copies_go_once
+run_test "memories lists what is not reviewed yet, from this machine and other devices" t_memories_lists_what_is_not_reviewed_yet_from_this_machine_and_other_devices
+run_test "memories record refuses bad input and another branch" t_memories_record_refuses_bad_input_and_another_branch
 
 # Encryption tests need age 1.3+ with age-plugin-batchpass.
 if v=$(age --version 2>/dev/null) && command -v age-plugin-batchpass >/dev/null 2>&1; then
@@ -1593,6 +1637,7 @@ if v=$(age --version 2>/dev/null) && command -v age-plugin-batchpass >/dev/null 
   run_test "the base of an encrypted file stays readable" t_the_base_of_an_encrypted_file_stays_readable
   run_test "a new data repo encrypted before its first snapshot never holds plain text" t_a_new_data_repo_encrypted_before_its_first_snapshot_never_holds_plain_text
   run_test "a merge that cannot decrypt stops with markers, never one side" t_a_merge_that_cannot_decrypt_stops_with_markers_and_never_one_side
+  run_test "the memory review record is stored encrypted" t_the_memory_review_record_is_stored_encrypted
 else
   echo "skip encryption tests: age 1.3 or later with age-plugin-batchpass is not on the PATH"
 fi

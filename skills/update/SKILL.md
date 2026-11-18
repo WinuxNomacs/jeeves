@@ -6,15 +6,17 @@ description: >-
   change a global rule, agent, command or personal skill (pass the request as the argument), when a "jeeves
   snapshot" message reports newer repo files, a conflict or a diverged main, or when the user asks to sync
   their preferences. Without an argument it syncs; with one it makes that change. When the user runs it, it
-  first reviews the session for what was learned and offers to save it to the global and project CLAUDE.md.
-  Not for settings.json or keybindings.json: those are per device, only backed up.
+  first reviews the session, and the memories of every device, for what was learned and offers to save it
+  to the global and project CLAUDE.md. Not for settings.json or keybindings.json: those are per device.
 argument-hint: "[change to make, or nothing to sync]"
 allowed-tools:
   - Bash(jeeves-status)
   - Bash(jeeves-snapshot)
   - Bash(jeeves-snapshot --no-pull)
+  - Bash(jeeves-snapshot --force:*)
   - Bash(jeeves-apply)
-  - Bash(jeeves-apply --force)
+  - Bash(jeeves-apply --force:*)
+  - Bash(jeeves-memories:*)
   - Bash(jeeves-scan)
   - Bash(git status:*)
   - Bash(git log:*)
@@ -31,8 +33,14 @@ Request: $ARGUMENTS
 No request above means **sync mode**; a request means **change mode** (a sync first, then the change).
 
 When the user ran this (typed `/jeeves:update`, with or without a request), it starts with a **session
-review**: what this session taught is collected and offered to the user, then written along with the sync or
-change. When you started this skill yourself (to settle a snapshot notice, say), skip the review.
+review**: what this session taught, and what memories on any device hold that CLAUDE.md should, is collected
+and offered to the user, then written along with the sync or change. When you started this skill yourself
+(to settle a snapshot notice, say), skip the review.
+
+The review's purpose: CLAUDE.md, global and per project, is the operational knowledge that current and
+future models read at the start of every session and keep maintaining. Each run should leave it more
+useful to them: rules that are true, general, short and actionable, with the reason where it is not
+obvious, revised in place rather than piled up, and never contradicting one another.
 
 Order: session review (steps 1–3) → find the data repo → sync or change mode (the selected items written in
 it) → push → report → follow-up on unselected items (review step 5).
@@ -85,17 +93,30 @@ AskUserQuestion: the obvious options, the recommended one first; they can still 
    constraints the user gave, approaches they confirmed, mistakes made and what avoids them, commands, setups
    and checks that took work to find. Leave out what those files already say, one-off details of the task,
    and what the code or git history records.
+
+   Then the **memories**: `JEEVES_DATA="${user_config.data_repo}" jeeves-memories list` prints the memory
+   files no device has reviewed yet (or changed since): `<hash> <source> <project> <file>`, tab-separated,
+   this machine's own first, then other devices' backups (as of the data repo's last pull). Read each file.
+   Look for the same kinds of knowledge, and especially for what several memories, projects or devices
+   repeat: a lesson saved as a memory in one project often holds everywhere. A memory that is personal,
+   true only on that machine, about one task, or history stays a memory and is not offered. Read at most 25
+   files per run, in the order listed; the rest stay unrecorded, so the next run starts with them (say how
+   many are left).
 2. **Sort** each item by where it applies, as the global rules' "What goes where" says:
    - **Global** (`home/CLAUDE.md` in the data repo): holds in any repository, on any machine.
    - **Project** (the project's CLAUDE.md): what anyone working in that repo needs. It is committed and may
      be public: nothing private, no secrets or personal details, nothing true only on this machine.
    - **Memory**: personal or true only on this machine, or history (what was tried and why it was decided).
+   An item from a memory goes to Global, or to Project only when it is a memory of this session's project
+   (never back to Memory: it is one already).
    Word each item as the text it would become, in the file's own style, and say where it goes: preferably
    revising an existing rule in place (name it), so the file stays short; otherwise new, under which section.
-   If nothing is found, say so in one line and go on to the sync.
+   Where an item would contradict or repeat an existing rule, word it as the revision of that rule. If
+   nothing is found, say so in one line and go on to the sync.
 3. **Ask** with AskUserQuestion (`multiSelect: true`), one question per destination, headed "Global",
-   "Project" or "Memory": one option per item (label: a few words; description: the full text and where it
-   goes), and a last option "All of these" (it covers the items of its own question). A question holds at
+   "Project" or "Memory": one option per item (label: a few words; description: the full text, where it
+   goes, and for an item from a memory, which memory: "from memory: <project> on <source>"), and a last
+   option "All of these" (it covers the items of its own question). A question holds at
    most 4 options, so more than 3 items for one destination are split over several questions; at most 4
    questions per call, then another call.
 4. **Write** what was selected, during the sync or change below:
@@ -109,7 +130,12 @@ AskUserQuestion: the obvious options, the recommended one first; they can still 
      delete the branch. Never push the project unless its own CLAUDE.md allows it. If the project is the
      data repo itself, its CLAUDE.md goes in the same `pref/` branch.
    - Memory: save as Claude Code's memory instructions say.
-   The report names each item written, one line per destination.
+   - The memories reviewed: memories themselves are never changed. Once the selected items are written, and
+     before the push, record each memory file reviewed in this run (every file read, whether or not anything
+     came of it; not the files left for a later run) with what came of it:
+     `cd <datarepo path> && jeeves-memories record <hash> "<outcome>" [<hash> "<outcome>"...]`, the outcome
+     such as `promoted 2, declined 1, kept 3` ("kept": stays a memory). It commits the record on `main`.
+   The report names each item written, one line per destination, and how many memories were reviewed.
 5. **Follow-up:** after the report, if any items were left unselected, ask (AskUserQuestion,
    `multiSelect: true`) whether the user wants to discuss any of them further, with an option per item and
    "No, leave them". Talk the chosen ones through; whatever comes of it is written as in step 4 (another
@@ -144,7 +170,9 @@ change-mode branch of your own from this session; for anything else, stop and as
 2. **Diverged `main`:** `git merge --no-ff origin/main -m "Merge origin/main: <what came in>"`. Merge
    conflicting text under `home/` by the rules above (keep both sides' additions; ask before dropping text);
    a conflict under `hosts/` takes this device's side for `hosts/<this host>/` and the incoming side for
-   any other host (each host's folder is written only by that host). If the merge fails, or a conflicting
+   any other host (each host's folder is written only by that host); a conflict in `hosts/.memory-review`
+   (the record of reviewed memories, one line per memory hash) keeps every line from both sides, one per
+   hash, sorted. If the merge fails, or a conflicting
    file says `jeeves: not merged` (the key could not be read), `git merge --abort` and point the user to
    `/jeeves:unlock`. Before committing, read each file git listed as conflicting: it must hold both sides
    as you merged them and no `<<<<<<<`, `=======` or `>>>>>>>` lines; a conflicting file with no markers at
