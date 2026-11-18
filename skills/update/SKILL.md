@@ -63,8 +63,14 @@ AskUserQuestion: the obvious options, the recommended one first; they can still 
 - **Never force-push**, never rewrite pushed commits, never tag (only `/jeeves:cleanup`, which the user
   starts, rewrites history). A rejected push is never forced: fetch, merge, and if it is still rejected,
   stop and ask.
-- **A failed `jeeves-scan` stops everything:** tell the user what it found (file and line, never the value)
-  and ask how to proceed. Never search files, transcripts or the environment for credentials.
+- **A failed `jeeves-scan` stops everything:** tell the user what it found (file, line and commit, never the
+  value) and ask how to proceed. Never search files, transcripts or the environment for credentials. The
+  way out, once the user agrees: they remove the secret where it lives (`~/.claude/<path>`; for a host's
+  `settings.json`, its `env` block), then `jeeves-snapshot`, then the commits not yet pushed are folded
+  into one so the secret leaves the history: `git reset --soft origin/main` and
+  `git commit -m "snapshot(<host>): <paths> (folded to remove a secret)"`, and `jeeves-scan` again. A
+  finding that is not a secret (a false positive) is the user's call: it can be pushed only after they say
+  so, naming it.
 - Edit `home/…` in the data repo, never `~/.claude` directly; `jeeves-apply` installs the result. Never edit
   `hosts/` (backups, written by snapshots) or `.sync-state/` (written by the scripts), and never copy
   credentials, `~/.claude.json`, history or transcripts into the repo.
