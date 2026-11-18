@@ -197,8 +197,13 @@ case_collisions() {
   awk '{ k = tolower($0); n[k]++; p[NR] = $0; l[NR] = k } END { for (i = 1; i <= NR; i++) if (n[l[i]] > 1) print p[i] }'
 }
 
-# Git commands that contact origin: never wait for a password prompt, and give up on a dead ssh host fast.
-remote_git() { GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=5" git_repo "$@"; }
+# Git commands that contact origin: never wait for a password prompt or a credential window, give up on a
+# dead ssh host fast, and stop after a deadline (a stalled HTTPS server would otherwise hold up the
+# session-start hook for as long as it stalls). git runs directly under with_deadline, so a stop reaches it.
+remote_git() {
+  GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=never GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=5" \
+    with_deadline "${JEEVES_REMOTE_DEADLINE:-30}" git -C "$REPO" -c core.autocrlf=false -c core.safecrlf=false "$@"
+}
 
 # The first line jeeves-cleanup gives the parentless commit that replaces the removed history.
 CLEANUP_MARK="jeeves-cleanup:"

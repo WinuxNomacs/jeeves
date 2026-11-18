@@ -215,6 +215,18 @@ t_offline_records_locally() {
   check "hook mode does not mention offline" bash -c '! grep -q "could not reach" <<< "$1"' _ "$out"
 }
 
+t_a_stalled_remote_does_not_hold_up_the_session_start() {
+  snap >/dev/null
+  git -C "$R" config remote.origin.uploadpack "sleep 30; git-upload-pack"
+  echo "rules v2" > "$W/claude/CLAUDE.md"
+  start=$(date +%s)
+  out=$(JEEVES_REMOTE_DEADLINE=2 snap --hook); rc=$?
+  check "exits 0" [ $rc = 0 ]
+  check "gives up on the remote within a few seconds" [ $(( $(date +%s) - start )) -lt 10 ]
+  check "still records locally" grep -q "committed CLAUDE.md" <<< "$out"
+  check "the repo is clean" [ -z "$(git -C "$R" status --porcelain)" ]
+}
+
 t_new_device_first_sync() {
   # A device whose ~/.claude differs from the repo before it ever synced: reported, not guessed.
   echo "this machine" > "$W/claude/CLAUDE.md"
@@ -1062,6 +1074,7 @@ run_test "snapshot --force keeps the disk copy of a conflict" t_snapshot_force_t
 run_test "snapshot fast-forwards to another device's push and asks to apply" t_pulls_other_device
 run_test "snapshot still records locally when main has diverged" t_diverged_still_records
 run_test "snapshot records locally when the remote is unreachable" t_offline_records_locally
+run_test "a stalled remote does not hold up the session start" t_a_stalled_remote_does_not_hold_up_the_session_start
 run_test "a new device that differs from the repo gets a conflict, not a guess" t_new_device_first_sync
 run_test "the data repo comes from the plugin option when JEEVES_DATA is unset" t_option_finds_data_repo
 run_test "the data repo is found from the current folder inside it" t_folder_finds_data_repo
