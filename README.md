@@ -160,7 +160,9 @@ A git repo with:
 - `hosts/<host>/`: each device's backup, laid out as in `~/.claude` (`settings.json`, `keybindings.json`,
   `projects/<project>/memory/`). Only that device writes its folder. Memories are restored only on request
   and only for projects that exist on the new machine, because their folder names are absolute paths.
-- Never copied: credentials, `~/.claude.json`, history, transcripts, caches.
+- Never copied: `.credentials.json`, `~/.claude.json`, history, transcripts, caches. `settings.json` is backed
+  up as it is, so a token in its `env` block goes into the data repo: keep secrets out of it (an environment
+  variable set elsewhere, or a secret manager). `jeeves-scan` stops a push that would send one.
 - `jeeves.conf` (optional): the automatic history cleanup's settings.
 - `.gitignore`: `.sync-state/` and `*.sync-tmp`; `.gitattributes`: `* text=auto eol=lf` (and, when
   encrypted, the filter for `home/` and `hosts/`).
