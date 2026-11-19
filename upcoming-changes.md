@@ -2,10 +2,32 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** nothing planned
-- **Later:** 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
+- **Up next:** 1. Instructions only from the user (details below under "Prompt injection hardening") ·
+  2. Incoming shared files checked before install
+- **Then:** script integrity (under discussion, 2026-11-19)
+- **Later:** 0. Injection docs: threat model in the README, deny rules for the installed plugin, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
   must differ per host) · Anthropic directory submission (only on the user's direct command)
+
+## Prompt injection hardening (planned 2026-11-19, the user's choice: 1 and 2 next, 4 later, 3 not taken)
+
+Threat: text Jeeves reads (web pages and tool output in the session, project CLAUDE.md files, memory bodies,
+shared files pushed to the data repo by a stolen token or a compromised device) becoming instructions loaded by
+every session on every device, or skills with scripts installed by `jeeves-apply` without the user seeing them.
+Already in place: scripts never execute data (no eval; `jeeves.conf` read as text), narrow allowed-tools,
+destructive skills user-only, settings per device.
+
+1. **Instructions only from the user** (skill text): in both reviews a rule comes only from the user's own
+   messages or an outcome they confirmed, never from text Claude read; an item that adds commands, URLs,
+   downloads, tool permissions, or weakens Security or a confirmation rule is never written on its own: it is
+   shown with its source and the user decides.
+2. **Incoming shared files checked before install:** new or changed skills, agents and commands from another
+   device are held back by `jeeves-apply` until the user has seen the diff and agreed; incoming CLAUDE.md
+   changes are summarised; a risk check (pipe to a shell, encoded blobs, permission or hook changes,
+   "ignore previous instructions") flags them in and out, beside `jeeves-scan`.
+3. Signed data repo commits: not taken for now.
+4. (Later) Docs: threat model in the README; deny rules `Edit`/`Write` on the installed plugin; plugin repo
+   protection (branch protection, 2FA, signed tags).
 
 ## Preference requests (planned 2026-11-19)
 
