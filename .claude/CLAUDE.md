@@ -21,7 +21,8 @@ already snapshotted the data repo when the plugin is installed.
 ## Layout
 
 - `.claude-plugin/plugin.json` — manifest (`userConfig.data_repo`); `.claude-plugin/marketplace.json` — the repo
-  is its own marketplace (plugin source `"./"`).
+  is its own marketplace; its plugin entry is pinned to the last release's tag and commit (a `github` source),
+  so installs get only signed releases. `MANIFEST`, `MANIFEST.sig`, `release-key.pub` — the signed release.
 - `hooks/hooks.json` — SessionStart → `jeeves-snapshot --hook`; PostToolUse `Write|Edit` → `jeeves-hook-edit`.
 - `bin/` — on the Bash tool's PATH while the plugin is enabled, so every name starts with `jeeves-`.
   `jeeves-snapshot` (`~/.claude` → data repo, commits on its `main`), `jeeves-apply` (data repo → `~/.claude`),
@@ -65,9 +66,13 @@ already snapshotted the data repo when the plugin is installed.
 
 ## Working on the plugin
 
-- Installed from this folder as a local marketplace, the plugin loads in place: `/reload-plugins` picks up
-  edits. Hook scripts are live as soon as a file is saved, so run `bash -n` on a changed script before saving
-  it over the working copy, and keep `main` working.
+- To develop, load the checkout over the installed copy: `"env": {"CLAUDE_CODE_PLUGIN_DIRS": "<checkout>"}`
+  in that device's `~/.claude/settings.json` (or `claude --plugin-dir <checkout>` for one session), and list
+  the checkout in `~/.claude/jeeves/dev-checkouts` so `jeeves-verify` leaves it alone. It loads in place:
+  `/reload-plugins` picks up edits. Hook scripts are live as soon as a file is saved, so run `bash -n` on a
+  changed script before saving it over the working copy, and keep `main` working. Loaded that way the plugin
+  gets no plugin options: skills pass the literal `${user_config.data_repo}`, which the scripts ignore in
+  favour of the recorded data repo (checked headless, 2026-11-19).
 - To run a `bin/` script by hand against scratch folders, `export CLAUDE_HOME=<scratch>/.claude
   JEEVES_DATA=<scratch>/data` (and `JEEVES_HOST=<name>` to act as another host) first; never put `env ...`
   in a variable and run `$VAR cmd`, which zsh (the macOS shell) does not split.
@@ -83,8 +88,9 @@ already snapshotted the data repo when the plugin is installed.
   `claude plugin validate .claude-plugin/marketplace.json`.
 - Rehearse an upgrade in a scratch `CLAUDE_CONFIG_DIR`: `claude plugin marketplace add WinuxNomacs/jeeves`
   and `claude plugin install jeeves@jeeves --config data_repo=<scratch>` (the published version); after the
-  release is pushed, `claude plugin marketplace update jeeves` and `claude plugin update jeeves@jeeves`,
-  then check `<scratch>/plugins/cache/jeeves/jeeves/<version>/`. For scripts, also run the last tag's `bin/`
+  new tag's pin is pushed, `claude plugin marketplace update jeeves` and `claude plugin update jeeves@jeeves`,
+  then check `<scratch>/plugins/cache/jeeves/jeeves/<version>/` and run its `bin/jeeves-verify --trust` and
+  `bin/jeeves-verify` with `CLAUDE_HOME=<scratch>` (Claude Code adds an `.in_use/` folder there; verify skips it). For scripts, also run the last tag's `bin/`
   (a `git worktree` of it) against a scratch data repo, then the new `bin/` on the state it wrote.
 
 ## Rules for the scripts
@@ -120,9 +126,9 @@ already snapshotted the data repo when the plugin is installed.
 
 The repo is public (`WinuxNomacs/jeeves`) and is the plugin's marketplace. Claude may pull from `origin` and
 push branches to it whenever the work needs it, and push `main` after a merge whose full test suite passed,
-without asking each time. A push to `main` reaches new installs at once (they take the default branch);
-existing installs get it only when `plugin.json`'s `version` changes, which happens on a `release/X.Y.Z`
-branch (version and `CHANGELOG.md`), merged like any other. Still never force-push or rewrite pushed history.
+without asking each time. A push to `main` reaches no install: the marketplace entry is pinned to the last
+release's tag and commit, and moves (one commit on `main`, release step 9) only after the user's tag. A
+release is a `release/X.Y.Z` branch (version, `CHANGELOG.md`, the signed `MANIFEST`), merged like any other. Still never force-push or rewrite pushed history.
 A tag marks a release and starts the test workflow, so Claude tags and pushes a tag only when the user says
 so for that release. Tags are annotated:
 `git tag -a vX.Y.Z -m "Jeeves X.Y.Z"` (a plain `git tag` fails here with "no tag message").

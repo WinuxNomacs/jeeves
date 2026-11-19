@@ -7,7 +7,12 @@
   "plugins": [
     {
       "name": "jeeves",
-      "source": "./",
+      "source": {
+        "source": "github",
+        "repo": "WinuxNomacs/jeeves",
+        "ref": "v1.3.0",
+        "sha": "0b91dfbcac580c080a382c4ce1c76aa2d1328646"
+      },
       "description": "Turns what your sessions and memories teach into CLAUDE.md rules, shared with your agents, commands and skills across devices"
     }
   ]

@@ -360,6 +360,8 @@ t_data_repo_is_remembered_for_bare_commands() {
   check "and records it for this device" [ "$(cat "$W/claude/jeeves/data-repo")" = "$R" ]
   out=$(cd "$SCRATCH" && "$SRC/bin/jeeves-status")
   check "a later bare command finds it from the record" grep -q "^datarepo	$R\$" <<< "$out"
+  out=$(cd "$SCRATCH" && "$SRC/bin/jeeves-status" --data-repo '${user_config.data_repo}')
+  check "an unfilled option placeholder (a plugin loaded from a folder) uses the record" bash -c 'grep -q "^datarepo	$2\$" <<< "$1" && [ "$(cat "$3")" = "$2" ]' _ "$out" "$R" "$W/claude/jeeves/data-repo"
   check "jeeves-git runs git in the data repo" [ "$(cd "$SCRATCH" && "$SRC/bin/jeeves-git" rev-parse HEAD)" = "$(git -C "$R" rev-parse HEAD)" ]
   echo "rules v2" > "$W/claude/CLAUDE.md"
   out=$(cd "$SCRATCH" && snap)
@@ -1202,7 +1204,7 @@ t_plugin_files() {
   check "MIT licence file" grep -q '^MIT License$' "$SRC/LICENSE"
   check "licence declared in plugin.json" grep -q '"license": "MIT"' "$SRC/.claude-plugin/plugin.json"
   check "version set in plugin.json only, not in marketplace.json" bash -c '! grep -q "\"version\"" "$1"' _ "$SRC/.claude-plugin/marketplace.json"
-  check "the marketplace gives the plugin source as ./ (older Claude Code versions reject \".\")" grep -q '"source": "\./"' "$SRC/.claude-plugin/marketplace.json"
+  check "the marketplace pins the plugin to a release tag and its commit" bash -c 'grep -q "\"source\": \"github\"" "$1" && grep -Eq "\"ref\": \"v[0-9]+\.[0-9]+\.[0-9]+\"" "$1" && grep -Eq "\"sha\": \"[0-9a-f]{40}\"" "$1"' _ "$SRC/.claude-plugin/marketplace.json"
   check "no CLAUDE.md at the plugin root (shipped to users to no effect)" [ ! -e "$SRC/CLAUDE.md" ]
   wf=$SRC/.github/workflows/test.yml
   check "the workflow has no pull-request or schedule trigger" bash -c '! grep -Eq "^  (pull_request|pull_request_target|schedule):" "$1"' _ "$wf"
