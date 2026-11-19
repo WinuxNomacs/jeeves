@@ -2,11 +2,31 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** nothing planned
+- **Up next:** README blurb under the tagline (below, under "README blurb")
 - **Then:** nothing planned
 - **Later:** 0. Review text gaps (below, under "Review text gaps") · 0. Injection docs: threat model in the README, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
   must differ per host) · Anthropic directory submission (only on the user's direct command)
+
+## README blurb (requested 2026-11-19, from new.md)
+
+Request: a short, eye-catching blurb under the tagline telling the user they only have to work as usual and
+run `/jeeves:update` now and then, so it learns from the current session and the project memories; Jeeves
+takes it from there, making Claude Code smarter right away and over time.
+
+Builds on: the README's opening (tagline, butler image, the paragraph on `/jeeves:update`). Docs only: no
+release needed for the GitHub page (it shows `main`); installs get the README with the next release.
+
+Proposed: a callout between the tagline and the image, two sentences, ahead of the longer paragraph:
+
+> **Just work as usual.** Now and then, run `/jeeves:update` (or `/jeeves`): Jeeves reviews the session
+> and the memories Claude saved in your projects, keeps what is worth learning, and writes it into your
+> `CLAUDE.md`, so Claude Code works smarter from the next session on, on every device, and keeps improving.
+
+Open:
+- "Immediately": the rules land in `CLAUDE.md` during the run, but whether Claude Code reloads a changed
+  `CLAUDE.md` within the running session is not checked; until it is, the text says "from the next session".
+- Placement: above the image (proposed) or below it.
 
 ## Prompt injection hardening (planned 2026-11-19, the user's choice: 1 and 2 next, 4 later, 3 not taken)
 
