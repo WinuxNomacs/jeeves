@@ -16,6 +16,7 @@ allowed-tools:
   - Bash(jeeves-apply --force:*)
   - Bash(jeeves-memories:*)
   - Bash(jeeves-scan)
+  - Bash(jeeves-risk)
   - Bash(jeeves-git status *)
   - Bash(jeeves-git log *)
   - Bash(jeeves-git diff *)
@@ -187,9 +188,12 @@ can be undone alone: `jeeves-git add -- home/CLAUDE.md`, then
 `jeeves-git commit -m "review: <the rule, in a few words>: <what changed and why>"`. The changes you made
 on your own go in one more commit, `curate: <what>`. Then `jeeves-git switch main`,
 `jeeves-git merge --no-ff pref/review-<date> -m "Merge branch 'pref/review-<date>': rules review"`,
-`jeeves-git branch -d pref/review-<date>`, `jeeves-apply`, `jeeves-snapshot` (must print nothing; if it
-prints anything, invoke `jeeves:update` with no args to settle it), `jeeves-scan`,
-`jeeves-git push origin main`. A rejected push is never forced: run `jeeves-snapshot`; if
+`jeeves-git branch -d pref/review-<date>`, `jeeves-apply` (it installs only CLAUDE.md here; a skill, agent
+or command it holds came from another device and is asked about as `jeeves:update` sync step 4 says),
+`jeeves-snapshot` (it must print nothing but the notice for files the user left held; if it prints anything
+else, invoke `jeeves:update` with no args to settle it), `jeeves-scan`, `jeeves-risk` (each line it flags is
+asked about before the push, as `jeeves:update` sync step 5 says; a rule the user agreed to in this review
+counts as asked for), `jeeves-git push origin main`. A rejected push is never forced: run `jeeves-snapshot`; if
 `main` has diverged, invoke `jeeves:update` with no args to merge, then push again; if it is still
 rejected, stop and ask.
 

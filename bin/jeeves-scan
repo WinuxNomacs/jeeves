@@ -31,21 +31,8 @@ if encrypted_at main; then
     done | awk '!seen[$1]++')
 fi
 
-# Added lines as "<file>\t<line>\t<commit>\t<text>", from each outgoing commit's own diff (a merge's
-# combined diff: only lines that match none of its parents, as the rest come from commits checked anyway).
-added=$(git_repo -c core.quotepath=false log --no-color --no-ext-diff --format='commit %h' -p --cc -U0 "$range" -- |
-  awk '
-  /^commit / { c = $2; hunk = 0; next }
-  /^diff / { hunk = 0; next }
-  !hunk && /^\+\+\+ / { f = substr($0, 7); next }
-  /^@@/ { match($0, /^@+/); np = RLENGTH - 1; hunk = 1
-          for (i = 2; i <= NF; i++) if (substr($i, 1, 1) == "+") { split(substr($i, 2), a, ","); n = a[1] + 0 }
-          next }
-  /^\\/ { next }
-  hunk { m = substr($0, 1, np)
-         if (m ~ /-/) next
-         if (m ~ /^\++$/) print f "\t" n "\t" c "\t" substr($0, np + 1)
-         n++ }')
+# Added lines as "<file>\t<line>\t<commit>\t<text>".
+added=$(outgoing_added "$range")
 
 look() { # look <kind> <grep flags> <extended regex>
   local hits

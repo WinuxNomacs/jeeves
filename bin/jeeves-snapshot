@@ -347,8 +347,17 @@ if [ ${#refused[@]} -gt 0 ]; then
   say "not taken, so every device can hold it: $(printf '%s; ' "${refused[@]}" | sed 's/; $//'); rename it in ~/.claude"
   status=1
 fi
-if [ ${#pending[@]} -gt 0 ]; then
-  say "the repo has newer $(printf '%s\n' "${pending[@]}" | join_lines); run jeeves-apply to install them, or /jeeves:update"
+# Newer skills, agents and commands are held by jeeves-apply until the user accepts them.
+newer=() waiting=()
+for p in ${pending[@]+"${pending[@]}"}; do
+  if held_path "$p" && [ -f "$HOME_COPY/$p" ]; then waiting+=("$p"); else newer+=("$p"); fi
+done
+if [ ${#newer[@]} -gt 0 ]; then
+  say "the repo has newer $(printf '%s\n' "${newer[@]}" | join_lines); run jeeves-apply to install them, or /jeeves:update"
+fi
+if [ ${#waiting[@]} -gt 0 ]; then
+  say "new or changed skills, agents or commands in the repo wait for the user's OK before they are installed:" \
+      "$(printf '%s\n' "${waiting[@]}" | join_lines); /jeeves:update shows them and asks"
 fi
 if [ ${#conflicts[@]} -gt 0 ]; then
   say "changed both on disk and in the repo: $(printf '%s\n' "${conflicts[@]}" | join_lines);" \

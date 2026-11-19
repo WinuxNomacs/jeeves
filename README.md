@@ -97,6 +97,15 @@ write: such an item is only reported. When Claude starts
 `/jeeves:update` itself with a change, the change must be one you asked for in the session; otherwise it
 only syncs.
 
+**Skills, agents and commands from another device wait for your OK.** They carry instructions or code into
+every session, so a new or changed one arriving through the data repo is held: `/jeeves:update` tells you
+what it does or what changed and where it came from, and installs it only if you say so (left held, it is asked again next time;
+or remove it on every device). A new device asks once for all of them. Incoming `CLAUDE.md` changes are
+installed and summarised in the report. Lines that could make a session run outside code, gain permissions
+or hooks, or obey text it reads (a download piped into a shell, an encoded blob, an `allowed-tools` or hook
+entry, "ignore previous instructions") are flagged, both in what arrives and in what this device is about
+to push; a flagged line in a push is asked about first, and can be taken out while the rest is pushed.
+
 It pushes without asking and shows no diff unless you ask for one: every step is a commit. It stops and asks
 whenever text could be lost: a passage changed differently on both sides, a rejected push (it never
 force-pushes), or a possible secret found by `jeeves-scan` in what it is about to push.
@@ -177,7 +186,7 @@ The plugin's `bin/` is on the PATH of Claude's Bash tool, so Claude (or you, by 
 | Command | Direction | What it does |
 |---|---|---|
 | `jeeves-snapshot` | `~/.claude` → data repo | Fast-forwards `main` from its remote, copies changed shared files into `home/`, mirrors this device's settings, keybindings and memories into `hosts/<host>/`, commits on `main`. Never pushes. `--force [<path>...]` keeps the disk copy of a conflict; `--allow-delete <folder>` records a folder gone from `~/.claude`; `--replace-host` takes over a host name another machine used. |
-| `jeeves-apply` | data repo → `~/.claude` | Installs shared files that changed in the data repo since this device last synced, from `main` only (not mid-merge, not with uncommitted files under `home/`). Never overwrites a file a session edited since then. `--force [<path>...]` installs the repo copy (of the named files, whatever their state), saving the disk copy first. |
+| `jeeves-apply` | data repo → `~/.claude` | Installs shared files that changed in the data repo since this device last synced, from `main` only (not mid-merge, not with uncommitted files under `home/`). Never overwrites a file a session edited since then. `--force [<path>...]` installs the repo copy (of the named files, whatever their state), saving the disk copy first. A skill, agent or command in a version this device never had is held until `--accept <hash>:<path>` names that version; `--show` prints every incoming change with its diff and risk flags and installs nothing. |
 | `jeeves-restore [<host> [--memories]]` | data repo → `~/.claude` | Copies a device's backup onto this machine, saving replaced files under `.sync-state/overwritten/`. Without a host, prints this machine's host name and the hosts with a backup. |
 | `jeeves-cleanup <days>` | data repo → origin | Folds the history older than `<days>` days into one root commit (same files) and force-pushes `main` with a lease; `--dry-run <days>` only says what it would do; `--all` folds all of it (after encrypting); `--auto` is what the session-start hook runs. |
 | `jeeves-check` | (read-only) | What setup needs to know: OS, git, the GitHub CLI and sign-in, an SSH key GitHub accepts, how to install the CLI and age here, the key store, the data repo folder's state. |
@@ -187,6 +196,7 @@ The plugin's `bin/` is on the PATH of Claude's Bash tool, so Claude (or you, by 
 | `jeeves-status` | (read-only) | Lists each path out of sync (`disk`, `repo` or `conflict`) with its disk, repo and last-synced hashes, and how `main` stands against `origin/main`. |
 | `jeeves-memories list` / `record <hash> <outcome>...` | data repo | The memory files the session review has not reviewed yet (this machine's and other devices' backups), and the shared record of those it has, committed on `main`. |
 | `jeeves-git <git arguments>` | data repo | Runs git in the data repo, so the skills never `cd` into it. |
+| `jeeves-risk` | (read-only) | Flags lines a push would add under `home/` that could make a session run outside code, gain permissions or hooks, or obey text it reads; lists file, line, commit and the kind of risk. |
 | `jeeves-scan` | (read-only) | Looks for secrets (private keys, API keys and tokens, password assignments) in each commit a push would send, so one a later commit removed is still caught; lists file, line and commit, never the value. |
 
 Each device keeps a gitignored record (`.sync-state/` in the data repo) of the file hashes at its last sync.
