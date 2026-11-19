@@ -74,7 +74,9 @@ in it) → push → report (review step 5).
 
 First of all, `jeeves-verify`: if it says the installed plugin differs from its signed release, stop: show
 the user what it listed, run no other `jeeves-` command, and say that reinstalling the plugin is the way
-out (its notice says how). Otherwise (verified, a development checkout, or not set up yet) go on without mentioning it.
+out (its notice says how). If it says the signature cannot be checked (no OpenSSH 8.1 or later), tell the user
+in one line what to install, then go on. Otherwise (verified, a development checkout, or not set up yet) go on
+without mentioning it.
 
 The live files are in `~/.claude`. The data repo keeps the shared ones under `home/` (`CLAUDE.md`, `agents/`,
 `commands/`, `skills/` but not `skills/synced/`) and each device's backup of its memories (and,

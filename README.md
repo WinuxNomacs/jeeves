@@ -311,13 +311,14 @@ release key fingerprint: published with the first signed release
 ```
 
 At every session start, `jeeves-verify` checks the plugin's files against the signed `MANIFEST`. If any file
-changed, is missing or was added, it says so and Jeeves runs nothing else; `/jeeves:update` and
-`/jeeves:review` stop too, until the plugin is reinstalled. This catches changes on disk; it cannot stop
+changed, is missing or was added (a link counts), it says so and Jeeves's hooks do nothing more;
+`/jeeves:update` and `/jeeves:review` stop too, until the plugin is reinstalled. The check needs OpenSSH 8.1
+or later (`ssh-keygen -Y`); without it, it says so and Jeeves carries on unchecked. This catches changes on disk; it cannot stop
 someone who can already write the plugin folder, who could change the check as well. Setup also offers deny
 rules that stop Claude's Edit and Write tools from changing the installed plugin or the recorded key.
 
 A copy you develop in (installed from a local folder) is not a signed release: list its folder, one per
-line, in `~/.claude/jeeves/dev-checkouts`, and the check leaves it alone.
+line, in `~/.claude/jeeves/dev-checkouts` (such as `~/src/jeeves`), and the check leaves it alone.
 
 ## Adding a device
 

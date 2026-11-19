@@ -65,7 +65,8 @@ Then `jeeves-verify --trust`: on first setup it records the plugin's release key
 later update cannot swap it, and prints its fingerprint. Show the fingerprint and ask the user to compare it
 with the one in the README on GitHub (`https://github.com/WinuxNomacs/jeeves#verifying-the-plugin`). If it
 says the key differs from the one trusted since setup, stop: show its message; continuing is the user's
-call. A version without a release key says so; go on.
+call. A version without a release key says so; go on. If it says OpenSSH 8.1 or later is missing, nothing is
+recorded: tell the user what to install, go on, and run it again once they have.
 
 ## Step 2 of 5: GitHub access
 

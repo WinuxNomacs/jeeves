@@ -15,6 +15,10 @@ allowed-tools:
   - Bash(jeeves-snapshot --force:*)
   - Bash(jeeves-apply)
   - Bash(jeeves-apply --force:*)
+  - Bash(jeeves-apply --show)
+  - Bash(jeeves-apply --accept:*)
+  - Bash(jeeves-git revert --no-edit *)
+  - Bash(jeeves-git revert --abort)
   - Bash(jeeves-memories:*)
   - Bash(jeeves-scan)
   - Bash(jeeves-risk)
@@ -109,7 +113,8 @@ AskUserQuestion: the obvious options, the recommended one first; they can still 
 
 First of all, `jeeves-verify`: if it says the installed plugin differs from its signed release, stop: show
 the user what it listed, run no other `jeeves-` command, and say that reinstalling the plugin is the way
-out (its notice says how). Otherwise go on without mentioning it. Note the session's project first: `git rev-parse --show-toplevel` in the session's working folder (outside
+out (its notice says how). If it says the signature cannot be checked (no OpenSSH 8.1 or later), tell the user
+in one line what to install, then go on. Otherwise go on without mentioning it. Note the session's project first: `git rev-parse --show-toplevel` in the session's working folder (outside
 a git repo there is no project part). Then `jeeves-status --data-repo "${user_config.data_repo}"`. If the
 device is locked, stop and point the user to `/jeeves:unlock`; if no data repo is set or it is not a git
 repository, point them to `/jeeves:setup`. From here on, run the `jeeves-` scripts bare and git in the data
