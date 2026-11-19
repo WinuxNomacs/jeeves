@@ -177,6 +177,9 @@ Suite 105 passed (2026-11-19).
   Windows and macOS, 105 passed each, encryption tests included.
 - Preference requests (2026-11-19): change mode fits a requested preference to the whole ruleset, or
   explains which rule covers it; `skills/update/SKILL.md` change mode steps 2, 3, 6; README. Details above.
+- `/jeeves` short form (2026-11-19, the user's request): `skills/jeeves/SKILL.md` (`name: jeeves`, so the
+  bare `/jeeves` reaches it; it hands its request to `update` through the Skill tool, checked headless on a
+  scratch plugin first); `/jeeves:update` unchanged, so tab-completing it still syncs at once. Suite 105 passed.
 
 ## Decisions (2026-11-16, with the user)
 
