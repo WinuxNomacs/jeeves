@@ -9,7 +9,9 @@ preferences (`~/.claude/CLAUDE.md`, `settings.json` and friends) in a separate *
 Jeeves exists to improve Claude Code's operational knowledge over time, across many separate sessions and
 devices: `/jeeves:update` keeps the global and project CLAUDE.md (and the skills they point to) meaningful
 and effective for the current and future models that read and maintain them. Backing up settings is
-secondary. Weigh every change against that.
+secondary. Weigh every change against that. What Jeeves writes must only ever improve how Claude works,
+never hinder it (2026-11-19): it captures the intent of what the user asks and fits it to the whole ruleset,
+or says which rule already covers it, without asking the user to approve wording (a later run may refine it).
 
 ## Start of every session here
 
@@ -66,7 +68,9 @@ already snapshotted the data repo when the plugin is installed.
   in a variable and run `$VAR cmd`, which zsh (the macOS shell) does not split.
 - To check a change to skill text, have an agent follow the skill against scratch folders (those variables
   exported, the worktree's `bin/` on the PATH) with a made-up session and memories that hit each case; it
-  finds unclear passages the tests can't. Some tests grep skill text, so rewording a skill can fail them.
+  finds unclear passages the tests can't. For text that only directs decisions, an agent that reads the
+  skill and applies it to sample requests, running nothing, is quicker and finds the same kind of gaps.
+  Some tests grep skill text, so rewording a skill can fail them.
 - **Releases follow `.claude/skills/release/SKILL.md`** (`/release`): readiness, the review for bugs,
   interaction breakdowns and secret leaks, the checks, the release branch, CI, the merge, and the tag on the
   user's word.
