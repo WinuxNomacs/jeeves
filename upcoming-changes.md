@@ -17,16 +17,17 @@ takes it from there, making Claude Code smarter right away and over time.
 Builds on: the README's opening (tagline, butler image, the paragraph on `/jeeves:update`). Docs only: no
 release needed for the GitHub page (it shows `main`); installs get the README with the next release.
 
-Proposed: a callout between the tagline and the image, two sentences, ahead of the longer paragraph:
+Proposed: a callout of two sentences, ahead of the longer paragraph:
 
 > **Just work as usual.** Now and then, run `/jeeves:update` (or `/jeeves`): Jeeves reviews the session
 > and the memories Claude saved in your projects, keeps what is worth learning, and writes it into your
 > `CLAUDE.md`, so Claude Code works smarter from the next session on, on every device, and keeps improving.
 
-Open:
-- "Immediately": the rules land in `CLAUDE.md` during the run, but whether Claude Code reloads a changed
-  `CLAUDE.md` within the running session is not checked; until it is, the text says "from the next session".
-- Placement: above the image (proposed) or below it.
+Decided with the user (2026-11-19):
+- Placement: below the butler image, leading into the longer paragraph.
+- "Immediately": check first whether a running session picks up a `CLAUDE.md` changed during it (a
+  headless test: change the file mid-session, ask about the new rule). The blurb says "right away" only if
+  it does; otherwise "from the next session".
 
 ## Prompt injection hardening (planned 2026-11-19, the user's choice: 1 and 2 next, 4 later, 3 not taken)
 
