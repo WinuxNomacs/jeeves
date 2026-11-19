@@ -290,7 +290,7 @@ change-mode branch of your own from this session; for anything else, stop and as
    **A request to revert a commit** (`revert <commit>`, from a report): `jeeves-git revert --no-edit
    <commit>` on the `pref/` branch (`-m 1` when it is a merge commit), instead of editing by hand. If the hash
    is not found (a history cleanup since gave every commit a new hash), find the commit on `main` by its
-   `learn:`, `curate:` or `pref:` message (`jeeves-git log --format="%h %s" main`) and revert that one; if none or
+   `learn:`, `curate:`, `pref:` or `review:` message (`jeeves-git log --format="%h %s" main`) and revert that one; if none or
    several match, say so and ask. A revert that conflicts: `jeeves-git revert --abort`, show the passage
    and ask.
 3. Commit the request on its own (`jeeves-git commit -m "pref: <what changed and why>"`), apart from the

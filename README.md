@@ -42,7 +42,8 @@ offers choices as clickable options.
 |---|---|---|
 | `/jeeves:setup [url]` | you, after installing | Walks you through setting up this machine in five steps: checks git and your GitHub sign-in (offers to install the GitHub CLI), finds your data repo on GitHub or creates a private one (offering to encrypt it), unlocks an encrypted one, offers to restore another device's backup, then runs the first sync and backup. |
 | `/jeeves:update [change]` | you, or Claude | Syncs the shared files and pushes; with a change, makes it. See below. |
-| `/jeeves [change]` | you | The short form of `/jeeves:update`: `/jeeves always answer in British English`. Alone, it asks what to do: discuss a rule idea, review and sync, or undo a recent change. |
+| `/jeeves [change]` | you | The short form of `/jeeves:update`: `/jeeves always answer in British English`. Alone, it asks what to do: discuss a rule idea, review and sync, review your rules, or undo a recent change. |
+| `/jeeves:review [concern]` | you | Goes over your rules with you, your own firm rules included, for any that hold back the results you want; talks through what you meant and rewrites them once you agree. See below. |
 | `/jeeves:cleanup <days>` | you | Removes history older than that many days (1 or more), keeping every file, after a fresh backup and your confirmation; `/jeeves:cleanup auto <every> [<keep>]` or `off` sets the automatic cleanup. See below. |
 | `/jeeves:encrypt [passphrase]` | you | Encrypts the data repo with a passphrase and removes the plain history from GitHub; with `passphrase`, changes the passphrase. See below. |
 | `/jeeves:unlock` / `/jeeves:lock` | you | Unlocks this device with the passphrase (once; the key then stays in its credential store), or removes the key from it. |
@@ -87,6 +88,22 @@ itself when you ask to change a global preference, or when a snapshot reports ne
 It pushes without asking and shows no diff unless you ask for one: every step is a commit. It stops and asks
 whenever text could be lost: a passage changed differently on both sides, a rejected push (it never
 force-pushes), or a possible secret found by `jeeves-scan` in what it is about to push.
+
+### The `review` skill
+
+`/jeeves:update` never changes the rules you set firmly yourself ("never", "always", your recorded
+decisions). `/jeeves:review` is where they are looked at, with you. It reads this session, every memory on
+every device and your global and project CLAUDE.md as one set, and looks for rules that hold back the results
+you want: an absolute that blocks a better path, wording a model could read two ways, two rules pulling
+against each other, a rule for something that no longer exists. It raises a rule only with a reason it can
+show.
+
+For each of your own rules it raises, it explains how the rule may be getting in the way and offers new
+wording, removal, or keeping it. If its reading of what you meant is off, say what you meant in your own
+words: Jeeves says back the intent it hears and offers wording that captures it, until you agree. Nothing of
+yours changes without your agreement. Rules you did not set firmly it tidies on its own and reports. Each
+agreed change is its own commit, undone with `/jeeves:update revert <commit>`. `/jeeves:review <concern>`
+starts from a rule or a result you are unhappy with.
 
 ### History cleanup
 

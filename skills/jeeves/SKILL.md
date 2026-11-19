@@ -25,15 +25,18 @@ like to do?", with these options in this order:
 1. "Discuss a rule idea": "Tell me a preference or rule in your own words; I'll fit it to your rules, or show
    you the rule that already covers it."
 2. "Review and sync": "Review this session and the memories, then sync your preferences on every device."
-3. "Undo a recent change": "Revert a rule change from an earlier review or request."
+3. "Review my rules": "Look over your rules with you for any that hold back the results you want, and find
+   better words for what you meant."
+4. "Undo a recent change": "Revert a rule change from an earlier review or request."
 
 Then:
 - **Discuss a rule idea:** if the user already wrote the idea (under "Other" or in a note), hand that off.
   Otherwise ask, in one line, what the idea is, and end your turn; when the user answers, hand their answer
   off as the request.
 - **Review and sync:** hand off with no request.
+- **Review my rules:** invoke the Skill tool with skill `jeeves:review` and no args, and follow it in full.
 - **Undo a recent change:** `jeeves-git log --format="%h %s" -n 40 main`, keep the commits whose message
-  starts with `learn:`, `curate:` or `pref:`, and ask with AskUserQuestion which to undo (the four most
+  starts with `learn:`, `curate:`, `pref:` or `review:`, and ask with AskUserQuestion which to undo (the four most
   recent, each labelled by its message in plain words, its hash in the description). Hand off
   `revert <hash>`. If the command fails (no data repo yet) or none are found, say so in one line and offer
   `/jeeves:setup` or nothing.

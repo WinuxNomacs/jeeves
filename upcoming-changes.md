@@ -183,6 +183,12 @@ Suite 105 passed (2026-11-19).
 - `/jeeves` alone asks what to do (2026-11-19, the user's request): "Discuss a rule idea" (always first: the
   user's text becomes the request), "Review and sync", "Undo a recent change" (the latest `learn:`, `curate:`,
   `pref:` commits); `skills/jeeves/SKILL.md`.
+- `/jeeves:review` (2026-11-19, the user's request): `skills/review/SKILL.md`. With the user, it finds the rules
+  (their own firm ones included) that hold results back, discusses the intent and rewords them once agreed;
+  rules not set firmly it tidies on its own. Reads every memory (`jeeves-memories list --all`, new in
+  `bin/jeeves-memories`) without touching the update review's record. One `review:` commit per agreed rule,
+  undone by `/jeeves:update revert`; an agreed rewording ends "(the user's decision, <date>)" so later
+  curation keeps it. Also on the `/jeeves` menu.
 
 ## Decisions (2026-11-16, with the user)
 

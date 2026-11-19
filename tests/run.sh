@@ -1003,7 +1003,7 @@ t_plugin_files() {
   done
   check "the Voice section asks for copy blocks and clickable options" bash -c 'grep -q "fenced code block" <<< "$1" && grep -q "AskUserQuestion" <<< "$1"' _ "$voice"
   check "the cleanup confirmation says the commits go permanently" grep -q '"Yes, remove them permanently"' "$SRC/skills/cleanup/SKILL.md"
-  for k in setup restore cleanup encrypt unlock lock; do
+  for k in setup restore cleanup encrypt unlock lock review; do
     sk=$SRC/skills/$k/SKILL.md
     check "$k skill is named $k" grep -q "^name: $k\$" "$sk"
     check "only the user starts the $k skill" grep -q '^disable-model-invocation: true$' "$sk"
@@ -1012,10 +1012,14 @@ t_plugin_files() {
   check "the jeeves skill is named jeeves, so /jeeves reaches it" grep -q '^name: jeeves$' "$sk"
   check "only the user starts the jeeves skill" grep -q '^disable-model-invocation: true$' "$sk"
   check "the jeeves skill hands its request to the update skill" bash -c 'grep -q "skill \`jeeves:update\`" "$1" && grep -q "^Request: \$ARGUMENTS$" "$1"' _ "$sk"
-  check "a bare /jeeves offers a rule idea first, then review and sync, then undo" bash -c 'grep -q "^1\. \"Discuss a rule idea\"" "$1" && grep -q "^2\. \"Review and sync\"" "$1" && grep -q "^3\. \"Undo a recent change\"" "$1"' _ "$sk"
+  check "a bare /jeeves offers a rule idea first, then review and sync, the rules review, then undo" bash -c 'grep -q "^1\. \"Discuss a rule idea\"" "$1" && grep -q "^2\. \"Review and sync\"" "$1" && grep -q "^3\. \"Review my rules\"" "$1" && grep -q "^4\. \"Undo a recent change\"" "$1"' _ "$sk"
   check "the jeeves skill allows the jeeves-git log it runs" grep -q '^  - Bash(jeeves-git log \*)$' "$sk"
+  sk=$SRC/skills/review/SKILL.md
+  check "the review changes the user's firm rules only with their agreement" grep -q "change only with their agreement in this run" "$sk"
+  check "the review reads every memory, reviewed or not" grep -q "jeeves-memories list --all" "$sk"
+  check "the review commits each agreed rule on its own, and update can undo it" bash -c 'grep -q "One commit per agreed rule" "$1" && grep -q "\`review:\` message" "$2"' _ "$sk" "$SRC/skills/update/SKILL.md"
   check "the update skill counts /jeeves as the user running it" grep -q 'its short form `/jeeves`' "$SRC/skills/update/SKILL.md"
-  for k in update setup restore cleanup encrypt unlock lock; do
+  for k in update setup restore cleanup encrypt unlock lock review; do
     sk=$SRC/skills/$k/SKILL.md
     check "$k skill gets the data repo from the plugin option" grep -q -- '--data-repo "${user_config.data_repo}"' "$sk"
     check "$k skill never runs a command after a cd into the data repo or a JEEVES_DATA= prefix" bash -c '! grep -q "cd <\|cd \"<\|\`JEEVES_DATA=" "$1"' _ "$sk"
@@ -1619,6 +1623,8 @@ t_memories_lists_what_is_not_reviewed_yet_from_this_machine_and_other_devices() 
   check "recorded in a commit" bash -c 'git -C "$1" log -1 --format=%s | grep -qx "memory review(testhost): 2 memories reviewed"' _ "$R"
   check "the data repo is clean" [ -z "$(git -C "$R" status --porcelain)" ]
   check "nothing left to review" [ -z "$(mem list)" ]
+  check "list --all still lists both, reviewed or not" [ "$(mem list --all | wc -l | tr -d ' ')" = 2 ]
+  check "list with another argument is refused" bash -c '"$1/bin/jeeves-memories" list --some 2>/dev/null; [ $? = 2 ]' _ "$SRC"
   echo "fact a, refined" > "$W/claude/projects/-p/memory/a.md"
   check "a changed memory is listed again" grep -q "a.md$" <<< "$(mem list)"
   check "the snapshot after a record has no leftovers to refuse" bash -c '"$1/bin/jeeves-snapshot" >/dev/null; [ -z "$(git -C "$2" status --porcelain)" ]' _ "$SRC" "$R"

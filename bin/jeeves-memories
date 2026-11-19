@@ -12,16 +12,19 @@
 #   jeeves-memories record <hash> <outcome> [<hash> <outcome>...]
 #                            adds each reviewed memory and what came of it (such as "promoted 2, kept 3,
 #                            left out 1") to the record, and commits it on main
+#   jeeves-memories list --all
+#                            every memory file, reviewed or not, in the same form (for /jeeves:review)
 #
 # The data repo is found as lib/lib.sh describes.
 
 . "$(dirname "$0")/../lib/lib.sh"
 
 say() { echo "jeeves memories: $*"; }
-usage() { echo "usage: jeeves-memories list | record <hash> <outcome> [<hash> <outcome>...]" >&2; exit 2; }
+usage() { echo "usage: jeeves-memories list [--all] | record <hash> <outcome> [<hash> <outcome>...]" >&2; exit 2; }
 [ $# -ge 1 ] || usage
 cmd=$1; shift
-case "$cmd" in list) [ $# = 0 ] || usage ;; record) [ $# -ge 2 ] && [ $(( $# % 2 )) = 0 ] || usage ;; esac
+all=
+case "$cmd" in list) [ $# = 0 ] || { [ $# = 1 ] && [ "$1" = --all ] && all=1; } || usage ;; record) [ $# -ge 2 ] && [ $(( $# % 2 )) = 0 ] || usage ;; esac
 find_data_repo || { say "$DATA_REPO_PROBLEM"; exit 1; }
 RECORD=$REPO/hosts/.memory-review
 
@@ -46,8 +49,8 @@ case "$cmd" in
         [ "$h" = "$HOST" ] && continue   # this machine's backup: its live memories are listed already
         memory_files "$REPO/hosts/$h/projects" "$h"
       done
-    } | awk -F'\t' -v rec="$RECORD" '
-      BEGIN { while ((getline line < rec) > 0) { split(line, a, "\t"); done[a[1]] = 1 } }
+    } | awk -F'\t' -v rec="$RECORD" -v all="$all" '
+      BEGIN { if (!all) while ((getline line < rec) > 0) { split(line, a, "\t"); done[a[1]] = 1 } }
       !($1 in done) && !seen[$1]++' ;;
 
   record)
