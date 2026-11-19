@@ -2,32 +2,11 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** README blurb under the tagline (below, under "README blurb")
+- **Up next:** nothing planned
 - **Then:** nothing planned
 - **Later:** 0. Review text gaps (below, under "Review text gaps") · 0. Injection docs: threat model in the README, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
   must differ per host) · Anthropic directory submission (only on the user's direct command)
-
-## README blurb (requested 2026-11-19, from new.md)
-
-Request: a short, eye-catching blurb under the tagline telling the user they only have to work as usual and
-run `/jeeves:update` now and then, so it learns from the current session and the project memories; Jeeves
-takes it from there, making Claude Code smarter right away and over time.
-
-Builds on: the README's opening (tagline, butler image, the paragraph on `/jeeves:update`). Docs only: no
-release needed for the GitHub page (it shows `main`); installs get the README with the next release.
-
-Proposed: a callout of two sentences, ahead of the longer paragraph:
-
-> **Just work as usual.** Now and then, run `/jeeves:update` (or `/jeeves`): Jeeves reviews the session
-> and the memories Claude saved in your projects, keeps what is worth learning, and writes it into your
-> `CLAUDE.md`, so Claude Code works smarter from the next session on, on every device, and keeps improving.
-
-Decided with the user (2026-11-19):
-- Placement: below the butler image, leading into the longer paragraph.
-- "Immediately": check first whether a running session picks up a `CLAUDE.md` changed during it (a
-  headless test: change the file mid-session, ask about the new rule). The blurb says "right away" only if
-  it does; otherwise "from the next session".
 
 ## Prompt injection hardening (planned 2026-11-19, the user's choice: 1 and 2 next, 4 later, 3 not taken)
 
@@ -350,6 +329,11 @@ Suite 105 passed (2026-11-19).
   copy, from settings `env` too) plus `~/.claude/jeeves/dev-checkouts`; such a load gets no plugin options,
   so `--data-repo` ignores an unfilled `${user_config...}` placeholder (test in the bare-commands test).
   Set up on the user's development machine with their OK. README and repo CLAUDE.md updated.
+- README blurb (2026-11-19, from new.md): a callout below the butler image: work as usual, run
+  `/jeeves:update` now and then, Claude Code works with what it learned from the next session on (the
+  user's placement). "From the next session", not "right away": checked headless (`claude -p`, one process,
+  two turns) that a project `CLAUDE.md` changed by a Bash command mid-session is not in context on the same
+  turn nor the next. Docs only: no rehearsal; installs get it with the next release.
 
 ## Review text gaps (found by the 2026-11-19 dry run; older text, not this phase's)
 
