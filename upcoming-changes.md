@@ -85,8 +85,20 @@ Decided with the user (2026-11-19):
 - Before the first signed release, nothing warns: no `allowed_signers` means the check is not set up. With
   `allowed_signers` present, a missing `MANIFEST` warns (a stripped or downgraded copy).
 
-Open: new installs take `main`, whose commits after a release would not match its signed `MANIFEST`; the
-marketplace entry must point new installs at the release tag (checking the docs for a pinned ref).
+- **Installs on releases only** (the user's choice): new installs took `main`, whose later commits would
+  not match the signed `MANIFEST`. The plugin entry in `marketplace.json` becomes
+  `{"source": "github", "repo": "WinuxNomacs/jeeves", "ref": "vX.Y.Z", "sha": "<tag commit>"}` (the docs,
+  code.claude.com/docs/en/plugins/marketplace-reference.md, 2026-11-19: `github`, `url` and `git-subdir`
+  sources take `ref` and `sha`; a relative `./` source takes neither). After each tag, one commit on `main`
+  moves the pin; pushes to `main` reach nobody until a release. This machine's in-place install would then
+  fetch from GitHub too, so development here needs a separate local dev marketplace: to work out and test
+  (it changes the user's plugin setup, so each command is confirmed first). The docs do not say whether the
+  cache copy holds `.git`, or whether `plugin update` re-fetches a ref pinned without `sha`: check on a real
+  install in the rehearsal.
+
+Build order: (1) `jeeves-verify`, the release skill's manifest and signing steps, the session-start check,
+the skills' stop, setup's anchor and deny rules, tests; (2) at the first signed release, with the user: the
+release key, the pinned marketplace entry, the dev marketplace here.
 
 ## Preference requests (planned 2026-11-19)
 
