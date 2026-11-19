@@ -1798,6 +1798,16 @@ t_a_cleaned_history_is_not_taken_when_the_old_one_cannot_be_kept() {
   check "main still holds this device's commits" git -C "$R" merge-base --is-ancestor "$before" HEAD
 }
 
+# The holder whose PID a waiter read releases and exits during the waiter's check, and another waiter takes a
+# fresh lock: a stand-in kill reports the old holder dead after writing the new holder's lock.
+t_a_lock_taken_during_the_stale_check_is_kept() {
+  mkdir -p "$W/lockdir"; echo 999999 > "$W/lockdir/lock"
+  bash -c '. "$1/lib/lib.sh"; CRYPT_DIR=$2
+    kill() { echo 424242 > "$CRYPT_DIR/lock"; return 1; }
+    take_lock 0.3; exit 0' _ "$SRC" "$W/lockdir"
+  check "the fresh holder's lock is not removed" [ "$(cat "$W/lockdir/lock" 2>/dev/null)" = 424242 ]
+}
+
 t_a_stale_lock_is_taken_over_by_one_waiter_only() {
   mkdir -p "$W/lockdir"
   for round in 1 2 3; do
@@ -1971,6 +1981,7 @@ run_test "an old data repo moves to byte-for-byte line endings" t_an_old_data_re
 run_test "a rule that would change a file stops the record" t_a_rule_that_would_change_a_file_stops_the_record
 run_test "another machine with the same name keeps its backup" t_another_machine_with_the_same_name_keeps_its_backup
 run_test "a cleaned history is not taken when the old one cannot be kept" t_a_cleaned_history_is_not_taken_when_the_old_one_cannot_be_kept
+run_test "a lock taken during the stale check is kept" t_a_lock_taken_during_the_stale_check_is_kept
 run_test "a stale lock is taken over by one waiter only" t_a_stale_lock_is_taken_over_by_one_waiter_only
 run_test "restore leaves a file whose disk copy cannot be saved" t_restore_leaves_a_file_whose_disk_copy_cannot_be_saved
 run_test "the settings backup is opt-in, and old copies go once" t_settings_backup_is_opt_in_and_old_copies_go_once
