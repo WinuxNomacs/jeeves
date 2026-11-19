@@ -310,6 +310,16 @@ Suite 105 passed (2026-11-19).
   Left for the first signed release: the key, `release-key.pub` and the README fingerprint, the pinned
   entry, the dev marketplace here, and the repo CLAUDE.md's "a push to main reaches new installs" (no longer
   true once pinned).
+- Release 1.3.0 review fixes (2026-11-19): `jeeves-verify` reports links, leaves out Claude Code's
+  `.orphaned_at` and `.in_use/` (seen in a real cache copy, which otherwise matched git's file list exactly,
+  no `.git`) and a worktree's `.git` file, takes `~/` in `dev-checkouts`, and without OpenSSH 8.1 says so
+  (exit 3) instead of a false mismatch; the edit hook runs the check too; names with control characters are
+  not taken; the review skill's allowed-tools cover its apply and revert steps. Upgrade rehearsed: 1.2.0's
+  scripts on two scratch devices, then the new ones (held, flagged, accepted). Suite 118 passed, the changed
+  tests also under Windows Git Bash.
+- Release 1.3.0 (2026-11-19), the first signed release: `/jeeves`, `/jeeves:review`, preference requests,
+  instructions only from the user, incoming shared files held until accepted, `jeeves-risk`, and the plugin
+  checked against its signed `MANIFEST` (release key `SHA256:tXt+0kjefgqd/mSjv7xDjFj6/u9LxpK+vv9gZhxgZy8`).
 
 ## Review text gaps (found by the 2026-11-19 dry run; older text, not this phase's)
 

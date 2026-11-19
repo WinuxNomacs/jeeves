@@ -12,6 +12,7 @@ description: >-
 argument-hint: "[change to make, or nothing to sync]"
 allowed-tools:
   - Bash(jeeves-verify)
+  - Bash(jeeves-verify --trust)
   - Bash(jeeves-status *)
   - Bash(jeeves-snapshot)
   - Bash(jeeves-snapshot --no-pull)
@@ -75,8 +76,11 @@ in it) → push → report (review step 5).
 First of all, `jeeves-verify`: if it says the installed plugin differs from its signed release, stop: show
 the user what it listed, run no other `jeeves-` command, and say that reinstalling the plugin is the way
 out (its notice says how). If it says the signature cannot be checked (no OpenSSH 8.1 or later), tell the user
-in one line what to install, then go on. Otherwise (verified, a development checkout, or not set up yet) go on
-without mentioning it.
+in one line what to install, then go on. If it says not set up (a device set up before signed releases), run
+`jeeves-verify --trust` once: it records the release key and prints its fingerprint; show the fingerprint and
+ask the user to compare it with the README's (`https://github.com/WinuxNomacs/jeeves#verifying-the-plugin`),
+then go on. If it says the key differs from the one trusted, stop and show its message. Otherwise (verified, a
+development checkout, or a version without a release key) go on without mentioning it.
 
 The live files are in `~/.claude`. The data repo keeps the shared ones under `home/` (`CLAUDE.md`, `agents/`,
 `commands/`, `skills/` but not `skills/synced/`) and each device's backup of its memories (and,

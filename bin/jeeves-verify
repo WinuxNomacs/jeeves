@@ -71,7 +71,7 @@ if [ -f "$STATE/dev-checkouts" ]; then
   done < "$STATE/dev-checkouts"
 fi
 if [ ! -s "$SIGNERS" ]; then
-  [ $mode = hook ] || say "not set up: no trusted release key yet (/jeeves:setup records it)"
+  [ $mode = hook ] || say "not set up: no trusted release key yet (/jeeves:setup or /jeeves:update records it)"
   exit 0
 fi
 
