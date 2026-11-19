@@ -7,6 +7,20 @@
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
   must differ per host) · Anthropic directory submission (only on the user's direct command)
 
+## Preference requests (planned 2026-11-19)
+
+The user's design: `/jeeves:update <preference>` captures the intent of the user's preference and commits
+it in the way that works best for the whole ruleset; CLAUDE.md must only ever improve Claude's operation,
+never hinder it. No approval of the wording (any later run may refine it). If the rules already cover the
+request, Jeeves explains which rule does and changes nothing. Built in `skills/update/SKILL.md` (change
+mode step 2: weigh the intent against the file as review step 3 does; revise in place, add, or explain;
+ask only to weaken Security), README's `update` section. Patch release (skill text only).
+Checked by an agent applying the text to three sample requests; its findings were fixed: a covered rule the
+user asks for again is sharpened when it was evidently missed, a direct request is never dropped as
+default behaviour, mixed requests are split, scope defaults to global, the request is its own `pref:`
+commit (found by message after a cleanup), and the report quotes the rule written and how to undo it.
+Suite 105 passed (2026-11-19).
+
 ## Done
 
 - 0. Initial import: `~/.claude/CLAUDE.md` and `settings.json` recorded in `home/` on `main`
@@ -161,6 +175,8 @@
   Upgrade rehearsed from v1.1.0's scripts (record written by `--data-repo`, bare commands find it, nothing
   re-recorded, the reviewed memory not listed again, the hook exits 0). CI on the release branch: Linux,
   Windows and macOS, 105 passed each, encryption tests included.
+- Preference requests (2026-11-19): change mode fits a requested preference to the whole ruleset, or
+  explains which rule covers it; `skills/update/SKILL.md` change mode steps 2, 3, 6; README. Details above.
 
 ## Decisions (2026-11-16, with the user)
 

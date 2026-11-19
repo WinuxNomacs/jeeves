@@ -50,7 +50,10 @@ offers choices as clickable options.
 ### The `update` skill
 
 `/jeeves:update` syncs and pushes; `/jeeves:update <change>` (for example
-`/jeeves:update always answer in British English`) makes a preference change. Claude also starts it by
+`/jeeves:update always answer in British English`) makes a preference change. Say what you want in any
+words: Claude works out the intent and fits it into the rules as a whole, revising the rule it repeats or
+contradicts rather than adding another; if the rules already cover it, Claude says which one and changes
+nothing. Claude also starts it by
 itself when you ask to change a global preference, or when a snapshot reports newer repo files or a conflict.
 
 - **Session review** (only when you run it, not when Claude starts it): first, Claude goes through the

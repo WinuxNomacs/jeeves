@@ -259,21 +259,49 @@ change-mode branch of your own from this session; for anything else, stop and as
 ## Change mode
 
 1. Sync first (sync mode, steps 1–4), so the change starts from files that match on disk and in the repo.
-2. `jeeves-git switch -c pref/<short-name>`, then make the requested change in `home/<path>`. For `CLAUDE.md`, follow
-   its own rules on wording and where a rule goes: edit a rule in place rather than adding one that
-   contradicts it. A file goes in `home/` only if it is one of the shared paths above; a change to
+2. The request is one of three kinds; handle each part of a mixed one by its own kind.
+
+   **A preference for CLAUDE.md** (what the user wants, in any words; not necessarily the text to write).
+   Work out the intent, what the user wants a model to do or avoid, and weigh it against the whole file,
+   as review step 3 weighs an item. A direct request is never dropped as what a model does anyway: the
+   user asks because it matters to them, often because a model did not do it. Then, for each part:
+   - A rule already says it clearly, where a model will act on it: change nothing; the report quotes the
+     rule. If the request suggests it was not followed (it is buried, vague, or lacks its reason), sharpen
+     that rule instead.
+   - It repeats, sharpens or conflicts with a rule: revise that rule in place so it carries the user's
+     intent; never leave two rules that say the same thing or contradict each other.
+   - Otherwise: a new rule, in the section it belongs to.
+   The user's intent is what must survive; the wording, placement and any merge are yours, chosen so the
+   file as a whole works better for the models that read it (true, general, short, actionable, the reason
+   where it is not obvious). Do not ask the user to approve the wording: a later run may refine it. Ask only
+   when the change would weaken the Security section (name what it would weaken). A new rule governs what
+   is written from now on; existing text that breaks it is left to curation, within its limits. The
+   preference is global unless it names the session's project or only makes sense there: then it goes to
+   the project's CLAUDE.md, written as review step 4 says. One that is personal or true only on this
+   machine goes to memory. If anything is to go in `home/`, `jeeves-git switch -c pref/<short-name>` and
+   write it there; if nothing is (and the session review has nothing for `home/` either), skip to step 6.
+
+   **Any other change** to a shared file: `jeeves-git switch -c pref/<short-name>`, then make the requested change in
+   `home/<path>`. A file goes in `home/` only if it is one of the shared paths above; a change to
    `settings.json` or `keybindings.json` is per device: make it in `~/.claude` (the next snapshot backs it
    up), not here. Shared files must work on Linux, macOS and Windows: no absolute paths, a skill runs its
    scripts as `bash <script>` (Windows keeps no executable bit), and file names without `: * ? " < > | \`.
-   A request to revert a commit (`revert <commit>`, from a session review's report): `jeeves-git revert --no-edit
+
+   **A request to revert a commit** (`revert <commit>`, from a report): `jeeves-git revert --no-edit
    <commit>` on the `pref/` branch (`-m 1` when it is a merge commit), instead of editing by hand. If the hash
    is not found (a history cleanup since gave every commit a new hash), find the commit on `main` by its
-   `learn:` or `curate:` message (`jeeves-git log --format="%h %s" main`) and revert that one; if none or
+   `learn:`, `curate:` or `pref:` message (`jeeves-git log --format="%h %s" main`) and revert that one; if none or
    several match, say so and ask. A revert that conflicts: `jeeves-git revert --abort`, show the passage
    and ask.
-3. Commit (`jeeves-git commit -m "<message>"`) with a message saying what changed and why. `jeeves-git switch main`, then
+3. Commit the request on its own (`jeeves-git commit -m "pref: <what changed and why>"`), apart from the
+   review's `learn:` and `curate:` commits, so each can be reverted alone. `jeeves-git switch main`, then
    `jeeves-git merge --no-ff pref/<short-name> -m "Merge branch 'pref/<short-name>': <summary>"`, and
    `jeeves-git branch -d pref/<short-name>`.
 4. `jeeves-apply` (installs it into `~/.claude`), then `jeeves-snapshot` (must print nothing).
 5. `jeeves-scan`, `jeeves-git push origin main`, as in sync mode step 5.
-6. Report the change in one line and that it is pushed. Show the diff only if the user asks.
+6. Report each part in a line or two, quoting the rule as written (the user approves nothing beforehand,
+   so the report shows what was decided): revised, added, or already covered (the rule that covers it,
+   and why that is enough). Then the undo, as a copy block: for the global file
+   `/jeeves:update revert <hash of the pref: commit>` and that it is pushed; for a project,
+   `git revert <commit>` there (not pushed unless its CLAUDE.md allows it); for memory, where it was saved.
+   Show the diff only if the user asks.
