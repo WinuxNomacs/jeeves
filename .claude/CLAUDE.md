@@ -72,7 +72,9 @@ already snapshotted the data repo when the plugin is installed.
   `/reload-plugins` picks up edits. Hook scripts are live as soon as a file is saved, so run `bash -n` on a
   changed script before saving it over the working copy, and keep `main` working. Loaded that way the plugin
   gets no plugin options: skills pass the literal `${user_config.data_repo}`, which the scripts ignore in
-  favour of the recorded data repo (checked headless, 2026-11-19).
+  favour of the recorded data repo (checked headless, 2026-11-19). After first adding the env, start a new
+  session: when `/reload-plugins` swapped the installed copy for the inline one, the VS Code panel's command
+  menu showed no Jeeves commands, while a fresh session listed all nine (2026-11-19).
 - To run a `bin/` script by hand against scratch folders, `export CLAUDE_HOME=<scratch>/.claude
   JEEVES_DATA=<scratch>/data` (and `JEEVES_HOST=<name>` to act as another host) first; never put `env ...`
   in a variable and run `$VAR cmd`, which zsh (the macOS shell) does not split.
