@@ -71,8 +71,10 @@ against a key the plugin cannot change.
    fully covered: the tripwire catches those afterwards.
 
 Decided with the user (2026-11-19):
-- **Key:** a new release-only ed25519 key with a passphrase (not `~/.ssh/id_rsa`, which also pushes to
-  GitHub and signs tags), created by the user in their own terminal; its public key ships as
+- **Key:** a new release-only ed25519 key (not `~/.ssh/id_rsa`, which also pushes to
+  GitHub and signs tags), created by the user in their own terminal; no passphrase, and Claude signs each
+  release the same way (the user's decision at the first signed release, 2026-11-19; the key is backed up in
+  the user's vault); its public key ships as
   `release-key.pub`, its fingerprint is printed in the README, and setup writes `allowed_signers` from it
   on first install (trust on first use; later updates cannot swap it).
 - **Mismatch:** a loud notice at session start, and the hook runs nothing else; `/jeeves:update` and
@@ -310,6 +312,18 @@ Suite 105 passed (2026-11-19).
   Left for the first signed release: the key, `release-key.pub` and the README fingerprint, the pinned
   entry, the dev marketplace here, and the repo CLAUDE.md's "a push to main reaches new installs" (no longer
   true once pinned).
+- Release 1.3.0 review fixes (2026-11-19): `jeeves-verify` reports links, leaves out Claude Code's
+  `.orphaned_at` and `.in_use/` (seen in a real cache copy, which otherwise matched git's file list exactly,
+  no `.git`) and a worktree's `.git` file, takes `~/` in `dev-checkouts`, and without OpenSSH 8.1 says so
+  (exit 3) instead of a false mismatch; the edit hook runs the check too; names with control characters are
+  not taken; the review skill's allowed-tools cover its apply and revert steps. Upgrade rehearsed: 1.2.0's
+  scripts on two scratch devices, then the new ones (held, flagged, accepted). Suite 118 passed, the changed
+  tests also under Windows Git Bash. CI on the release branch then caught an older race in `take_lock`
+  (Windows): a waiter removed a fresh lock after its holder's predecessor exited; fixed (removed only if it
+  still names the dead PID), with a deterministic test. Suite 119 passed.
+- Release 1.3.0 (2026-11-19), the first signed release: `/jeeves`, `/jeeves:review`, preference requests,
+  instructions only from the user, incoming shared files held until accepted, `jeeves-risk`, and the plugin
+  checked against its signed `MANIFEST` (release key `SHA256:tXt+0kjefgqd/mSjv7xDjFj6/u9LxpK+vv9gZhxgZy8`).
 
 ## Review text gaps (found by the 2026-11-19 dry run; older text, not this phase's)
 

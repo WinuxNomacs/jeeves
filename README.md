@@ -307,7 +307,7 @@ Each release carries `MANIFEST` (the SHA-256 of every file it ships) signed with
 a later update cannot swap it; compare the fingerprint it shows with this one:
 
 ```
-release key fingerprint: published with the first signed release
+SHA256:tXt+0kjefgqd/mSjv7xDjFj6/u9LxpK+vv9gZhxgZy8 jeeves-release (ED25519)
 ```
 
 At every session start, `jeeves-verify` checks the plugin's files against the signed `MANIFEST`. If any file

@@ -2,6 +2,34 @@
 
 A new version reaches installed copies only when `version` in `.claude-plugin/plugin.json` changes.
 
+## 1.3.0 (2026-11-19)
+
+**Shorter to use, harder to slip things past: `/jeeves`, a rules review with you, and nothing installed or
+run from elsewhere without your OK.**
+
+- **`/jeeves <request>`** is the short form of `/jeeves:update`. Alone, it asks what you want: a rule idea,
+  review and sync, the rules review, or undo.
+- **A preference you ask for is fitted to the whole ruleset:** Jeeves works out what you want a model to do,
+  revises the rule that already covers it (or says which rule does), and never asks you to approve wording.
+- **`/jeeves:review`** goes over your rules with you, your firm ones included, finds the ones likely holding
+  results back, talks through what you meant, and rewords them once you agree.
+- **Rules come only from you:** the reviews never take a rule from text Claude read (web pages, tool output,
+  files, memories). A rule that would add commands, downloads, URLs or permissions, or weaken a safety rule,
+  is shown to you with where it came from, and you decide.
+- **Skills, agents and commands from another device wait for your OK:** `/jeeves:update` shows each new or
+  changed one and asks before installing it; a new device asks once for all. Lines that could run downloaded
+  code, decode hidden text, grant permissions or hooks, or tell the model to drop its instructions are
+  flagged, in what arrives and in what you push.
+- **The plugin is checked against its signed release:** each release carries a `MANIFEST` signed with a
+  release-only key. `/jeeves:setup` records the key and shows its fingerprint to compare with the README;
+  then every session start checks the plugin's files. If one changed, is missing or was added, Jeeves says so
+  and does nothing more until it is reinstalled. Setup also offers deny rules that stop Claude's Edit and
+  Write tools from changing the installed plugin. Needs OpenSSH 8.1 or later.
+- **Names with control characters** (a tab, a line break) are no longer taken into the data repo.
+
+Existing installs: the next `/jeeves:update` records the release key and shows its fingerprint to compare
+with the README's.
+
 ## 1.2.0 (2026-11-18)
 
 **The session review decides for itself, and Jeeves stops asking permission at every step.**

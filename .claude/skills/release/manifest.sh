@@ -6,8 +6,8 @@
 #   bash .claude/skills/release/manifest.sh --check  MANIFEST matches the tracked files and MANIFEST.sig is
 #                                                    signed by release-key.pub (exit 1 otherwise)
 #
-# The signature is the user's, in their own terminal (the key's passphrase never goes through Claude):
-#   ssh-keygen -Y sign -f ~/.ssh/jeeves-release -n jeeves-release MANIFEST
+# Then sign it (the release skill, step 6; the key has no passphrase, by the user's decision):
+#   ssh-keygen -Y sign -f ~/.ssh/jeeves-release -n jeeves-release MANIFEST </dev/null
 
 cd "$(git rev-parse --show-toplevel)" || exit 1
 if command -v sha256sum >/dev/null 2>&1; then SHA256=(sha256sum); else SHA256=(shasum -a 256); fi
@@ -18,8 +18,8 @@ case "$1" in
     [ -z "$(git status --porcelain)" ] || { echo "manifest: commit everything first (the tree is not clean)" >&2; exit 1; }
     files | tr '\n' '\0' | xargs -0 "${SHA256[@]}" > MANIFEST || exit 1
     rm -f MANIFEST.sig
-    echo "manifest: wrote MANIFEST ($(wc -l < MANIFEST | tr -d ' ') files); now sign it in your terminal:"
-    echo "  ssh-keygen -Y sign -f ~/.ssh/jeeves-release -n jeeves-release MANIFEST" ;;
+    echo "manifest: wrote MANIFEST ($(wc -l < MANIFEST | tr -d ' ') files); now sign it:"
+    echo "  ssh-keygen -Y sign -f ~/.ssh/jeeves-release -n jeeves-release MANIFEST </dev/null" ;;
   --check)
     ok=1
     diff <(files | tr '\n' '\0' | xargs -0 "${SHA256[@]}") MANIFEST >/dev/null ||
