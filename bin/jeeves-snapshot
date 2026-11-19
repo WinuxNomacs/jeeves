@@ -54,10 +54,11 @@ forced() {
 say() { echo "jeeves snapshot: $*"; }
 finish() { if [ $hook = 1 ]; then exit 0; else exit "$1"; fi; }
 
-# At session start, first the check that the plugin is its signed release: on a difference, its notice and
-# nothing else (jeeves-verify).
-if [ $hook = 1 ] && [ $pull = 1 ]; then
-  verify_out=$("$(dirname "$0")/jeeves-verify" --hook 2>&1) || { printf '%s\n' "$verify_out"; exit 0; }
+# From a hook (session start, or after an edit), first the check that the plugin is its signed release: on a
+# difference, its notice and nothing else; when the signature cannot be checked here, its notice, then on.
+if [ $hook = 1 ]; then
+  verify_out=$("$(dirname "$0")/jeeves-verify" --hook 2>&1)
+  case $? in 0) ;; 3) printf '%s\n' "$verify_out" ;; *) printf '%s\n' "$verify_out"; exit 0 ;; esac
 fi
 
 find_data_repo || { say "skipped, $DATA_REPO_PROBLEM"; finish 1; }

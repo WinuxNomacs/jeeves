@@ -386,6 +386,7 @@ risk_flags() {
 # forbids, or a name part ending in a dot or space.
 bad_name() {
   case "$1" in
+    *[[:cntrl:]]*) echo "its name has a control character (such as a tab or a line break)" ;;
     *[':*?"<>|\\']*) echo "its name has a character Windows does not allow" ;;
     *'.' | *' ' | *'./'* | *' /'*) echo "a part of its name ends in a dot or space, which Windows does not allow" ;;
   esac

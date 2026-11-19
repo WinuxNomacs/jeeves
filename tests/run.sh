@@ -688,6 +688,10 @@ t_verify_checks_the_signed_release_and_lists_every_difference() {
   check "an added file is named" grep -q "not in the release: bin/jeeves-extra" <<< "$out"
   check "a missing file is named" grep -q "missing: README.md" <<< "$out"
   check "exit 1" [ $rc = 1 ]
+  ln -s jeeves-git "$W/plugin/bin/jeeves-link"; touch "$W/plugin/.orphaned_at"
+  out=$(verify)
+  check "an added link is named" grep -q "bin/jeeves-link" <<< "$out"
+  check "the marker of a replaced version is not" bash -c '! grep -q orphaned_at <<< "$1"' _ "$out"
   check "the hook prints the difference too" grep -q "differs from its signed release" <<< "$(verify --hook)"
   # A MANIFEST rewritten to match the changes no longer carries the release key's signature.
   (cd "$W/plugin" && find . -type f ! -name 'MANIFEST*' | sed 's|^\./||' | sort | tr '\n' '\0' | xargs -0 sha256sum > M2 && mv M2 MANIFEST)
@@ -719,8 +723,43 @@ t_session_start_runs_nothing_else_when_the_plugin_differs() {
   check "the notice is printed" grep -q "differs from its signed release" <<< "$out"
   check "the hook exits 0" [ $rc = 0 ]
   check "no snapshot was taken" [ "$(commits)" = "$n" ]
-  out=$("$W/plugin/bin/jeeves-snapshot" --hook --no-pull)
-  check "the edit hook's snapshot (no pull) does not run the check" bash -c '! grep -q "differs" <<< "$1"' _ "$out"
+  out=$("$W/plugin/bin/jeeves-snapshot" --hook --no-pull); rc=$?
+  check "the edit hook's snapshot prints it too" grep -q "differs from its signed release" <<< "$out"
+  check "and takes no snapshot either" bash -c '[ $1 = 0 ] && [ "$2" = "$3" ]' _ $rc "$(commits)" "$n"
+}
+
+t_verify_without_openssh_8_1_says_so_and_jeeves_carries_on() {
+  make_release
+  fake ssh-keygen 'echo "unknown option -- Y" >&2; exit 1'
+  out=$(PATH=$W/fakebin:$PATH verify --trust); rc=$?
+  check "--trust names what to install" grep -q "OpenSSH 8.1 or later" <<< "$out"
+  check "exits 3 and records nothing" bash -c '[ $1 = 3 ] && [ ! -e "$2" ]' _ $rc "$CLAUDE_HOME/jeeves/allowed_signers"
+  rm "$W/fakebin/ssh-keygen"; verify --trust >/dev/null
+  # Only the version probe fails: git may sign the test's commits with the real ssh-keygen.
+  fake ssh-keygen "[ \"\$*\" = '-Y verify' ] && { echo 'unknown option -- Y' >&2; exit 1; }; exec $(command -v ssh-keygen) \"\$@\""
+  out=$(PATH=$W/fakebin:$PATH verify); rc=$?
+  check "the check says the signature cannot be checked" grep -q "cannot be checked" <<< "$out"
+  check "exit 3, not a difference" bash -c '[ $1 = 3 ] && ! grep -q differs <<< "$2"' _ $rc "$out"
+  snap >/dev/null; echo "rules v2" > "$W/claude/CLAUDE.md"; n=$(commits)
+  out=$(PATH=$W/fakebin:$PATH "$W/plugin/bin/jeeves-snapshot" --hook)
+  check "the session-start hook prints the notice" grep -q "cannot be checked" <<< "$out"
+  check "and still takes its snapshot" [ "$(commits)" != "$n" ]
+}
+
+t_development_checkouts_take_a_home_path_and_a_worktree() {
+  make_release; verify --trust >/dev/null
+  echo "# changed" >> "$W/plugin/lib/lib.sh"; echo "gitdir: /elsewhere" > "$W/plugin/.git"
+  echo "~/plugin" > "$CLAUDE_HOME/jeeves/dev-checkouts"
+  check "a folder written with ~ is recognised" bash -c 'HOME=$1 "$1/plugin/bin/jeeves-verify" | grep -q "development checkout"' _ "$W"
+  : > "$CLAUDE_HOME/jeeves/dev-checkouts"
+  cp "$SRC/lib/lib.sh" "$W/plugin/lib/lib.sh"
+  check "a worktree's .git file is not counted as a file of the release" bash -c '! "$1" | grep -q "not in the release: .git"' _ "$W/plugin/bin/jeeves-verify"
+}
+
+t_names_with_control_characters_are_not_taken() {
+  . "$SRC/lib/lib.sh"
+  check "a tab in a name is refused" bash -c '. "$1/lib/lib.sh"; [ -n "$(bad_name "skills/a$(printf "\t")b.md")" ]' _ "$SRC"
+  check "a plain name is taken" bash -c '. "$1/lib/lib.sh"; [ -z "$(bad_name skills/ab.md)" ]' _ "$SRC"
 }
 
 restore() { "$SRC/bin/jeeves-restore" "$@"; }
@@ -1881,6 +1920,9 @@ run_test "snapshot points to /jeeves:update for newer files and conflicts" t_sna
 run_test "verify checks the signed release and lists every difference" t_verify_checks_the_signed_release_and_lists_every_difference
 run_test "verify --trust keeps the key recorded at setup" t_trust_keeps_the_key_recorded_at_setup
 run_test "session start runs nothing else when the plugin differs from its signed release" t_session_start_runs_nothing_else_when_the_plugin_differs
+run_test "verify without OpenSSH 8.1 says so and Jeeves carries on" t_verify_without_openssh_8_1_says_so_and_jeeves_carries_on
+run_test "development checkouts take a ~ path, and a worktree's .git file is ignored" t_development_checkouts_take_a_home_path_and_a_worktree
+run_test "names with control characters are not taken" t_names_with_control_characters_are_not_taken
 run_test "an incoming skill or agent is held until that version is accepted; CLAUDE.md is installed" t_an_incoming_skill_or_agent_is_held_until_that_version_is_accepted
 run_test "apply --show prints every incoming change with its flags and installs nothing" t_apply_show_prints_every_incoming_change_and_installs_nothing
 run_test "a first sync of skills says so and holds them" t_a_first_sync_of_skills_says_so_and_holds_them

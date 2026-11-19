@@ -4,7 +4,8 @@
 # when the plugin was first set up.
 #
 #   jeeves-verify          prints what it found; exit 0: verified, a listed development checkout, or not set
-#                          up yet; exit 1: the plugin differs from the signed release (each difference listed)
+#                          up yet; exit 1: the plugin differs from the signed release (each difference listed);
+#                          exit 3: the signature cannot be checked here (no ssh-keygen with -Y: OpenSSH 8.1+)
 #   jeeves-verify --hook   the same, printing only a difference (the session-start check)
 #   jeeves-verify --trust  record the plugin's release-key.pub as the trusted key when none is recorded yet,
 #                          and print its fingerprint (setup runs it; the user compares it with the README)
@@ -33,11 +34,18 @@ esac
 say() { echo "jeeves verify: $*"; }
 # The SHA-256 tool: sha256sum (Linux, Git Bash), or shasum on a macOS without it. An array, so xargs can run it.
 if command -v sha256sum >/dev/null 2>&1; then SHA256=(sha256sum); else SHA256=(shasum -a 256); fi
+# sshsig: ssh-keygen is here and knows -Y (OpenSSH 8.1 or later; older ones reject the option).
+sshsig() {
+  command -v ssh-keygen >/dev/null 2>&1 || return 1
+  ! ssh-keygen -Y verify </dev/null 2>&1 | grep -qi -e 'unknown option' -e 'illegal option' -e 'invalid option'
+}
+NO_SSHSIG="ssh-keygen with -Y (OpenSSH 8.1 or later) is not on the PATH, so the release's signature cannot be checked; install OpenSSH 8.1 or later"
 # key_of <file>: the "<type> <base64>" of the first public key in an OpenSSH key or allowed_signers line.
 key_of() { awk '{ for (i = 1; i < NF; i++) if ($i ~ /^(ssh-|ecdsa-|sk-)/) { print $i, $(i + 1); exit } }' "$1" 2>/dev/null; }
 
 if [ $mode = trust ]; then
   [ -f "$ROOT/release-key.pub" ] || { say "this version ships no release key yet; nothing to trust"; exit 0; }
+  sshsig || { say "$NO_SSHSIG, then run --trust again (nothing recorded)"; exit 3; }
   key=$(key_of "$ROOT/release-key.pub")
   [ -n "$key" ] || { say "release-key.pub holds no public key"; exit 1; }
   fp=$(ssh-keygen -lf "$ROOT/release-key.pub" 2>/dev/null | awk '{ print $2 }')
@@ -56,6 +64,7 @@ fi
 if [ -f "$STATE/dev-checkouts" ]; then
   while IFS= read -r d; do
     d=${d%$'\r'}
+    case "$d" in "~") d=$HOME ;; "~/"*) d=$HOME/${d#"~/"} ;; esac
     [ -n "$d" ] && [ "$(cd "$d" 2>/dev/null && pwd -P)" = "$ROOT" ] || continue
     [ $mode = hook ] || say "development checkout $ROOT (listed in $STATE/dev-checkouts): not checked"
     exit 0
@@ -73,8 +82,8 @@ if [ ! -f MANIFEST ] || [ ! -f MANIFEST.sig ]; then
 else
   mh=$("${SHA256[@]}" < MANIFEST | awk '{ print $1 }')
   if [ "$(cat "$STATE/verified-manifest" 2>/dev/null)" != "$mh" ]; then
-    if ! command -v ssh-keygen >/dev/null 2>&1; then
-      problems+=("cannot check the signature: ssh-keygen (OpenSSH 8.1 or later) is not on the PATH")
+    if ! sshsig; then
+      say "$NO_SSHSIG (the files were not checked either)"; exit 3
     elif ssh-keygen -Y verify -f "$SIGNERS" -I "$NS" -n "$NS" -s MANIFEST.sig < MANIFEST >/dev/null 2>&1; then
       printf '%s\n' "$mh" > "$STATE/verified-manifest.tmp" && mv "$STATE/verified-manifest.tmp" "$STATE/verified-manifest"
     else
@@ -91,17 +100,22 @@ else
     NR == FNR { if (h != "") have[p] = h; next }
     !(p in have) { print "missing: " p; next }
     have[p] != h { print "changed: " p }' - MANIFEST)
+  # A release holds no links: one could lead anywhere, and the hashes would follow it. .orphaned_at is the
+  # marker Claude Code writes into a version's folder once another version replaces it.
+  while IFS= read -r f; do
+    problems+=("a link, which no release holds: $f")
+  done < <(find . -type l ! -path './.git/*' | sed 's|^\./||' | sort)
   while IFS= read -r f; do
     problems+=("not in the release: $f")
-  done < <(find . -type f ! -path './.git/*' | sed 's|^\./||' | grep -vxF -e MANIFEST -e MANIFEST.sig |
-    grep -vxF -f <(printf '%s\n' "$listed") | sort)
+  done < <(find . ! -type d ! -type l ! -path './.git/*' ! -path ./.git | sed 's|^\./||' |
+    grep -vxF -e MANIFEST -e MANIFEST.sig -e .orphaned_at | grep -vxF -f <(printf '%s\n' "$listed") | sort)
 fi
 
 if [ ${#problems[@]} = 0 ]; then
   [ $mode = hook ] || say "verified: every file in $ROOT is the signed release's"
   exit 0
 fi
-say "the installed plugin differs from its signed release ($ROOT), so Jeeves runs nothing else:"
+say "the installed plugin differs from its signed release ($ROOT), so Jeeves's hooks do nothing:"
 for p in "${problems[@]}"; do echo "  $p"; done
 echo "  Reinstall it (claude plugin uninstall jeeves@jeeves, then install) and ask Claude to look at what changed;"
 echo "  until then do not run /jeeves:update or /jeeves:review."
