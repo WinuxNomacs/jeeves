@@ -2,9 +2,7 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** 1. First signed release (with 1.3.0, on the user's word): the release key, the signed
-  `MANIFEST`, the pinned marketplace entry, a dev marketplace on this machine (details below under "Script
-  integrity", build order (2))
+- **Up next:** nothing planned
 - **Then:** nothing planned
 - **Later:** 0. Review text gaps (below, under "Review text gaps") · 0. Injection docs: threat model in the README, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
@@ -324,6 +322,13 @@ Suite 105 passed (2026-11-19).
 - Release 1.3.0 (2026-11-19), the first signed release: `/jeeves`, `/jeeves:review`, preference requests,
   instructions only from the user, incoming shared files held until accepted, `jeeves-risk`, and the plugin
   checked against its signed `MANIFEST` (release key `SHA256:tXt+0kjefgqd/mSjv7xDjFj6/u9LxpK+vv9gZhxgZy8`).
+  Tagged `v1.3.0` (`0b91dfb`) on the user's word.
+- First signed release, the rest (2026-11-19): the marketplace entry pinned to `v1.3.0` and its commit (a
+  `github` source; test in `t_plugin_files`); development loads the checkout with `CLAUDE_CODE_PLUGIN_DIRS`
+  in the device's settings `env` (no dev marketplace needed: checked headless that it replaces the installed
+  copy, from settings `env` too) plus `~/.claude/jeeves/dev-checkouts`; such a load gets no plugin options,
+  so `--data-repo` ignores an unfilled `${user_config...}` placeholder (test in the bare-commands test).
+  Set up on the user's development machine with their OK. README and repo CLAUDE.md updated.
 
 ## Review text gaps (found by the 2026-11-19 dry run; older text, not this phase's)
 

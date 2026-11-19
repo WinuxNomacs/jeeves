@@ -289,16 +289,18 @@ adding `--config data_repo=~/jeeves-data` to the install (or another folder), th
 
 **Updates:** auto-update is off for third-party marketplaces. Update with
 `claude plugin marketplace update jeeves` and `claude plugin update jeeves@jeeves`, or turn on auto-update in
-`/plugin` > Marketplaces. A new version arrives when `plugin.json`'s `version` changes; see
-[CHANGELOG.md](CHANGELOG.md). To stay on one release, add the marketplace as `WinuxNomacs/jeeves#v<version>`.
+`/plugin` > Marketplaces. The marketplace installs only signed releases: its entry is pinned to the latest
+release's tag and commit, so a new version arrives with each release; see [CHANGELOG.md](CHANGELOG.md). To stay on one release, add the marketplace as `WinuxNomacs/jeeves#v<version>`.
 
-**Working on Jeeves:** install from a local clone instead, and edits take effect on `/reload-plugins`:
+**Working on Jeeves:** load a clone over the installed copy, and edits take effect on `/reload-plugins`. Add
+this to `~/.claude/settings.json` (or start `claude --plugin-dir <clone>` for one session), and list the
+clone's folder in `~/.claude/jeeves/dev-checkouts` so the release check leaves it alone (see below):
 
-```sh
-git clone https://github.com/WinuxNomacs/jeeves.git
-claude plugin marketplace add ./jeeves
-claude plugin install jeeves@jeeves
+```json
+"env": { "CLAUDE_CODE_PLUGIN_DIRS": "/path/to/jeeves" }
 ```
+
+A clone loaded this way gets no plugin options; Jeeves then uses the data repo this device last recorded.
 
 ## Verifying the plugin
 
