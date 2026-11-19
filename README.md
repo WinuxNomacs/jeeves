@@ -4,6 +4,11 @@
 
 ![Jeeves, a butler in a dark tailcoat and white bow tie](docs/images/jeeves-butler.jpg)
 
+> **Just work as usual.** Now and then, run `/jeeves:update` (or `/jeeves`): Jeeves reviews the session and
+> the memories Claude saved in your projects, keeps what is worth learning, and writes it into your
+> `CLAUDE.md`. From the next session on, on every device, Claude Code works with what it learned, and it
+> keeps getting better.
+
 A Claude Code plugin that turns what your sessions learn into lasting operational knowledge. `/jeeves:update`
 reviews the session, and the memories Claude saved on any of your devices, for corrections, lessons and
 setups worth keeping, and writes them as rules into your global or project `CLAUDE.md` on its own judgement,
