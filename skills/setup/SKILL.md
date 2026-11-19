@@ -8,6 +8,7 @@ argument-hint: "[git URL of an existing data repo]"
 disable-model-invocation: true
 allowed-tools:
   - Bash(jeeves-check *)
+  - Bash(jeeves-verify --trust)
   - Bash(jeeves-github find)
   - Bash(jeeves-encrypt status)
   - Bash(jeeves-status *)
@@ -59,6 +60,12 @@ in every command, never `~`.
   for Windows from git-scm.com; Linux: the system's package manager). Stop until it is installed.
 - `os windows`: Claude Code runs Jeeves in Git Bash, which comes with Git for Windows; nothing more needed.
 - Otherwise say in one line that the tools are there, and go on.
+
+Then `jeeves-verify --trust`: on first setup it records the plugin's release key outside the plugin, so a
+later update cannot swap it, and prints its fingerprint. Show the fingerprint and ask the user to compare it
+with the one in the README on GitHub (`https://github.com/WinuxNomacs/jeeves#verifying-the-plugin`). If it
+says the key differs from the one trusted since setup, stop: show its message; continuing is the user's
+call. A version without a release key says so; go on.
 
 ## Step 2 of 5: GitHub access
 
@@ -131,6 +138,20 @@ everything both sides hold and asks before dropping text), installs the result, 
 `hosts/<host>/` and pushes.
 
 ## Done
+
+Before the report, offer to protect the plugin (AskUserQuestion; it changes the global settings, so only on
+a yes): deny rules that stop any session's Edit and Write tools from changing the installed plugin or the
+trusted key, added to `permissions.deny` in `~/.claude/settings.json` (keep every rule already there):
+
+```json
+"Edit(~/.claude/plugins/**)",
+"Edit(~/.claude/jeeves/**)"
+```
+
+When Claude Code's folder is not `~/.claude` (`CLAUDE_CONFIG_DIR` is set), write its absolute path with
+two leading slashes instead (`Edit(//<that folder>/plugins/**)`): a `~/` rule does not follow it. Say in
+one line what they do not cover: a script a session runs can still write there; the session-start check
+reports such a change. Options: "Add them" (recommended) and "Not now".
 
 Report in a few lines: where the data repo is (folder and GitHub repo), whether anything was restored, what
 the first sync merged or installed, and what happens from now on: a snapshot at every session start and after

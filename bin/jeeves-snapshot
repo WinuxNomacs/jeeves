@@ -54,6 +54,12 @@ forced() {
 say() { echo "jeeves snapshot: $*"; }
 finish() { if [ $hook = 1 ]; then exit 0; else exit "$1"; fi; }
 
+# At session start, first the check that the plugin is its signed release: on a difference, its notice and
+# nothing else (jeeves-verify).
+if [ $hook = 1 ] && [ $pull = 1 ]; then
+  verify_out=$("$(dirname "$0")/jeeves-verify" --hook 2>&1) || { printf '%s\n' "$verify_out"; exit 0; }
+fi
+
 find_data_repo || { say "skipped, $DATA_REPO_PROBLEM"; finish 1; }
 # Another session's snapshot is running: it records the same changes, so the hook stays quiet.
 take_lock 30 || { [ $hook = 1 ] || say "skipped, another Jeeves run is still at work on $REPO; try again shortly"; finish 1; }

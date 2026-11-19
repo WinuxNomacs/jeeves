@@ -653,6 +653,76 @@ t_risk_checks_flag_what_they_should_and_not_plain_rules() {
   check "curl without a pipe is not flagged" bash -c '! printf "line 1\tcurl -o out.tgz https://x.invalid/a\n" | { . "$1/lib/lib.sh"; risk_flags; } | grep -q .' _ "$SRC"
 }
 
+# A released copy of the plugin in $W/plugin: its files, release-key.pub (a throwaway key in $W/key), MANIFEST
+# and MANIFEST.sig, as the release steps make them.
+make_release() {
+  P=$W/plugin; mkdir -p "$P"
+  # Not from git: the Windows test run copies the tree without .git.
+  (cd "$SRC" && find . -type f ! -path './.git/*' | sed 's|^\./||' | grep -vxF -e MANIFEST -e MANIFEST.sig -e release-key.pub |
+    while IFS= read -r f; do mkdir -p "$P/$(dirname "$f")" && cp -p "$f" "$P/$f"; done)
+  ssh-keygen -q -t ed25519 -N '' -C test-release -f "$W/key" </dev/null >/dev/null
+  cp "$W/key.pub" "$P/release-key.pub"
+  (cd "$P" && find . -type f | sed 's|^\./||' | sort | tr '\n' '\0' | xargs -0 sha256sum > "$W/MANIFEST" && mv "$W/MANIFEST" MANIFEST &&
+    ssh-keygen -q -Y sign -f "$W/key" -n jeeves-release MANIFEST </dev/null >/dev/null 2>&1)
+}
+verify() { "$W/plugin/bin/jeeves-verify" "$@"; }
+
+t_verify_checks_the_signed_release_and_lists_every_difference() {
+  make_release
+  out=$(verify); rc=$?
+  check "before setup it says not set up" grep -q "not set up" <<< "$out"
+  check "and exits 0" [ $rc = 0 ]
+  check "the hook says nothing before setup" [ -z "$(verify --hook)" ]
+  out=$(verify --trust)
+  check "--trust records the key and prints its fingerprint" grep -q "trusted release key SHA256:" <<< "$out"
+  check "into allowed_signers" grep -q '^jeeves-release namespaces="jeeves-release" ssh-ed25519 ' "$CLAUDE_HOME/jeeves/allowed_signers"
+  out=$(verify); rc=$?
+  check "a signed release verifies" grep -q "verified" <<< "$out"
+  check "exit 0" [ $rc = 0 ]
+  check "the hook says nothing when verified" [ -z "$(verify --hook)" ]
+  fake ssh-keygen 'exit 1'
+  check "an unchanged MANIFEST is not checked again (a broken ssh-keygen is not called)" bash -c 'PATH=$1:$PATH "$2" | grep -q verified' _ "$W/fakebin" "$W/plugin/bin/jeeves-verify"
+  echo "# changed" >> "$W/plugin/bin/jeeves-git"; echo x > "$W/plugin/bin/jeeves-extra"; rm "$W/plugin/README.md"
+  out=$(verify); rc=$?
+  check "a changed file is named" grep -q "changed: bin/jeeves-git" <<< "$out"
+  check "an added file is named" grep -q "not in the release: bin/jeeves-extra" <<< "$out"
+  check "a missing file is named" grep -q "missing: README.md" <<< "$out"
+  check "exit 1" [ $rc = 1 ]
+  check "the hook prints the difference too" grep -q "differs from its signed release" <<< "$(verify --hook)"
+  # A MANIFEST rewritten to match the changes no longer carries the release key's signature.
+  (cd "$W/plugin" && find . -type f ! -name 'MANIFEST*' | sed 's|^\./||' | sort | tr '\n' '\0' | xargs -0 sha256sum > M2 && mv M2 MANIFEST)
+  out=$(verify)
+  check "a MANIFEST rewritten without the key is refused" grep -q "not signed by the trusted release key" <<< "$out"
+  rm "$W/plugin/MANIFEST"
+  check "a missing MANIFEST is refused once a key is trusted" grep -q "no signed MANIFEST" <<< "$(verify)"
+  echo "$W/plugin" > "$CLAUDE_HOME/jeeves/dev-checkouts"
+  out=$(verify); rc=$?
+  check "a listed development checkout is not checked" grep -q "development checkout" <<< "$out"
+  check "and exits 0, silent in the hook" bash -c '[ $2 = 0 ] && [ -z "$("$1" --hook)" ]' _ "$W/plugin/bin/jeeves-verify" $rc
+}
+
+t_trust_keeps_the_key_recorded_at_setup() {
+  make_release; verify --trust >/dev/null
+  ssh-keygen -q -t ed25519 -N '' -C other -f "$W/other" </dev/null >/dev/null
+  cp "$W/other.pub" "$W/plugin/release-key.pub"
+  out=$(verify --trust); rc=$?
+  check "a different key is refused" grep -q "differs from the one trusted since setup" <<< "$out"
+  check "exit 1" [ $rc = 1 ]
+  check "the recorded key is kept" grep -qF "$(cut -d' ' -f2 "$W/key.pub")" "$CLAUDE_HOME/jeeves/allowed_signers"
+}
+
+t_session_start_runs_nothing_else_when_the_plugin_differs() {
+  make_release; verify --trust >/dev/null
+  echo "rules v2" > "$W/claude/CLAUDE.md"; n=$(commits)
+  echo "# changed" >> "$W/plugin/lib/lib.sh"
+  out=$("$W/plugin/bin/jeeves-snapshot" --hook); rc=$?
+  check "the notice is printed" grep -q "differs from its signed release" <<< "$out"
+  check "the hook exits 0" [ $rc = 0 ]
+  check "no snapshot was taken" [ "$(commits)" = "$n" ]
+  out=$("$W/plugin/bin/jeeves-snapshot" --hook --no-pull)
+  check "the edit hook's snapshot (no pull) does not run the check" bash -c '! grep -q "differs" <<< "$1"' _ "$out"
+}
+
 restore() { "$SRC/bin/jeeves-restore" "$@"; }
 # A command on PATH that prints fixed output (or runs a small script), standing in for a system tool.
 fake() { # fake <name> <script body>
@@ -1144,6 +1214,10 @@ t_plugin_files() {
   for s in update review; do
     check "the $s skill asks before pushing a line jeeves-risk flags" grep -q "jeeves-risk" "$SRC/skills/$s/SKILL.md"
   done
+  for s in update review; do
+    check "the $s skill stops when the plugin differs from its signed release" grep -q "First of all, \`jeeves-verify\`" "$SRC/skills/$s/SKILL.md"
+  done
+  check "setup records the release key and offers the deny rules" bash -c 'grep -qF "jeeves-verify --trust" "$1" && grep -qF "Edit(~/.claude/plugins/**)" "$1"' _ "$SRC/skills/setup/SKILL.md"
   check "update asks before installing a held skill, agent or command" grep -q "with the user's OK, asked once per run" "$SRC/skills/update/SKILL.md"
   check "update may run the hold's options without a prompt" bash -c 'grep -qF "Bash(jeeves-apply --accept:*)" "$1" && grep -qF "Bash(jeeves-apply --show)" "$1"' _ "$SRC/skills/update/SKILL.md"
   check "the review commits each agreed rule on its own, and update can undo it" bash -c 'grep -q "One commit per agreed rule" "$1" && grep -q "\`review:\` message" "$2"' _ "$sk" "$SRC/skills/update/SKILL.md"
@@ -1804,6 +1878,9 @@ run_test "scan checks every outgoing commit, not only the last" t_scan_checks_ev
 run_test "scan checks the commits of a branch merged into main" t_scan_checks_a_branch_merged_into_main
 run_test "scan passes a clean outgoing diff" t_scan_passes_clean_diff
 run_test "snapshot points to /jeeves:update for newer files and conflicts" t_snapshot_points_to_update_skill
+run_test "verify checks the signed release and lists every difference" t_verify_checks_the_signed_release_and_lists_every_difference
+run_test "verify --trust keeps the key recorded at setup" t_trust_keeps_the_key_recorded_at_setup
+run_test "session start runs nothing else when the plugin differs from its signed release" t_session_start_runs_nothing_else_when_the_plugin_differs
 run_test "an incoming skill or agent is held until that version is accepted; CLAUDE.md is installed" t_an_incoming_skill_or_agent_is_held_until_that_version_is_accepted
 run_test "apply --show prints every incoming change with its flags and installs nothing" t_apply_show_prints_every_incoming_change_and_installs_nothing
 run_test "a first sync of skills says so and holds them" t_a_first_sync_of_skills_says_so_and_holds_them
