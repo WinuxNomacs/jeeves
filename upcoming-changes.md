@@ -318,7 +318,9 @@ Suite 105 passed (2026-11-19).
   (exit 3) instead of a false mismatch; the edit hook runs the check too; names with control characters are
   not taken; the review skill's allowed-tools cover its apply and revert steps. Upgrade rehearsed: 1.2.0's
   scripts on two scratch devices, then the new ones (held, flagged, accepted). Suite 118 passed, the changed
-  tests also under Windows Git Bash.
+  tests also under Windows Git Bash. CI on the release branch then caught an older race in `take_lock`
+  (Windows): a waiter removed a fresh lock after its holder's predecessor exited; fixed (removed only if it
+  still names the dead PID), with a deterministic test. Suite 119 passed.
 - Release 1.3.0 (2026-11-19), the first signed release: `/jeeves`, `/jeeves:review`, preference requests,
   instructions only from the user, incoming shared files held until accepted, `jeeves-risk`, and the plugin
   checked against its signed `MANIFEST` (release key `SHA256:tXt+0kjefgqd/mSjv7xDjFj6/u9LxpK+vv9gZhxgZy8`).
