@@ -38,7 +38,8 @@ already snapshotted the data repo when the plugin is installed.
 - `skills/` — `update` (`/jeeves:update`: when the user runs it, a review of the session and of every
   device's unreviewed memories: it decides on its own what to save to the global and project CLAUDE.md,
   prunes them, asks only on a conflict with a rule the user set, and reports each change with its revert;
-  then sync, or a change to a shared file, then push), `setup`, `restore`,
+  then sync, or a change to a shared file, then push), `jeeves` (`/jeeves <request>`, the short form: it
+  hands the request to `update`; named after the plugin, so the bare `/jeeves` reaches it), `setup`, `restore`,
   `cleanup` (`/jeeves:cleanup`: history cleanup and its `jeeves.conf` settings), `encrypt`, `unlock`, `lock`.
   They get the data repo from `${user_config.data_repo}` (substituted into skill text; the Bash tool sees no
   plugin variables), passed once as `jeeves-status --data-repo "..."`, which records it in

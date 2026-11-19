@@ -50,7 +50,7 @@ Request: $ARGUMENTS
 
 No request above means **sync mode**; a request means **change mode** (a sync first, then the change).
 
-When the user ran this (typed `/jeeves:update`, with or without a request), it starts with a **session
+When the user ran this (typed `/jeeves:update` or its short form `/jeeves`, with or without a request), it starts with a **session
 review**: what this session taught, and what memories on any device hold that CLAUDE.md should, is collected,
 decided on by you, written along with the sync or change, and reported. When you started this skill yourself
 (to settle a snapshot notice, say), skip the review.

@@ -998,6 +998,7 @@ t_plugin_files() {
   check "the update skill sends a locked device to /jeeves:unlock" grep -q "point the user to \`/jeeves:unlock\`" "$SRC/skills/update/SKILL.md"
   voice=$(awk '/^## Voice$/ { on = 1 } on && /^## / && !/^## Voice$/ { exit } on' "$SRC/skills/update/SKILL.md")
   for f in "$SRC"/skills/*/SKILL.md; do
+    [ "$f" = "$SRC/skills/jeeves/SKILL.md" ] && continue  # hands off to update, which speaks
     check "$f has the same Voice section as the update skill" [ "$(awk '/^## Voice$/ { on = 1 } on && /^## / && !/^## Voice$/ { exit } on' "$f")" = "$voice" ]
   done
   check "the Voice section asks for copy blocks and clickable options" bash -c 'grep -q "fenced code block" <<< "$1" && grep -q "AskUserQuestion" <<< "$1"' _ "$voice"
@@ -1007,6 +1008,11 @@ t_plugin_files() {
     check "$k skill is named $k" grep -q "^name: $k\$" "$sk"
     check "only the user starts the $k skill" grep -q '^disable-model-invocation: true$' "$sk"
   done
+  sk=$SRC/skills/jeeves/SKILL.md
+  check "the jeeves skill is named jeeves, so /jeeves reaches it" grep -q '^name: jeeves$' "$sk"
+  check "only the user starts the jeeves skill" grep -q '^disable-model-invocation: true$' "$sk"
+  check "the jeeves skill hands its request to the update skill" bash -c 'grep -q "skill \`jeeves:update\`" "$1" && grep -q "^Request: \$ARGUMENTS$" "$1"' _ "$sk"
+  check "the update skill counts /jeeves as the user running it" grep -q 'its short form `/jeeves`' "$SRC/skills/update/SKILL.md"
   for k in update setup restore cleanup encrypt unlock lock; do
     sk=$SRC/skills/$k/SKILL.md
     check "$k skill gets the data repo from the plugin option" grep -q -- '--data-repo "${user_config.data_repo}"' "$sk"
