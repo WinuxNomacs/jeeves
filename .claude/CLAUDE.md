@@ -26,7 +26,7 @@ already snapshotted the data repo when the plugin is installed.
 - `bin/` — on the Bash tool's PATH while the plugin is enabled, so every name starts with `jeeves-`.
   `jeeves-snapshot` (`~/.claude` → data repo, commits on its `main`), `jeeves-apply` (data repo → `~/.claude`),
   `jeeves-hook-edit` (snapshots after an edit to `~/.claude/CLAUDE.md`), `jeeves-status` (read-only: what is
-  out of sync, with hashes), `jeeves-scan` (secrets in the outgoing commits), `jeeves-restore` (a host's
+  out of sync, with hashes), `jeeves-scan` (secrets in the outgoing commits), `jeeves-risk` (lines in the outgoing commits that could plant instructions or code; `jeeves-apply` holds incoming skills, agents and commands until accepted), `jeeves-restore` (a host's
   backup → `~/.claude`), `jeeves-init` (new data repo), `jeeves-check` (read-only facts for setup: tools,
   GitHub sign-in, age, data repo folder), `jeeves-github` (find or create the data repo on GitHub through
   `gh`), `jeeves-cleanup` (folds old history into one root commit and force-pushes with a lease; `--auto`

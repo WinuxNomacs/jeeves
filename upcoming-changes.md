@@ -2,10 +2,9 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** 1. Incoming shared files checked before install (details below under "Prompt injection
-  hardening")
-- **Then:** 2. Script integrity: signed release manifest, session-start tripwire, deny rules (details below under
-  "Script integrity")
+- **Up next:** 1. Script integrity: signed release manifest, session-start tripwire, deny rules (details below
+  under "Script integrity")
+- **Then:** nothing planned
 - **Later:** 0. Review text gaps (below, under "Review text gaps") · 0. Injection docs: threat model in the README, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
   must differ per host) · Anthropic directory submission (only on the user's direct command)
@@ -26,6 +25,24 @@ destructive skills user-only, settings per device.
    device are held back by `jeeves-apply` until the user has seen the diff and agreed; incoming CLAUDE.md
    changes are summarised; a risk check (pipe to a shell, encoded blobs, permission or hook changes,
    "ignore previous instructions") flags them in and out, beside `jeeves-scan`.
+   Decided with the user (2026-11-19):
+   - Held: new or changed `skills/`, `agents/`, `commands/` files. `jeeves-apply` installs each only with
+     `--accept <hash>:<path>` for that exact version (a later change is held again); `--show` prints every
+     incoming change (diff and flags) and installs nothing. Deletions are not held.
+   - CLAUDE.md: installed as before; the update report summarises the incoming change and names any flag
+     (never held, the user's choice).
+   - A new device's first sync (no skill, agent or command synced on it yet): one question for all, listing
+     them by name; flagged ones asked separately (the user's choice).
+   - Outgoing: `jeeves-risk` flags lines added under `home/` by what a push would send; the update and
+     review skills ask before the push, naming each (the user's choice). `jeeves-scan` is unchanged.
+   - A file Jeeves wrote on this device for the user's request is accepted without asking; a merged
+     conflict is shown (its incoming side came from another device).
+   - Held files are asked per skill folder, with "Install it", "Leave it held" (asked again next run) or
+     "Remove it on every device"; a flagged outgoing line can be taken out (reverted) while the rest is
+     pushed. (From the dry run, 2026-11-19.)
+   - Limit: the hold stops a session from installing without the user seeing it; a session already
+     following planted instructions can pass `--accept` itself (the tripwire and deny rules of "Script
+     integrity" cover more).
 3. Signed data repo commits: not taken for now.
 4. (Later) Docs: threat model in the README; plugin repo protection (branch protection, 2FA, signed tags).
    The deny rules moved to "Script integrity".
@@ -246,6 +263,15 @@ Suite 105 passed (2026-11-19).
   their source, with "Leave it out"; permission and hook items are only reported. `/jeeves:update` started
   by Claude with a request the user never made only syncs. Checked by a read-only dry run of 14 cases;
   tests in `t_plugin_files`. README "Instructions come only from you".
+- Incoming shared files checked before install (2026-11-19; the user's choices: CLAUDE.md installed and
+  summarised only, one question for a first sync, ask before pushing a flagged line): `bin/jeeves-apply`
+  holds a skill, agent or command in a version the device never had until `--accept <hash>:<path>`;
+  `--show` prints incoming diffs and flags; `bin/jeeves-risk` flags risky lines in what a push sends;
+  `held_path`, `added_lines`, `outgoing_added` (shared with `jeeves-scan`) and `risk_flags` in
+  `lib/lib.sh`; the snapshot notice says held files wait for the user's OK. Skill text in `update` sync steps
+  4 to 6 and change step 4, and `review` step 5. Tests: the held, `--show`, first sync, forced, snapshot
+  notice and risk tests in `tests/run.sh`, plus 4 older tests now accepting held files; the new tests also
+  pass under Windows Git Bash. A read-only dry run of 9 cases found 12 gaps in the skill text, all fixed.
 
 ## Review text gaps (found by the 2026-11-19 dry run; older text, not this phase's)
 

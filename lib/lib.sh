@@ -322,6 +322,66 @@ classify() {
 
 join_lines() { tr '\n' ' ' | sed 's/ $//'; }
 
+# Shared files that carry instructions or code into every session on every device: a new or changed one from
+# the data repo is installed only once the user has accepted that exact version (jeeves-apply --accept).
+held_path() { case "$1" in skills/*|agents/*|commands/*) return 0 ;; esac; return 1; }
+
+# added_lines <old file> <new file>: "line <n>\t<text>" for each line the new file adds (all of them when
+# the old file does not exist).
+added_lines() {
+  local old=$1
+  [ -f "$old" ] || old=/dev/null
+  git -c core.autocrlf=false -c core.quotepath=false diff --no-index --no-color --no-ext-diff --no-textconv \
+    -U0 -- "$old" "$2" 2>/dev/null | awk '
+    /^@@/ { for (i = 2; i <= NF; i++) if (substr($i, 1, 1) == "+") { split(substr($i, 2), a, ","); n = a[1] + 0 }
+            hunk = 1; next }
+    !hunk || /^\\/ { next }
+    /^\+/ { print "line " n "\t" substr($0, 2); n++ }'
+}
+
+# outgoing_added <range>: "<file>\t<line>\t<commit>\t<text>" for each line the commits in <range> add, each
+# commit's own diff (a merge's combined diff: only lines that match none of its parents, as the rest come
+# from commits checked anyway).
+outgoing_added() {
+  git_repo -c core.quotepath=false log --no-color --no-ext-diff --format='commit %h' -p --cc -U0 "$1" -- |
+  awk '
+  /^commit / { c = $2; hunk = 0; next }
+  /^diff / { hunk = 0; next }
+  !hunk && /^\+\+\+ / { f = substr($0, 7); next }
+  /^@@/ { match($0, /^@+/); np = RLENGTH - 1; hunk = 1
+          for (i = 2; i <= NF; i++) if (substr($i, 1, 1) == "+") { split(substr($i, 2), a, ","); n = a[1] + 0 }
+          next }
+  /^\\/ { next }
+  hunk { m = substr($0, 1, np)
+         if (m ~ /-/) next
+         if (m ~ /^\++$/) print f "\t" n "\t" c "\t" substr($0, np + 1)
+         n++ }'
+}
+
+# risk_flags: reads "<where>\t<text>" lines on stdin and prints "<where>: <kind>" for each line that could
+# make a session run outside code, gain permissions or hooks, or obey text it reads. A flag is for the user
+# to look at, not proof of harm.
+risk_flags() {
+  local lines
+  lines=$(cat)
+  [ -n "$lines" ] || return 0
+  risk_look() { # risk_look <kind> <grep flags> <extended regex>
+    local i
+    for i in $(printf '%s\n' "$lines" | cut -f2- | grep -n $2 -e "$3" | cut -d: -f1); do
+      printf '%s: %s\n' "$(printf '%s\n' "$lines" | sed -n "${i}p" | cut -f1)" "$1"
+    done
+  }
+  risk_look "a download run by a shell or interpreter" -Ei \
+    '(curl|wget|iwr|irm|invoke-webrequest|invoke-restmethod)[^|]*\|[[:space:]]*(sudo[[:space:]]+)?([a-z]*sh|iex|invoke-expression|python[0-9.]*|node|perl|ruby)([[:space:]]|$)'
+  risk_look "encoded text decoded (possibly to run it)" -Ei 'base64[[:space:]]+(-d|-D|--decode)|frombase64string'
+  risk_look "a long encoded blob" -E '[A-Za-z0-9+/_=-]{200,}'
+  risk_look "a tool permission or permission mode" -Ei \
+    'allowed-?tools|bypasspermissions|dangerously-skip-permissions|permission-mode|defaultmode|"(allow|deny|ask)"[[:space:]]*:'
+  risk_look "a hook" -Ei '"hooks"[[:space:]]*:|^[[:space:]]*hooks[[:space:]]*:'
+  risk_look "text telling the model to drop its instructions" -Ei \
+    '(ignore|disregard|forget|override)([[:space:]]+(all|any|the|your|of|these|previous|prior|above|earlier|preceding|system))+[[:space:]]+(instructions|rules|prompts?|guidelines)'
+}
+
 # Why a shared path can't be held on every OS (Windows, macOS), or nothing when it can: characters Windows
 # forbids, or a name part ending in a dot or space.
 bad_name() {
