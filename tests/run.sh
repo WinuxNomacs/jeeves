@@ -360,6 +360,8 @@ t_data_repo_is_remembered_for_bare_commands() {
   check "and records it for this device" [ "$(cat "$W/claude/jeeves/data-repo")" = "$R" ]
   out=$(cd "$SCRATCH" && "$SRC/bin/jeeves-status")
   check "a later bare command finds it from the record" grep -q "^datarepo	$R\$" <<< "$out"
+  out=$(cd "$SCRATCH" && "$SRC/bin/jeeves-status" --data-repo '${user_config.data_repo}')
+  check "an unfilled option placeholder (a plugin loaded from a folder) uses the record" bash -c 'grep -q "^datarepo	$2\$" <<< "$1" && [ "$(cat "$3")" = "$2" ]' _ "$out" "$R" "$W/claude/jeeves/data-repo"
   check "jeeves-git runs git in the data repo" [ "$(cd "$SCRATCH" && "$SRC/bin/jeeves-git" rev-parse HEAD)" = "$(git -C "$R" rev-parse HEAD)" ]
   echo "rules v2" > "$W/claude/CLAUDE.md"
   out=$(cd "$SCRATCH" && snap)

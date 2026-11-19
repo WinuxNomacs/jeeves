@@ -30,11 +30,13 @@ DATA_REPO_POINTER=$CLAUDE_HOME/jeeves/data-repo
 
 # `--data-repo <path>` as a script's first two arguments: the same as JEEVES_DATA, and recorded. An empty path
 # (the plugin option left empty) means what it does without one, except that the record is not read and is
-# removed, so later bare commands find the same repo. This file is sourced without arguments, so it shares
-# the script's own and the shift is the script's.
+# removed, so later bare commands find the same repo. A placeholder left unfilled (a plugin loaded with
+# CLAUDE_CODE_PLUGIN_DIRS or --plugin-dir gets no plugin options, so its skills pass the literal
+# ${user_config.data_repo}) counts as no --data-repo at all. This file is sourced without arguments, so it
+# shares the script's own and the shift is the script's.
 DATA_REPO_GIVEN=
 if [ "$1" = --data-repo ]; then
-  JEEVES_DATA=$2 DATA_REPO_GIVEN=1
+  case "$2" in '${user_config.'*) ;; *) JEEVES_DATA=$2 DATA_REPO_GIVEN=1 ;; esac
   shift; [ $# -gt 0 ] && shift
 fi
 
