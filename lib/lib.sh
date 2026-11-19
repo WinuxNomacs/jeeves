@@ -459,8 +459,11 @@ take_lock() {
     if ( set -o noclobber; echo $$ > "$lock.takeover" ) 2>/dev/null; then
       # Read again under the takeover lock: another waiter may have replaced the stale lock meanwhile.
       pid=$(cat "$lock" 2>/dev/null)
-      if { [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; } ||
-         { [ -z "$pid" ] && [ -n "$(find "$lock" -mmin +1 2>/dev/null)" ]; }; then
+      # Removed only if it still names the same PID after the check: the holder read above may have released
+      # it and exited meanwhile, and another waiter taken a fresh lock that must stay (seen once on Windows).
+      if { { [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; } ||
+           { [ -z "$pid" ] && [ -n "$(find "$lock" -mmin +1 2>/dev/null)" ]; }; } &&
+         [ -e "$lock" ] && [ "$(cat "$lock" 2>/dev/null)" = "$pid" ]; then
         rm -f "$lock"
       fi
       rm -f "$lock.takeover"
