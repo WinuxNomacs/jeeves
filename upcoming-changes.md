@@ -20,7 +20,7 @@ encryption commands; setup, restore and cleanup stay as they are (folding them i
 them model-invoked, losing the "destructive skills are user-only" safeguard).
 
 Design (proposed):
-- One skill replaces `encrypt`, `lock` and `unlock`. It runs `jeeves-encrypt status` first and acts on the
+- `/jeeves:encryption` replaces `encrypt`, `lock` and `unlock`. It runs `jeeves-encrypt status` first and acts on the
   state: off: offer to encrypt (today's encrypt flow); on and locked: unlock; on and unlocked: ask "Change
   the passphrase", "Lock this device" or nothing; plain history left on GitHub: offer its removal (today's
   `PLAIN_HISTORY_MSG` case). `disable-model-invocation: true` stays; `allowed-tools` the union of the three.
@@ -28,13 +28,15 @@ Design (proposed):
   `lib/crypt.sh`, `bin/jeeves-snapshot`, `-scan`, `-risk`, `-crypt`, `-encrypt`), the setup, update and
   review skills' references ("follow /jeeves:encrypt steps 1 and 2", "/jeeves:unlock steps 1 and 2"), the
   README and the tests name the new command.
-- 9 commands become 7. Version: a command users type goes away, so per the release skill a major bump
-  (2.0.0), unless the user prefers otherwise; CHANGELOG says which command replaces them.
+- 9 commands become 7. Version 1.4.0 (the user's choice: the data repo and saved state do not change);
+  CHANGELOG says which command replaces the three.
 - Tests: the existing encryption tests keep passing; greps of skill text updated; a check that no script
   message names a removed command.
 
-Open:
-- The name: `/jeeves:encrypt` (kept, now also unlocks and locks) or `/jeeves:encryption`.
+Decided with the user (2026-11-19):
+- Merge only the three encryption commands (setup, restore, cleanup stay).
+- Name: `/jeeves:encryption` (skill folder `skills/encryption/`; `encrypt`, `lock`, `unlock` removed).
+- Version 1.4.0, not 2.0.0, though a typed command goes away.
 
 ## Prompt injection hardening (planned 2026-11-19, the user's choice: 1 and 2 next, 4 later, 3 not taken)
 
