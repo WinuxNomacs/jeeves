@@ -69,9 +69,24 @@ against a key the plugin cannot change.
    suggested by setup, written only with the user's yes (they change global settings). Bash writes are not
    fully covered: the tripwire catches those afterwards.
 
-Open decisions (for planning): which SSH key signs releases; what a mismatch blocks (all plugin commands,
-or only the hook); how a development checkout is recognised; whether setup writes the deny rules or only
-suggests them; the Windows timing to measure first.
+Decided with the user (2026-11-19):
+- **Key:** a new release-only ed25519 key with a passphrase (not `~/.ssh/id_rsa`, which also pushes to
+  GitHub and signs tags), created by the user in their own terminal; its public key ships as
+  `release-key.pub`, its fingerprint is printed in the README, and setup writes `allowed_signers` from it
+  on first install (trust on first use; later updates cannot swap it).
+- **Mismatch:** a loud notice at session start, and the hook runs nothing else; `/jeeves:update` and
+  `/jeeves:review` stop before syncing until `jeeves-verify` passes again.
+- **Development checkout:** only a folder the user lists in `~/.claude/jeeves/dev-checkouts` (outside the
+  plugin) skips the check, silently; any other unsigned copy warns.
+- **Deny rules:** setup shows them and writes them to the global `settings.json` only on the user's yes.
+- **Windows timing** (measured 2026-11-19, Git Bash, 41 files, 3 runs): hashes 205-226 ms, signature
+  100-120 ms. So the signature is checked again only when `MANIFEST` changed since the last pass (recorded
+  outside the plugin); the hashes run each session.
+- Before the first signed release, nothing warns: no `allowed_signers` means the check is not set up. With
+  `allowed_signers` present, a missing `MANIFEST` warns (a stripped or downgraded copy).
+
+Open: new installs take `main`, whose commits after a release would not match its signed `MANIFEST`; the
+marketplace entry must point new installs at the release tag (checking the docs for a pinned ref).
 
 ## Preference requests (planned 2026-11-19)
 
