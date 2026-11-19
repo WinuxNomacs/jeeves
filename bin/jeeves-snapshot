@@ -139,9 +139,9 @@ if [ $pull = 1 ] && git_repo remote get-url origin >/dev/null 2>&1; then
     if [ "$(git_repo rev-parse HEAD)" = "$(git_repo rev-parse origin/main)" ]; then
       :
     elif encrypted_at origin/main && ! unlocked; then
-      say "another device encrypted the data repo; this device is locked, so its changes are not taken: run /jeeves:unlock"
+      say "another device encrypted the data repo; this device is locked, so its changes are not taken: run /jeeves:encryption"
     elif encrypted_at origin/main && ! load_key; then
-      say "the data repo's key is not in this device's key store, so other devices' changes are not taken: run /jeeves:unlock"
+      say "the data repo's key is not in this device's key store, so other devices' changes are not taken: run /jeeves:encryption"
     elif ! git_repo merge-base HEAD origin/main >/dev/null 2>&1 && cleaned_root origin/main; then
       switch_to_cleaned_history
     elif git_repo merge-base --is-ancestor HEAD origin/main; then

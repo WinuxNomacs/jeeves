@@ -20,7 +20,7 @@ if git_repo rev-parse -q --verify refs/remotes/origin/main >/dev/null; then rang
 
 found=0
 if encrypted_at main; then
-  load_key || { say "the data repo's key is not in this device's key store: run /jeeves:unlock"; exit 1; }
+  load_key || { say "the data repo's key is not in this device's key store: run /jeeves:encryption"; exit 1; }
   # Each blob under home/ or hosts/ in the outgoing commits, once, with the first commit that holds it.
   while IFS=' ' read -r blob c f; do
     if [ "$(git_repo cat-file blob "$blob" | head -c ${#AGE_MAGIC})" != "$AGE_MAGIC" ]; then

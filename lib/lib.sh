@@ -90,7 +90,7 @@ find_data_repo() {
   CRYPT_DIR=$REPO/.git/jeeves CRYPT_TOP=$REPO
   if encrypted || unlocked; then crypt_setup; fi
   if encrypted && ! unlocked && [ "$ALLOW_LOCKED" != 1 ]; then
-    DATA_REPO_PROBLEM="the data repo is encrypted and this device is locked: run /jeeves:unlock"
+    DATA_REPO_PROBLEM="the data repo is encrypted and this device is locked: run /jeeves:encryption"
     return 1
   fi
   return 0
@@ -125,7 +125,7 @@ plain_history_at() {
   [ -n "$first" ] && git_repo rev-parse -q --verify "$first^" >/dev/null &&
     [ -n "$(git_repo log -1 --format=%H "$first^" -- home hosts)" ]
 }
-PLAIN_HISTORY_MSG="the data repo's history on GitHub still holds the plain files from before encryption: run /jeeves:encrypt to remove it"
+PLAIN_HISTORY_MSG="the data repo's history on GitHub still holds the plain files from before encryption: run /jeeves:encryption to remove it"
 # Read the key once for this script and the git commands it runs; 1 when the store has none.
 load_key() {
   [ -n "$JEEVES_AGE_KEY" ] && return 0

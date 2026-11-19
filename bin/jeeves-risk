@@ -17,7 +17,7 @@ find_data_repo || { say "$DATA_REPO_PROBLEM"; exit 1; }
 
 if git_repo rev-parse -q --verify refs/remotes/origin/main >/dev/null; then range=origin/main..main; else range=main; fi
 if encrypted_at main; then
-  load_key || { say "the data repo's key is not in this device's key store: run /jeeves:unlock"; exit 1; }
+  load_key || { say "the data repo's key is not in this device's key store: run /jeeves:encryption"; exit 1; }
 fi
 
 lines=$(outgoing_added "$range" | awk -F'\t' '$1 ~ /^home\// {

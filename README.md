@@ -50,8 +50,7 @@ offers choices as clickable options.
 | `/jeeves [change]` | you | The short form of `/jeeves:update`: `/jeeves always answer in British English`. Alone, it asks what to do: discuss a rule idea, review and sync, review your rules, or undo a recent change. |
 | `/jeeves:review [concern]` | you | Goes over your rules with you, your own firm rules included, for any that hold back the results you want; talks through what you meant and rewrites them once you agree. See below. |
 | `/jeeves:cleanup <days>` | you | Removes history older than that many days (1 or more), keeping every file, after a fresh backup and your confirmation; `/jeeves:cleanup auto <every> [<keep>]` or `off` sets the automatic cleanup. See below. |
-| `/jeeves:encrypt [passphrase]` | you | Encrypts the data repo with a passphrase and removes the plain history from GitHub; with `passphrase`, changes the passphrase. See below. |
-| `/jeeves:unlock` / `/jeeves:lock` | you | Unlocks this device with the passphrase (once; the key then stays in its credential store), or removes the key from it. |
+| `/jeeves:encryption [passphrase \| lock]` | you | Goes by the state: turns on encryption with a passphrase (and removes the plain history from GitHub), unlocks this device once with the passphrase (the key then stays in its credential store), or, on an unlocked device, changes the passphrase or locks the device (removes the key). See below. |
 | `/jeeves:restore <host>` | you | Copies a device's backed-up `settings.json`, `keybindings.json` (and on request memories) onto this machine, then fixes paths that only worked there (`data_repo`, a local marketplace folder) and lists other machine-specific values. Replaced files are saved first. |
 
 ### The `update` skill
@@ -155,7 +154,7 @@ file changes, on disk or in the repo.
 
 ### Encryption
 
-`/jeeves:encrypt` encrypts everything under `home/` and `hosts/` with [age](https://age-encryption.org)
+`/jeeves:encryption` encrypts everything under `home/` and `hosts/` with [age](https://age-encryption.org)
 (1.3.0 or later), so a leaked GitHub token or a repo made public by mistake shows only encrypted files. The
 data repo's folder and `~/.claude` on each device stay plain, as they must for Claude Code to read them.
 Still visible on GitHub: file names (including the project paths of memories), sizes and commit messages.
@@ -165,18 +164,18 @@ Still visible on GitHub: file names (including the project paths of memories), s
 - **Your passphrase** is asked for in a window of the system (macOS dialog, Windows credential prompt, zenity
   or kdialog on Linux; elsewhere, Jeeves gives you a command for your own terminal), never in the chat,
   which is saved in transcripts. It is never stored. Losing it on every device means the data on GitHub can't
-  be read; a device that is still unlocked can set a new one (`/jeeves:encrypt passphrase`). A new
+  be read; a device that is still unlocked can set a new one (`/jeeves:encryption passphrase`). A new
   passphrase does not change the key: the old `identity.age` stays in the history and still opens with the old
-  passphrase, so after a leak `/jeeves:encrypt passphrase` offers to fold the history as well (a copy someone
+  passphrase, so after a leak `/jeeves:encryption passphrase` offers to fold the history as well (a copy someone
   took before that stays readable with the old passphrase). Generating it with a password manager is
   recommended.
 - **If the fold after turning encryption on is not pushed** (offline, say), the session-start message and
-  `/jeeves:encrypt` say that GitHub still holds the plain history, and `/jeeves:encrypt` removes it.
-- **Each device unlocks once** (`/jeeves:unlock`, or during `/jeeves:setup`): the key then stays in its
+  `/jeeves:encryption` say that GitHub still holds the plain history, and `/jeeves:encryption` removes it.
+- **Each device unlocks once** (`/jeeves:encryption`, or during `/jeeves:setup`): the key then stays in its
   credential store (macOS Keychain, Windows Credential Manager, a Linux Secret Service through
   `secret-tool`; where there is none, a file only you can read, if you choose it). Jeeves reads it from there
   at most once per command, so it works without asking again. A locked device says so at session start and
-  doesn't sync; `/jeeves:lock` removes the key.
+  doesn't sync; `/jeeves:encryption lock` removes the key.
 - **Turning it on** folds all earlier history into one encrypted commit and force-pushes it with a lease, as
   the history cleanup does, so no plain copy stays in the history on GitHub (GitHub may keep unreachable
   copies for a while). A new data repo encrypted during setup never holds plain text at all.
