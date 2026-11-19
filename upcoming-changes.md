@@ -4,8 +4,9 @@
 
 - **Up next:** 1. Instructions only from the user (details below under "Prompt injection hardening") ·
   2. Incoming shared files checked before install
-- **Then:** script integrity (under discussion, 2026-11-19)
-- **Later:** 0. Injection docs: threat model in the README, deny rules for the installed plugin, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
+- **Then:** 3. Script integrity: signed release manifest, session-start tripwire, deny rules (details below under
+  "Script integrity")
+- **Later:** 0. Injection docs: threat model in the README, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
   must differ per host) · Anthropic directory submission (only on the user's direct command)
 
@@ -26,8 +27,34 @@ destructive skills user-only, settings per device.
    changes are summarised; a risk check (pipe to a shell, encoded blobs, permission or hook changes,
    "ignore previous instructions") flags them in and out, beside `jeeves-scan`.
 3. Signed data repo commits: not taken for now.
-4. (Later) Docs: threat model in the README; deny rules `Edit`/`Write` on the installed plugin; plugin repo
-   protection (branch protection, 2FA, signed tags).
+4. (Later) Docs: threat model in the README; plugin repo protection (branch protection, 2FA, signed tags).
+   The deny rules moved to "Script integrity".
+
+## Script integrity (planned 2026-11-19, the user agreed to the design)
+
+Goal: know that the scripts that run are the ones released. A check inside the plugin cannot stop an attacker
+who can already write the plugin folder (they can edit the check, or `~/.bashrc`), so it is a tripwire for
+changes on disk; the real protection is verifying what arrives (release pipeline, marketplace copy, update)
+against a key the plugin cannot change.
+
+1. **Signed manifest per release:** `MANIFEST` (SHA-256 of every shipped file) and `MANIFEST.sig`
+   (`ssh-keygen -Y sign`, namespace e.g. `jeeves-release`) made on the release branch; the signature needs
+   the user's SSH key at release time (Claude prepares the rest).
+2. **Trust anchor outside the plugin:** `~/.claude/jeeves/allowed_signers`, written by `/jeeves:setup` from
+   the key fingerprint printed in the README; an update that rewrites the plugin cannot swap the key.
+3. **`jeeves-verify`:** signature, every file's hash, no extra files; run after install or update and on
+   demand. Clone installs on a tag may check `git verify-tag` + a clean `git diff <tag>` instead.
+4. **Tripwire at session start:** the same check from the hook (measured ~13 ms for hashes + signature on
+   Linux, 28 files; Windows Git Bash not measured yet); on a mismatch it warns loudly and runs nothing else
+   from the plugin. A development checkout (not on a signed release) is marked as such and skips it.
+5. **Deny rules** so a prompt-injected session cannot edit the installed plugin: `Edit`/`Write` on
+   `~/.claude/plugins/**` (and, in this repo, `bin/`, `lib/`, `hooks/` for sessions other than development);
+   suggested by setup, written only with the user's yes (they change global settings). Bash writes are not
+   fully covered: the tripwire catches those afterwards.
+
+Open decisions (for planning): which SSH key signs releases; what a mismatch blocks (all plugin commands,
+or only the hook); how a development checkout is recognised; whether setup writes the deny rules or only
+suggests them; the Windows timing to measure first.
 
 ## Preference requests (planned 2026-11-19)
 
