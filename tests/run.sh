@@ -1012,6 +1012,8 @@ t_plugin_files() {
   check "the jeeves skill is named jeeves, so /jeeves reaches it" grep -q '^name: jeeves$' "$sk"
   check "only the user starts the jeeves skill" grep -q '^disable-model-invocation: true$' "$sk"
   check "the jeeves skill hands its request to the update skill" bash -c 'grep -q "skill \`jeeves:update\`" "$1" && grep -q "^Request: \$ARGUMENTS$" "$1"' _ "$sk"
+  check "a bare /jeeves offers a rule idea first, then review and sync, then undo" bash -c 'grep -q "^1\. \"Discuss a rule idea\"" "$1" && grep -q "^2\. \"Review and sync\"" "$1" && grep -q "^3\. \"Undo a recent change\"" "$1"' _ "$sk"
+  check "the jeeves skill allows the jeeves-git log it runs" grep -q '^  - Bash(jeeves-git log \*)$' "$sk"
   check "the update skill counts /jeeves as the user running it" grep -q 'its short form `/jeeves`' "$SRC/skills/update/SKILL.md"
   for k in update setup restore cleanup encrypt unlock lock; do
     sk=$SRC/skills/$k/SKILL.md

@@ -180,6 +180,9 @@ Suite 105 passed (2026-11-19).
 - `/jeeves` short form (2026-11-19, the user's request): `skills/jeeves/SKILL.md` (`name: jeeves`, so the
   bare `/jeeves` reaches it; it hands its request to `update` through the Skill tool, checked headless on a
   scratch plugin first); `/jeeves:update` unchanged, so tab-completing it still syncs at once. Suite 105 passed.
+- `/jeeves` alone asks what to do (2026-11-19, the user's request): "Discuss a rule idea" (always first: the
+  user's text becomes the request), "Review and sync", "Undo a recent change" (the latest `learn:`, `curate:`,
+  `pref:` commits); `skills/jeeves/SKILL.md`.
 
 ## Decisions (2026-11-16, with the user)
 
