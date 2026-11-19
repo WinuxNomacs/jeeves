@@ -2,11 +2,39 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** nothing planned
+- **Up next:** One encryption command (below, under "One encryption command")
 - **Then:** nothing planned
 - **Later:** 0. Review text gaps (below, under "Review text gaps") · 0. Injection docs: threat model in the README, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
   must differ per host) · Anthropic directory submission (only on the user's direct command)
+
+## One encryption command (requested 2026-11-19)
+
+Request: the `/` menu lists all nine Jeeves commands, `/jeeves:lock` and `/jeeves:unlock` included on a
+device whose data repo was never encrypted; list only what can be used, to clutter the menu less.
+
+Checked (Claude Code docs, 2026-11-19, code.claude.com/docs/en/skills.md): a plugin cannot show or hide a
+skill by state. The only per-skill switch is `user-invocable: false` (fixed); `skillOverrides` does not apply
+to plugin skills. So the menu gets shorter only with fewer commands. The user's choice: merge the three
+encryption commands; setup, restore and cleanup stay as they are (folding them into `/jeeves` would make
+them model-invoked, losing the "destructive skills are user-only" safeguard).
+
+Design (proposed):
+- One skill replaces `encrypt`, `lock` and `unlock`. It runs `jeeves-encrypt status` first and acts on the
+  state: off: offer to encrypt (today's encrypt flow); on and locked: unlock; on and unlocked: ask "Change
+  the passphrase", "Lock this device" or nothing; plain history left on GitHub: offer its removal (today's
+  `PLAIN_HISTORY_MSG` case). `disable-model-invocation: true` stays; `allowed-tools` the union of the three.
+- Every message that names `/jeeves:unlock`, `/jeeves:lock` or `/jeeves:encrypt` (`lib/lib.sh`,
+  `lib/crypt.sh`, `bin/jeeves-snapshot`, `-scan`, `-risk`, `-crypt`, `-encrypt`), the setup, update and
+  review skills' references ("follow /jeeves:encrypt steps 1 and 2", "/jeeves:unlock steps 1 and 2"), the
+  README and the tests name the new command.
+- 9 commands become 7. Version: a command users type goes away, so per the release skill a major bump
+  (2.0.0), unless the user prefers otherwise; CHANGELOG says which command replaces them.
+- Tests: the existing encryption tests keep passing; greps of skill text updated; a check that no script
+  message names a removed command.
+
+Open:
+- The name: `/jeeves:encrypt` (kept, now also unlocks and locks) or `/jeeves:encryption`.
 
 ## Prompt injection hardening (planned 2026-11-19, the user's choice: 1 and 2 next, 4 later, 3 not taken)
 
