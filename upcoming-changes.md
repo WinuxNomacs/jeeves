@@ -71,8 +71,10 @@ against a key the plugin cannot change.
    fully covered: the tripwire catches those afterwards.
 
 Decided with the user (2026-11-19):
-- **Key:** a new release-only ed25519 key with a passphrase (not `~/.ssh/id_rsa`, which also pushes to
-  GitHub and signs tags), created by the user in their own terminal; its public key ships as
+- **Key:** a new release-only ed25519 key (not `~/.ssh/id_rsa`, which also pushes to
+  GitHub and signs tags), created by the user in their own terminal; no passphrase, and Claude signs each
+  release the same way (the user's decision at the first signed release, 2026-11-19; the key is backed up in
+  the user's vault); its public key ships as
   `release-key.pub`, its fingerprint is printed in the README, and setup writes `allowed_signers` from it
   on first install (trust on first use; later updates cannot swap it).
 - **Mismatch:** a loud notice at session start, and the hook runs nothing else; `/jeeves:update` and

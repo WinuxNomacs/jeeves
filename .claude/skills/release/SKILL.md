@@ -109,17 +109,20 @@ Then the signed manifest, last on the branch (any later change on it means writi
 bash .claude/skills/release/manifest.sh
 ```
 
-The user signs it in their own terminal (the key's passphrase never goes through Claude); give them:
+Claude signs it (the user's decision, 2026-11-19: the release key has no passphrase, so every release is
+signed the same way; the key is backed up in the user's vault). `</dev/null` makes ssh-keygen fail rather
+than wait if the key ever asks for a passphrase: then stop and ask the user, never put a passphrase on a
+command line.
 
 ```bash
-ssh-keygen -Y sign -f ~/.ssh/jeeves-release -n jeeves-release MANIFEST
+ssh-keygen -Y sign -f ~/.ssh/jeeves-release -n jeeves-release MANIFEST </dev/null
 ```
 
 Then `bash .claude/skills/release/manifest.sh --check` must pass; commit `MANIFEST` and `MANIFEST.sig`
 ("Release X.Y.Z: signed manifest").
 
 **First signed release only** (once): the user creates the release-only key in their own terminal,
-`ssh-keygen -t ed25519 -f ~/.ssh/jeeves-release -C jeeves-release` (with a passphrase); copy
+`ssh-keygen -t ed25519 -f ~/.ssh/jeeves-release -C jeeves-release` (no passphrase, so Claude can sign); copy
 `~/.ssh/jeeves-release.pub` to `release-key.pub`, and put `ssh-keygen -lf release-key.pub`'s fingerprint
 in the README under "Verifying the plugin", both before the manifest is written. The marketplace entry moves
 to a pinned GitHub source (step 9), and this machine, which runs the plugin from this checkout, needs a
