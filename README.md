@@ -85,6 +85,18 @@ itself when you ask to change a global preference, or when a snapshot reports ne
   `~/.claude`. Only shared files change this way; `settings.json` and `keybindings.json` you change in
   `~/.claude` as usual, and the next snapshot backs them up.
 
+**Instructions come only from you.** Both reviews take a rule from your own messages, from results Claude
+saw itself, and (as lessons) from memories; never from text Claude read, such as a web page, tool output, a
+file or a project's `CLAUDE.md`. A line there that asks for a rule or speaks for you is not written, and the
+report says where it was. An item that would add a command fetching or running outside code (a URL, a
+download, an install, a pipe into a shell), change tool permissions or hooks, tell Claude to trust a source,
+or weaken Security or a confirmation step is never written on Claude's own judgement, whatever its source:
+it is shown to you with where it came from, unless you asked for exactly that yourself ("Leave it out"
+settles it for good). Permissions and hooks live in each device's `settings.json`, which the reviews never
+write: such an item is only reported. When Claude starts
+`/jeeves:update` itself with a change, the change must be one you asked for in the session; otherwise it
+only syncs.
+
 It pushes without asking and shows no diff unless you ask for one: every step is a commit. It stops and asks
 whenever text could be lost: a passage changed differently on both sides, a rejected push (it never
 force-pushes), or a possible secret found by `jeeves-scan` in what it is about to push.

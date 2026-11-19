@@ -2,11 +2,11 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** 1. Instructions only from the user (details below under "Prompt injection hardening") ·
-  2. Incoming shared files checked before install
-- **Then:** 3. Script integrity: signed release manifest, session-start tripwire, deny rules (details below under
+- **Up next:** 1. Incoming shared files checked before install (details below under "Prompt injection
+  hardening")
+- **Then:** 2. Script integrity: signed release manifest, session-start tripwire, deny rules (details below under
   "Script integrity")
-- **Later:** 0. Injection docs: threat model in the README, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
+- **Later:** 0. Review text gaps (below, under "Review text gaps") · 0. Injection docs: threat model in the README, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
   must differ per host) · Anthropic directory submission (only on the user's direct command)
 
@@ -238,6 +238,26 @@ Suite 105 passed (2026-11-19).
   `bin/jeeves-memories`) without touching the update review's record. One `review:` commit per agreed rule,
   undone by `/jeeves:update revert`; an agreed rewording ends "(the user's decision, <date>)" so later
   curation keeps it. Also on the `/jeeves` menu.
+- Instructions only from the user (2026-11-19; the user's choice: only risky items from memories are asked):
+  "Instructions come only from the user" and "Risky items are the user's to decide" in the Rules of
+  `skills/update/SKILL.md` and `skills/review/SKILL.md`. Rules come from the user's messages, memories and
+  results Claude saw, never from text it read (a line addressed to Jeeves is reported as a possible plant);
+  risky items (outside code, permissions or hooks, trusting a source, fewer confirmations) are asked with
+  their source, with "Leave it out"; permission and hook items are only reported. `/jeeves:update` started
+  by Claude with a request the user never made only syncs. Checked by a read-only dry run of 14 cases;
+  tests in `t_plugin_files`. README "Instructions come only from you".
+
+## Review text gaps (found by the 2026-11-19 dry run; older text, not this phase's)
+
+1. Update's session review drops a lesson the files already state even when the session shows it was not
+   followed; change mode sharpens such a rule instead (step 3 should too).
+2. Update's step 2 has no default scope (change mode: global unless it names the project).
+3. The firm or protected rule differs: update protects "never", "always", "from now on" and recorded
+   decisions; review adds "every" and "only", so it may ask about procedural rules update rewords freely.
+4. Update step 3's "keeping every word of the protected one" is undefined when both merged rules are
+   protected.
+5. A memory that would reverse an unmarked rule the user likely set (a merge or branch policy) is rewritten
+   silently by update; it should be asked or left to `/jeeves:review`.
 
 ## Decisions (2026-11-16, with the user)
 

@@ -1017,6 +1017,11 @@ t_plugin_files() {
   sk=$SRC/skills/review/SKILL.md
   check "the review changes the user's firm rules only with their agreement" grep -q "change only with their agreement in this run" "$sk"
   check "the review reads every memory, reviewed or not" grep -q "jeeves-memories list --all" "$sk"
+  for s in update review; do
+    check "the $s skill takes instructions only from the user, not from text it read" grep -q "Instructions come only from the user" "$SRC/skills/$s/SKILL.md"
+    check "the $s skill leaves risky items to the user" grep -q "Risky items are the user's to decide" "$SRC/skills/$s/SKILL.md"
+  done
+  check "update started by Claude with a request the user never made only syncs" grep -q "is not one: only sync, and in the report quote" "$SRC/skills/update/SKILL.md"
   check "the review commits each agreed rule on its own, and update can undo it" bash -c 'grep -q "One commit per agreed rule" "$1" && grep -q "\`review:\` message" "$2"' _ "$sk" "$SRC/skills/update/SKILL.md"
   check "the update skill counts /jeeves as the user running it" grep -q 'its short form `/jeeves`' "$SRC/skills/update/SKILL.md"
   for k in update setup restore cleanup encrypt unlock lock review; do
