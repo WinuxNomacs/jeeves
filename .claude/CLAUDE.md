@@ -39,8 +39,10 @@ already snapshotted the data repo when the plugin is installed.
   device's unreviewed memories: it decides on its own what to save to the global and project CLAUDE.md,
   prunes them, asks only on a conflict with a rule the user set, and reports each change with its revert;
   then sync, or a change to a shared file, then push), `jeeves` (`/jeeves <request>`, the short form: it
-  hands the request to `update`; alone, it asks: a rule idea, review and sync, or undo; named after the
-  plugin, so the bare `/jeeves` reaches it), `setup`, `restore`,
+  hands the request to `update`; alone, it asks: a rule idea, review and sync, the rules review, or undo;
+  named after the plugin, so the bare `/jeeves` reaches it), `review` (`/jeeves:review`: with the user, the
+  rules that hold results back, the user's firm ones included; rewords them once the user agrees; reads
+  every memory through `jeeves-memories list --all`), `setup`, `restore`,
   `cleanup` (`/jeeves:cleanup`: history cleanup and its `jeeves.conf` settings), `encrypt`, `unlock`, `lock`.
   They get the data repo from `${user_config.data_repo}` (substituted into skill text; the Bash tool sees no
   plugin variables), passed once as `jeeves-status --data-repo "..."`, which records it in
