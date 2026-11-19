@@ -2,8 +2,9 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** 1. Script integrity: signed release manifest, session-start tripwire, deny rules (details below
-  under "Script integrity")
+- **Up next:** 1. First signed release (with 1.3.0, on the user's word): the release key, the signed
+  `MANIFEST`, the pinned marketplace entry, a dev marketplace on this machine (details below under "Script
+  integrity", build order (2))
 - **Then:** nothing planned
 - **Later:** 0. Review text gaps (below, under "Review text gaps") · 0. Injection docs: threat model in the README, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
@@ -299,6 +300,16 @@ Suite 105 passed (2026-11-19).
   4 to 6 and change step 4, and `review` step 5. Tests: the held, `--show`, first sync, forced, snapshot
   notice and risk tests in `tests/run.sh`, plus 4 older tests now accepting held files; the new tests also
   pass under Windows Git Bash. A read-only dry run of 9 cases found 12 gaps in the skill text, all fixed.
+- Script integrity, part 1 (2026-11-19; the user's choices under "Script integrity"): `bin/jeeves-verify`
+  (signature against `~/.claude/jeeves/allowed_signers`, every file's hash, no extra files; `--trust`,
+  `--hook`; listed dev checkouts skip it; the signature is checked again only when `MANIFEST` changed), run
+  first by the session-start snapshot (not the edit hook), and first by the `update` and `review` skills;
+  `setup` records the key and offers the deny rules; `.claude/skills/release/manifest.sh` and the release
+  skill's signing and pinning steps. Tests: the verify, trust and session-start tests in `tests/run.sh`,
+  skill checks in `t_plugin_files`; `manifest.sh` checked by hand on a scratch clone with a throwaway key.
+  Left for the first signed release: the key, `release-key.pub` and the README fingerprint, the pinned
+  entry, the dev marketplace here, and the repo CLAUDE.md's "a push to main reaches new installs" (no longer
+  true once pinned).
 
 ## Review text gaps (found by the 2026-11-19 dry run; older text, not this phase's)
 

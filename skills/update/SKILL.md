@@ -11,6 +11,7 @@ description: >-
   settings.json or keybindings.json: those are per device.
 argument-hint: "[change to make, or nothing to sync]"
 allowed-tools:
+  - Bash(jeeves-verify)
   - Bash(jeeves-status *)
   - Bash(jeeves-snapshot)
   - Bash(jeeves-snapshot --no-pull)
@@ -70,6 +71,10 @@ polished and intelligent work, and ask only in the cases step 3 names.
 
 Order: session review (steps 1–3) → find the data repo → sync or change mode (the decided items written
 in it) → push → report (review step 5).
+
+First of all, `jeeves-verify`: if it says the installed plugin differs from its signed release, stop: show
+the user what it listed, run no other `jeeves-` command, and say that reinstalling the plugin is the way
+out (its notice says how). Otherwise (verified, a development checkout, or not set up yet) go on without mentioning it.
 
 The live files are in `~/.claude`. The data repo keeps the shared ones under `home/` (`CLAUDE.md`, `agents/`,
 `commands/`, `skills/` but not `skills/synced/`) and each device's backup of its memories (and,

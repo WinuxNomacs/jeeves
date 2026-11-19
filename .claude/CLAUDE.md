@@ -34,7 +34,8 @@ already snapshotted the data repo when the plugin is installed.
   (encryption on, unlock, lock, passphrase), `jeeves-crypt` (git's filter, textconv and merge driver for an
   encrypted data repo; git runs it once per file, so it sources only `lib/crypt.sh`), `jeeves-memories`
   (the memories the session review has not reviewed yet, and the shared record `hosts/.memory-review`),
-  `jeeves-git` (git in the data repo).
+  `jeeves-git` (git in the data repo), `jeeves-verify` (the plugin's files against its signed `MANIFEST`,
+  the release key recorded at setup in `~/.claude/jeeves/allowed_signers`; standalone, sources nothing).
 - `skills/` — `update` (`/jeeves:update`: when the user runs it, a review of the session and of every
   device's unreviewed memories: it decides on its own what to save to the global and project CLAUDE.md,
   prunes them, asks only on a conflict with a rule the user set, and reports each change with its revert;

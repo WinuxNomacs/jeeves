@@ -8,6 +8,7 @@ description: >-
 argument-hint: "[a rule or concern to start from, or nothing]"
 disable-model-invocation: true
 allowed-tools:
+  - Bash(jeeves-verify)
   - Bash(jeeves-status *)
   - Bash(jeeves-snapshot)
   - Bash(jeeves-snapshot --no-pull)
@@ -106,7 +107,9 @@ AskUserQuestion: the obvious options, the recommended one first; they can still 
 
 ## 1. Find the data repo and sync
 
-Note the session's project first: `git rev-parse --show-toplevel` in the session's working folder (outside
+First of all, `jeeves-verify`: if it says the installed plugin differs from its signed release, stop: show
+the user what it listed, run no other `jeeves-` command, and say that reinstalling the plugin is the way
+out (its notice says how). Otherwise go on without mentioning it. Note the session's project first: `git rev-parse --show-toplevel` in the session's working folder (outside
 a git repo there is no project part). Then `jeeves-status --data-repo "${user_config.data_repo}"`. If the
 device is locked, stop and point the user to `/jeeves:unlock`; if no data repo is set or it is not a git
 repository, point them to `/jeeves:setup`. From here on, run the `jeeves-` scripts bare and git in the data

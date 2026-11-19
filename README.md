@@ -196,6 +196,7 @@ The plugin's `bin/` is on the PATH of Claude's Bash tool, so Claude (or you, by 
 | `jeeves-status` | (read-only) | Lists each path out of sync (`disk`, `repo` or `conflict`) with its disk, repo and last-synced hashes, and how `main` stands against `origin/main`. |
 | `jeeves-memories list` / `record <hash> <outcome>...` | data repo | The memory files the session review has not reviewed yet (this machine's and other devices' backups), and the shared record of those it has, committed on `main`. |
 | `jeeves-git <git arguments>` | data repo | Runs git in the data repo, so the skills never `cd` into it. |
+| `jeeves-verify` | (read-only) | Checks the plugin's files against its signed `MANIFEST` and the release key recorded at setup; lists every changed, missing or added file. `--trust` records the release key on first setup; `--hook` prints only a difference (the session-start check). |
 | `jeeves-risk` | (read-only) | Flags lines a push would add under `home/` that could make a session run outside code, gain permissions or hooks, or obey text it reads; lists file, line, commit and the kind of risk. |
 | `jeeves-scan` | (read-only) | Looks for secrets (private keys, API keys and tokens, password assignments) in each commit a push would send, so one a later commit removed is still caught; lists file, line and commit, never the value. |
 
@@ -298,6 +299,25 @@ git clone https://github.com/WinuxNomacs/jeeves.git
 claude plugin marketplace add ./jeeves
 claude plugin install jeeves@jeeves
 ```
+
+## Verifying the plugin
+
+Each release carries `MANIFEST` (the SHA-256 of every file it ships) signed with a release-only SSH key.
+`/jeeves:setup` records that key outside the plugin (`~/.claude/jeeves/allowed_signers`) the first time, so
+a later update cannot swap it; compare the fingerprint it shows with this one:
+
+```
+release key fingerprint: published with the first signed release
+```
+
+At every session start, `jeeves-verify` checks the plugin's files against the signed `MANIFEST`. If any file
+changed, is missing or was added, it says so and Jeeves runs nothing else; `/jeeves:update` and
+`/jeeves:review` stop too, until the plugin is reinstalled. This catches changes on disk; it cannot stop
+someone who can already write the plugin folder, who could change the check as well. Setup also offers deny
+rules that stop Claude's Edit and Write tools from changing the installed plugin or the recorded key.
+
+A copy you develop in (installed from a local folder) is not a signed release: list its folder, one per
+line, in `~/.claude/jeeves/dev-checkouts`, and the check leaves it alone.
 
 ## Adding a device
 

@@ -103,6 +103,29 @@ Run each that applies; say which were skipped and why.
 
 Commit ("Release X.Y.Z: <summary>").
 
+Then the signed manifest, last on the branch (any later change on it means writing and signing it again):
+
+```bash
+bash .claude/skills/release/manifest.sh
+```
+
+The user signs it in their own terminal (the key's passphrase never goes through Claude); give them:
+
+```bash
+ssh-keygen -Y sign -f ~/.ssh/jeeves-release -n jeeves-release MANIFEST
+```
+
+Then `bash .claude/skills/release/manifest.sh --check` must pass; commit `MANIFEST` and `MANIFEST.sig`
+("Release X.Y.Z: signed manifest").
+
+**First signed release only** (once): the user creates the release-only key in their own terminal,
+`ssh-keygen -t ed25519 -f ~/.ssh/jeeves-release -C jeeves-release` (with a passphrase); copy
+`~/.ssh/jeeves-release.pub` to `release-key.pub`, and put `ssh-keygen -lf release-key.pub`'s fingerprint
+in the README under "Verifying the plugin", both before the manifest is written. The marketplace entry moves
+to a pinned GitHub source (step 9), and this machine, which runs the plugin from this checkout, needs a
+local dev marketplace and its folder in `~/.claude/jeeves/dev-checkouts`: work these out with the user,
+confirming each command that changes their plugin setup.
+
 ## 7. CI by hand on the release branch
 
 ```bash
@@ -121,6 +144,7 @@ public repo; never add a trigger or matrix entry for it.
 ```bash
 git switch main
 git merge --no-ff release/X.Y.Z -m "Merge branch 'release/X.Y.Z': Jeeves X.Y.Z"
+bash .claude/skills/release/manifest.sh --check   # main must not have moved: the tag's tree is the signed one
 git push origin main
 git push origin --delete release/X.Y.Z && git branch -d release/X.Y.Z   # remote first, or -d refuses
 ```
@@ -135,6 +159,13 @@ git push origin --delete release/X.Y.Z && git branch -d release/X.Y.Z   # remote
 
   When the user says to tag, run exactly that (that word covers this tag only).
 - The tag's workflow run is green (`gh run list --workflow tests --limit 1`).
+- Pin new installs to the tag: on a branch, set the plugin entry's source in
+  `.claude-plugin/marketplace.json` to
+  `{"source": "github", "repo": "WinuxNomacs/jeeves", "ref": "vX.Y.Z", "sha": "<git rev-parse vX.Y.Z^{commit}>"}`,
+  `claude plugin validate .claude-plugin/marketplace.json`, commit ("Marketplace: pin Jeeves X.Y.Z"), merge,
+  push `main`. Until this commit, new installs still get the previous release.
 - In the scratch `CLAUDE_CONFIG_DIR`: `claude plugin marketplace update jeeves` and
   `claude plugin update jeeves@jeeves`, then `<scratch>/plugins/cache/jeeves/jeeves/X.Y.Z/` exists.
-- Installs from a clone (a local marketplace) update with `git pull`; say so in the report.
+- Installs from a clone (a local marketplace) update with `git pull`; say so in the report. Such a copy is
+  not on the signed tree between releases: its folder goes in `~/.claude/jeeves/dev-checkouts`, or it
+  warns at session start.

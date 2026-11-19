@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+# Check that the plugin's files are the ones released: MANIFEST (the SHA-256 of every shipped file) signed
+# with the release key, checked against the key recorded outside the plugin (~/.claude/jeeves/allowed_signers)
+# when the plugin was first set up.
+#
+#   jeeves-verify          prints what it found; exit 0: verified, a listed development checkout, or not set
+#                          up yet; exit 1: the plugin differs from the signed release (each difference listed)
+#   jeeves-verify --hook   the same, printing only a difference (the session-start check)
+#   jeeves-verify --trust  record the plugin's release-key.pub as the trusted key when none is recorded yet,
+#                          and print its fingerprint (setup runs it; the user compares it with the README)
+#
+# A tripwire: someone who can write the plugin folder can also change this script, so it catches changes on
+# disk; what arrives is checked by the signature, against a key an update cannot replace. A development
+# checkout is a folder the user lists, one per line, in ~/.claude/jeeves/dev-checkouts. The signature is
+# checked again only when MANIFEST changed since the last pass (its hash in ~/.claude/jeeves/verified-manifest);
+# the files' hashes are checked every time. Standalone: it sources nothing from the plugin.
+
+CLAUDE_HOME=${CLAUDE_HOME:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}}
+STATE=$CLAUDE_HOME/jeeves
+SIGNERS=$STATE/allowed_signers
+NS=jeeves-release
+ROOT=$(cd "$(dirname "$0")/.." && pwd -P) || exit 1
+
+mode=check
+case "$1" in
+  --hook) mode=hook ;;
+  --trust) mode=trust ;;
+  "") ;;
+  *) echo "verify: unknown option $1" >&2; exit 2 ;;
+esac
+[ $# -le 1 ] || { echo "verify: takes one option at most" >&2; exit 2; }
+
+say() { echo "jeeves verify: $*"; }
+# The SHA-256 tool: sha256sum (Linux, Git Bash), or shasum on a macOS without it. An array, so xargs can run it.
+if command -v sha256sum >/dev/null 2>&1; then SHA256=(sha256sum); else SHA256=(shasum -a 256); fi
+# key_of <file>: the "<type> <base64>" of the first public key in an OpenSSH key or allowed_signers line.
+key_of() { awk '{ for (i = 1; i < NF; i++) if ($i ~ /^(ssh-|ecdsa-|sk-)/) { print $i, $(i + 1); exit } }' "$1" 2>/dev/null; }
+
+if [ $mode = trust ]; then
+  [ -f "$ROOT/release-key.pub" ] || { say "this version ships no release key yet; nothing to trust"; exit 0; }
+  key=$(key_of "$ROOT/release-key.pub")
+  [ -n "$key" ] || { say "release-key.pub holds no public key"; exit 1; }
+  fp=$(ssh-keygen -lf "$ROOT/release-key.pub" 2>/dev/null | awk '{ print $2 }')
+  if [ -s "$SIGNERS" ]; then
+    if [ "$(key_of "$SIGNERS")" = "$key" ]; then say "trusted release key $fp (already recorded)"; exit 0; fi
+    say "the plugin's release key $fp differs from the one trusted since setup; the trusted one is kept" \
+        "(if the release key really changed, the README says so: then remove $SIGNERS and run --trust again)"
+    exit 1
+  fi
+  mkdir -p "$STATE" && printf '%s namespaces="%s" %s\n' "$NS" "$NS" "$key" > "$SIGNERS.tmp" &&
+    mv "$SIGNERS.tmp" "$SIGNERS" || { rm -f "$SIGNERS.tmp"; say "could not write $SIGNERS"; exit 1; }
+  say "trusted release key $fp (recorded in $SIGNERS); compare it with the fingerprint in the README"
+  exit 0
+fi
+
+if [ -f "$STATE/dev-checkouts" ]; then
+  while IFS= read -r d; do
+    d=${d%$'\r'}
+    [ -n "$d" ] && [ "$(cd "$d" 2>/dev/null && pwd -P)" = "$ROOT" ] || continue
+    [ $mode = hook ] || say "development checkout $ROOT (listed in $STATE/dev-checkouts): not checked"
+    exit 0
+  done < "$STATE/dev-checkouts"
+fi
+if [ ! -s "$SIGNERS" ]; then
+  [ $mode = hook ] || say "not set up: no trusted release key yet (/jeeves:setup records it)"
+  exit 0
+fi
+
+problems=()
+cd "$ROOT" || exit 1
+if [ ! -f MANIFEST ] || [ ! -f MANIFEST.sig ]; then
+  problems+=("no signed MANIFEST in $ROOT (a copy stripped of it, or a version from before signed releases)")
+else
+  mh=$("${SHA256[@]}" < MANIFEST | awk '{ print $1 }')
+  if [ "$(cat "$STATE/verified-manifest" 2>/dev/null)" != "$mh" ]; then
+    if ! command -v ssh-keygen >/dev/null 2>&1; then
+      problems+=("cannot check the signature: ssh-keygen (OpenSSH 8.1 or later) is not on the PATH")
+    elif ssh-keygen -Y verify -f "$SIGNERS" -I "$NS" -n "$NS" -s MANIFEST.sig < MANIFEST >/dev/null 2>&1; then
+      printf '%s\n' "$mh" > "$STATE/verified-manifest.tmp" && mv "$STATE/verified-manifest.tmp" "$STATE/verified-manifest"
+    else
+      problems+=("MANIFEST is not signed by the trusted release key")
+    fi
+  fi
+  # Each listed file: missing, or its hash differs. Then any file not listed (outside .git/).
+  listed=$(awk '{ sub(/^[0-9a-f]+ [ *]/, ""); print }' MANIFEST)
+  current=$(printf '%s\n' "$listed" | tr '\n' '\0' | xargs -0 "${SHA256[@]}" 2>/dev/null)
+  while IFS= read -r line; do
+    [ -n "$line" ] && problems+=("$line")
+  done < <(printf '%s\n' "$current" | awk '
+    { h = $1; p = $0; sub(/^[0-9a-f]+ [ *]/, "", p) }
+    NR == FNR { if (h != "") have[p] = h; next }
+    !(p in have) { print "missing: " p; next }
+    have[p] != h { print "changed: " p }' - MANIFEST)
+  while IFS= read -r f; do
+    problems+=("not in the release: $f")
+  done < <(find . -type f ! -path './.git/*' | sed 's|^\./||' | grep -vxF -e MANIFEST -e MANIFEST.sig |
+    grep -vxF -f <(printf '%s\n' "$listed") | sort)
+fi
+
+if [ ${#problems[@]} = 0 ]; then
+  [ $mode = hook ] || say "verified: every file in $ROOT is the signed release's"
+  exit 0
+fi
+say "the installed plugin differs from its signed release ($ROOT), so Jeeves runs nothing else:"
+for p in "${problems[@]}"; do echo "  $p"; done
+echo "  Reinstall it (claude plugin uninstall jeeves@jeeves, then install) and ask Claude to look at what changed;"
+echo "  until then do not run /jeeves:update or /jeeves:review."
+exit 1
