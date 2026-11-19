@@ -69,9 +69,36 @@ against a key the plugin cannot change.
    suggested by setup, written only with the user's yes (they change global settings). Bash writes are not
    fully covered: the tripwire catches those afterwards.
 
-Open decisions (for planning): which SSH key signs releases; what a mismatch blocks (all plugin commands,
-or only the hook); how a development checkout is recognised; whether setup writes the deny rules or only
-suggests them; the Windows timing to measure first.
+Decided with the user (2026-11-19):
+- **Key:** a new release-only ed25519 key with a passphrase (not `~/.ssh/id_rsa`, which also pushes to
+  GitHub and signs tags), created by the user in their own terminal; its public key ships as
+  `release-key.pub`, its fingerprint is printed in the README, and setup writes `allowed_signers` from it
+  on first install (trust on first use; later updates cannot swap it).
+- **Mismatch:** a loud notice at session start, and the hook runs nothing else; `/jeeves:update` and
+  `/jeeves:review` stop before syncing until `jeeves-verify` passes again.
+- **Development checkout:** only a folder the user lists in `~/.claude/jeeves/dev-checkouts` (outside the
+  plugin) skips the check, silently; any other unsigned copy warns.
+- **Deny rules:** setup shows them and writes them to the global `settings.json` only on the user's yes.
+- **Windows timing** (measured 2026-11-19, Git Bash, 41 files, 3 runs): hashes 205-226 ms, signature
+  100-120 ms. So the signature is checked again only when `MANIFEST` changed since the last pass (recorded
+  outside the plugin); the hashes run each session.
+- Before the first signed release, nothing warns: no `allowed_signers` means the check is not set up. With
+  `allowed_signers` present, a missing `MANIFEST` warns (a stripped or downgraded copy).
+
+- **Installs on releases only** (the user's choice): new installs took `main`, whose later commits would
+  not match the signed `MANIFEST`. The plugin entry in `marketplace.json` becomes
+  `{"source": "github", "repo": "WinuxNomacs/jeeves", "ref": "vX.Y.Z", "sha": "<tag commit>"}` (the docs,
+  code.claude.com/docs/en/plugins/marketplace-reference.md, 2026-11-19: `github`, `url` and `git-subdir`
+  sources take `ref` and `sha`; a relative `./` source takes neither). After each tag, one commit on `main`
+  moves the pin; pushes to `main` reach nobody until a release. This machine's in-place install would then
+  fetch from GitHub too, so development here needs a separate local dev marketplace: to work out and test
+  (it changes the user's plugin setup, so each command is confirmed first). The docs do not say whether the
+  cache copy holds `.git`, or whether `plugin update` re-fetches a ref pinned without `sha`: check on a real
+  install in the rehearsal.
+
+Build order: (1) `jeeves-verify`, the release skill's manifest and signing steps, the session-start check,
+the skills' stop, setup's anchor and deny rules, tests; (2) at the first signed release, with the user: the
+release key, the pinned marketplace entry, the dev marketplace here.
 
 ## Preference requests (planned 2026-11-19)
 
