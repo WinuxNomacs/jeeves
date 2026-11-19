@@ -100,14 +100,15 @@ else
     NR == FNR { if (h != "") have[p] = h; next }
     !(p in have) { print "missing: " p; next }
     have[p] != h { print "changed: " p }' - MANIFEST)
-  # A release holds no links: one could lead anywhere, and the hashes would follow it. .orphaned_at is the
-  # marker Claude Code writes into a version's folder once another version replaces it.
+  # A release holds no links: one could lead anywhere, and the hashes would follow it. Claude Code's own
+  # bookkeeping in the cache copy is left out: .orphaned_at (written once another version replaces this one)
+  # and the .in_use/ folder (seen on an install, 2026-11-19); nothing loads from either.
   while IFS= read -r f; do
     problems+=("a link, which no release holds: $f")
-  done < <(find . -type l ! -path './.git/*' | sed 's|^\./||' | sort)
+  done < <(find . -type l ! -path './.git/*' ! -path './.in_use/*' | sed 's|^\./||' | sort)
   while IFS= read -r f; do
     problems+=("not in the release: $f")
-  done < <(find . ! -type d ! -type l ! -path './.git/*' ! -path ./.git | sed 's|^\./||' |
+  done < <(find . ! -type d ! -type l ! -path './.git/*' ! -path ./.git ! -path './.in_use/*' | sed 's|^\./||' |
     grep -vxF -e MANIFEST -e MANIFEST.sig -e .orphaned_at | grep -vxF -f <(printf '%s\n' "$listed") | sort)
 fi
 

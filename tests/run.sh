@@ -689,9 +689,10 @@ t_verify_checks_the_signed_release_and_lists_every_difference() {
   check "a missing file is named" grep -q "missing: README.md" <<< "$out"
   check "exit 1" [ $rc = 1 ]
   ln -s jeeves-git "$W/plugin/bin/jeeves-link"; touch "$W/plugin/.orphaned_at"
+  mkdir -p "$W/plugin/.in_use"; touch "$W/plugin/.in_use/12345"
   out=$(verify)
   check "an added link is named" grep -q "bin/jeeves-link" <<< "$out"
-  check "the marker of a replaced version is not" bash -c '! grep -q orphaned_at <<< "$1"' _ "$out"
+  check "Claude Code's own markers are not" bash -c '! grep -q -e orphaned_at -e in_use <<< "$1"' _ "$out"
   check "the hook prints the difference too" grep -q "differs from its signed release" <<< "$(verify --hook)"
   # A MANIFEST rewritten to match the changes no longer carries the release key's signature.
   (cd "$W/plugin" && find . -type f ! -name 'MANIFEST*' | sed 's|^\./||' | sort | tr '\n' '\0' | xargs -0 sha256sum > M2 && mv M2 MANIFEST)
