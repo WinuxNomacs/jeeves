@@ -150,7 +150,7 @@ crypt_key() {
 # decrypt <file>: plain text on stdout.
 decrypt_file() {
   local key
-  key=$(crypt_key) || { echo "jeeves: the data repo's key is not in this device's key store: run /jeeves:unlock" >&2; return 1; }
+  key=$(crypt_key) || { echo "jeeves: the data repo's key is not in this device's key store: run /jeeves:encryption" >&2; return 1; }
   printf '%s\n' "$key" | "$AGE" -d -i - "$1"
 }
 

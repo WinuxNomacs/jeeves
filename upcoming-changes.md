@@ -2,8 +2,7 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** 1. One encryption command (below, under "One encryption command") · 2. Update notice (below,
-  under "Update notice"); then release 1.4.0
+- **Up next:** 1. Update notice (below, under "Update notice"); then release 1.4.0
 - **Then:** nothing planned
 - **Later:** 0. Review text gaps (below, under "Review text gaps") · 0. Injection docs: threat model in the README, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
@@ -390,6 +389,11 @@ Suite 105 passed (2026-11-19).
   user's placement). "From the next session", not "right away": checked headless (`claude -p`, one process,
   two turns) that a project `CLAUDE.md` changed by a Bash command mid-session is not in context on the same
   turn nor the next. Docs only: no rehearsal; installs get it with the next release.
+- One encryption command (2026-11-19): `skills/encryption/SKILL.md` replaces `encrypt`, `lock` and
+  `unlock` (the `/` menu: 9 Jeeves commands to 7); it goes by `jeeves-encrypt status`. Every message in
+  `bin/`, `lib/`, the setup, update and review skills, README and tests names `/jeeves:encryption`; checks in
+  `t_plugin_files` (old names gone, seen failing with one planted). Skill text read through by an agent
+  against nine states; its findings fixed. Suite 119 passed.
 
 ## Review text gaps (found by the 2026-11-19 dry run; older text, not this phase's)
 

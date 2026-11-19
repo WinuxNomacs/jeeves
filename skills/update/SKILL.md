@@ -233,7 +233,7 @@ AskUserQuestion: the obvious options, the recommended one first; they can still 
 ## Find the data repo
 
 Run `jeeves-status --data-repo "${user_config.data_repo}"`. If it says the data repo is encrypted and this
-device is locked, stop and point the user to `/jeeves:unlock`. If it says no data repo is set, or that the data
+device is locked, stop and point the user to `/jeeves:encryption`. If it says no data repo is set, or that the data
 repo is not a git repository, stop and tell the user to run `/jeeves:setup` (after setting the plugin option
 `data_repo` if it is empty). Never clone or create the data repo here: setup also offers to restore another
 machine's backup, which only it can do before the first sync. Otherwise go on: that command also records
@@ -267,7 +267,7 @@ change-mode branch of your own from this session; for anything else, stop and as
    (the record of reviewed memories, one line per memory hash) keeps every line from both sides, one per
    hash, sorted. If the merge fails, or a conflicting
    file says `jeeves: not merged` (the key could not be read), `jeeves-git merge --abort` and point the user to
-   `/jeeves:unlock`. Before committing, read each file git listed as conflicting: it must hold both sides
+   `/jeeves:encryption`. Before committing, read each file git listed as conflicting: it must hold both sides
    as you merged them and no `<<<<<<<`, `=======` or `>>>>>>>` lines; a conflicting file with no markers at
    all was not merged (stop and ask). Then `jeeves-git add -- <those files>` and commit.
 3. **Each `conflict` line:** read base, disk (`~/.claude/<path>`) and repo (`home/<path>`). With a base, take

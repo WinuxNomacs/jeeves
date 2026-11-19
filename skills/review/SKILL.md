@@ -116,7 +116,7 @@ the user what it listed, run no other `jeeves-` command, and say that reinstalli
 out (its notice says how). If it says the signature cannot be checked (no OpenSSH 8.1 or later), tell the user
 in one line what to install, then go on. Otherwise go on without mentioning it. Note the session's project first: `git rev-parse --show-toplevel` in the session's working folder (outside
 a git repo there is no project part). Then `jeeves-status --data-repo "${user_config.data_repo}"`. If the
-device is locked, stop and point the user to `/jeeves:unlock`; if no data repo is set or it is not a git
+device is locked, stop and point the user to `/jeeves:encryption`; if no data repo is set or it is not a git
 repository, point them to `/jeeves:setup`. From here on, run the `jeeves-` scripts bare and git in the data
 repo as `jeeves-git <arguments>`; never `cd` into the data repo or set `JEEVES_DATA` before a command (a
 permission rule does not match past either). Paths such as `home/CLAUDE.md` are under the folder on the

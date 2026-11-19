@@ -47,7 +47,7 @@ picks rather than types; ask for typing only for a URL or a name. Never search f
 ask for a password or token: sign-ins are the user's own, in their terminal. Never copy credentials,
 `~/.claude.json`, history or transcripts anywhere. Anything that installs software or changes global
 settings is shown as the exact command and run only after the user agrees. A passphrase never goes through
-the chat: `jeeves-encrypt` asks for it in a window of the OS (see `/jeeves:encrypt` for how to handle that).
+the chat: `jeeves-encrypt` asks for it in a window of the OS (see `/jeeves:encryption` for how to handle that).
 
 Start by running `jeeves-check --data-repo "${user_config.data_repo}"` (an empty option is fine: it then
 uses `~/jeeves-data`). Its lines (tab-separated) are the facts for the steps below; run the same command
@@ -108,13 +108,14 @@ The folder on this machine is the `datarepo` path.
 - **Encrypt** (only a repo just created): now, before anything is pushed, is the best time. Ask "Encrypt your
   data with a passphrase?" (recommended first), explaining in one or two sentences: GitHub then holds only
   encrypted files; each device asks for the passphrase once; a passphrase lost on every device means the data
-  can't be read. Options: "Yes, encrypt it", "Not now (/jeeves:encrypt later)". On a yes, follow
-  `/jeeves:encrypt` steps 1 and 2 with these changes: no sync first, no question again, and no
+  can't be read. Options: "Yes, encrypt it", "Not now (/jeeves:encryption later)". On a yes, follow
+  `/jeeves:encryption` ("First: the state", then "Turn on") with these changes: no sync first, no question again, and no
   `jeeves-cleanup --all` (there is no history to remove yet). First run
   `jeeves-status --data-repo "<datarepo path>"`: it records the data repo, so the commands find it bare.
 - **Unlock** (after a clone): `jeeves-status --data-repo "<datarepo path>"` (it records the data repo),
   then `jeeves-encrypt status`. With `encryption locked`, the
-  repo is encrypted: follow `/jeeves:unlock` steps 1 and 2 before going on.
+  repo is encrypted: follow `/jeeves:encryption` ("First: the state", then the first step of "Unlock")
+  before going on.
 
 ## Step 4 of 5: Settings from another machine
 
@@ -159,4 +160,4 @@ the first sync merged or installed, and what happens from now on: a snapshot at 
 each edit Claude makes to `~/.claude/CLAUDE.md`; `/jeeves:update` to sync by hand or change a preference;
 on another device, install Jeeves and run `/jeeves:setup`, which finds this data repo by itself when that
 device is signed in to GitHub with `gh` (and asks for the passphrase if it is encrypted). Without encryption,
-mention `/jeeves:encrypt` in one line.
+mention `/jeeves:encryption` in one line.

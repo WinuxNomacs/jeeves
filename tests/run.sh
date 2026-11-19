@@ -1223,10 +1223,13 @@ t_plugin_files() {
   check "setup finds or creates the data repo through jeeves-github" bash -c 'grep -q "jeeves-github find" "$1" && grep -q "jeeves-github create" "$1"' _ "$SRC/skills/setup/SKILL.md"
   check "the data_repo option defaults to ~/jeeves-data" grep -q '"default": "~/jeeves-data"' "$SRC/.claude-plugin/plugin.json"
   check "setup offers encryption for a new repo and unlocks an encrypted clone" bash -c 'grep -q "^- \*\*Encrypt\*\*" "$1" && grep -q "^- \*\*Unlock\*\*" "$1"' _ "$SRC/skills/setup/SKILL.md"
-  for k in encrypt unlock setup; do
+  for k in encryption setup; do
     check "the $k skill keeps the passphrase out of the chat" grep -qi "passphrase never goes through" "$SRC/skills/$k/SKILL.md"
   done
-  check "the update skill sends a locked device to /jeeves:unlock" grep -q "point the user to \`/jeeves:unlock\`" "$SRC/skills/update/SKILL.md"
+  check "the update skill sends a locked device to /jeeves:encryption" grep -q "point the user to \`/jeeves:encryption\`" "$SRC/skills/update/SKILL.md"
+  check "one encryption command: encrypt, lock and unlock are gone" bash -c '[ -f "$1/skills/encryption/SKILL.md" ] && [ ! -e "$1/skills/encrypt" ] && [ ! -e "$1/skills/lock" ] && [ ! -e "$1/skills/unlock" ]' _ "$SRC"
+  check "no script or skill names a removed encryption command" bash -c '! grep -rqE "/jeeves:(unlock|lock|encrypt)([^a-z]|$)" "$1/bin" "$1/lib" "$1/skills" "$1/hooks" "$1/README.md"' _ "$SRC"
+  check "the encryption skill goes by the state: turn on, unlock, plain history, passphrase, lock" bash -c 'for h in "## First: the state" "## Turn on" "## Unlock" "## Plain history still on GitHub" "## Change the passphrase" "## Lock this device"; do grep -qxF "$h" "$1" || exit 1; done' _ "$SRC/skills/encryption/SKILL.md"
   voice=$(awk '/^## Voice$/ { on = 1 } on && /^## / && !/^## Voice$/ { exit } on' "$SRC/skills/update/SKILL.md")
   for f in "$SRC"/skills/*/SKILL.md; do
     [ "$f" = "$SRC/skills/jeeves/SKILL.md" ] && continue  # hands off to update, which speaks
@@ -1234,7 +1237,7 @@ t_plugin_files() {
   done
   check "the Voice section asks for copy blocks and clickable options" bash -c 'grep -q "fenced code block" <<< "$1" && grep -q "AskUserQuestion" <<< "$1"' _ "$voice"
   check "the cleanup confirmation says the commits go permanently" grep -q '"Yes, remove them permanently"' "$SRC/skills/cleanup/SKILL.md"
-  for k in setup restore cleanup encrypt unlock lock review; do
+  for k in setup restore cleanup encryption review; do
     sk=$SRC/skills/$k/SKILL.md
     check "$k skill is named $k" grep -q "^name: $k\$" "$sk"
     check "only the user starts the $k skill" grep -q '^disable-model-invocation: true$' "$sk"
@@ -1264,7 +1267,7 @@ t_plugin_files() {
   check "update may run the hold's options without a prompt" bash -c 'grep -qF "Bash(jeeves-apply --accept:*)" "$1" && grep -qF "Bash(jeeves-apply --show)" "$1"' _ "$SRC/skills/update/SKILL.md"
   check "the review commits each agreed rule on its own, and update can undo it" bash -c 'grep -q "One commit per agreed rule" "$1" && grep -q "\`review:\` message" "$2"' _ "$sk" "$SRC/skills/update/SKILL.md"
   check "the update skill counts /jeeves as the user running it" grep -q 'its short form `/jeeves`' "$SRC/skills/update/SKILL.md"
-  for k in update setup restore cleanup encrypt unlock lock review; do
+  for k in update setup restore cleanup encryption review; do
     sk=$SRC/skills/$k/SKILL.md
     check "$k skill gets the data repo from the plugin option" grep -q -- '--data-repo "${user_config.data_repo}"' "$sk"
     check "$k skill never runs a command after a cd into the data repo or a JEEVES_DATA= prefix" bash -c '! grep -q "cd <\|cd \"<\|\`JEEVES_DATA=" "$1"' _ "$sk"
@@ -1340,7 +1343,7 @@ t_a_locked_clone_refuses_to_sync_until_unlocked() {
   crypt_env; snap >/dev/null; encrypt on >/dev/null; git -C "$R" push -q origin main 2>/dev/null
   device_b; echo "rules v1" > "$W/claudeB/CLAUDE.md"
   out=$(as_b snap); rc=$?
-  check "snapshot says locked" grep -q "locked: run /jeeves:unlock" <<< "$out"
+  check "snapshot says locked" grep -q "locked: run /jeeves:encryption" <<< "$out"
   check "snapshot exits 1" [ $rc = 1 ]
   as_b snap --hook >/dev/null; check "hook mode exits 0" [ $? = 0 ]
   check "apply refuses" grep -q "locked" <<< "$(as_b apply)"
@@ -1512,7 +1515,7 @@ t_lock_removes_the_key_and_the_scripts_then_refuse() {
   check "says locked" grep -q "locked" <<< "$(encrypt lock)"
   check "the key is gone from the store" [ -z "$(ls "$W/keys")" ]
   check "status says locked" grep -q "^encryption	locked" <<< "$(encrypt status)"
-  check "snapshot refuses" grep -q "locked: run /jeeves:unlock" <<< "$(snap)"
+  check "snapshot refuses" grep -q "locked: run /jeeves:encryption" <<< "$(snap)"
 }
 
 t_a_new_data_repo_encrypted_before_its_first_snapshot_never_holds_plain_text() {

@@ -14,7 +14,7 @@
 #
 # The passphrase is asked for in a dialog of the OS, never on a command line or in Claude's chat, and goes to
 # age only in the environment of that one age process. It is never stored. Exit status 3: no dialog can be
-# shown here; the message says what to run in a terminal. `on` and `passphrase` never push: /jeeves:encrypt
+# shown here; the message says what to run in a terminal. `on` and `passphrase` never push: /jeeves:encryption
 # pushes (after `on`, with jeeves-cleanup --all, so no plain copy stays in the history on the remote).
 
 ALLOW_LOCKED=1
@@ -206,7 +206,7 @@ END
 
   passphrase)
     encrypted || { say "the data repo is not encrypted"; exit 1; }
-    unlocked && load_key || { say "this device is locked: run /jeeves:unlock first"; exit 1; }
+    unlocked && load_key || { say "this device is locked: run /jeeves:encryption first"; exit 1; }
     on_main_clean; check_age
     pass=$(new_passphrase) || exit $?
     write_identity "$JEEVES_AGE_KEY" "$pass" || { say "could not write identity.age; nothing changed"; exit 1; }
