@@ -42,7 +42,7 @@ offers choices as clickable options.
 |---|---|---|
 | `/jeeves:setup [url]` | you, after installing | Walks you through setting up this machine in five steps: checks git and your GitHub sign-in (offers to install the GitHub CLI), finds your data repo on GitHub or creates a private one (offering to encrypt it), unlocks an encrypted one, offers to restore another device's backup, then runs the first sync and backup. |
 | `/jeeves:update [change]` | you, or Claude | Syncs the shared files and pushes; with a change, makes it. See below. |
-| `/jeeves [change]` | you | The short form of `/jeeves:update`: `/jeeves always answer in British English`. |
+| `/jeeves [change]` | you | The short form of `/jeeves:update`: `/jeeves always answer in British English`. Alone, it asks what to do: discuss a rule idea, review and sync, or undo a recent change. |
 | `/jeeves:cleanup <days>` | you | Removes history older than that many days (1 or more), keeping every file, after a fresh backup and your confirmation; `/jeeves:cleanup auto <every> [<keep>]` or `off` sets the automatic cleanup. See below. |
 | `/jeeves:encrypt [passphrase]` | you | Encrypts the data repo with a passphrase and removes the plain history from GitHub; with `passphrase`, changes the passphrase. See below. |
 | `/jeeves:unlock` / `/jeeves:lock` | you | Unlocks this device with the passphrase (once; the key then stays in its credential store), or removes the key from it. |
