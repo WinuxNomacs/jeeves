@@ -2,7 +2,8 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** One encryption command (below, under "One encryption command")
+- **Up next:** 1. One encryption command (below, under "One encryption command") · 2. Update notice (below,
+  under "Update notice"); then release 1.4.0
 - **Then:** nothing planned
 - **Later:** 0. Review text gaps (below, under "Review text gaps") · 0. Injection docs: threat model in the README, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
@@ -37,6 +38,31 @@ Decided with the user (2026-11-19):
 - Merge only the three encryption commands (setup, restore, cleanup stay).
 - Name: `/jeeves:encryption` (skill folder `skills/encryption/`; `encrypt`, `lock`, `unlock` removed).
 - Version 1.4.0, not 2.0.0, though a typed command goes away.
+
+## Update notice (requested 2026-11-19)
+
+Request: Jeeves checks for a newer release and tells the user to update. Today nothing does: auto-update is
+off for third-party marketplaces, so an install stays on its version until the user runs
+`claude plugin marketplace update jeeves` and `claude plugin update jeeves@jeeves`, or turns on auto-update
+in `/plugin` > Marketplaces.
+
+Design:
+- The session-start hook (`jeeves-snapshot --hook`), at most once a day, runs `git ls-remote --tags` on
+  `https://github.com/WinuxNomacs/jeeves` (public, anonymous, the hook's existing 30 s deadline), takes the
+  highest `vX.Y.Z` tag and compares it with `.claude-plugin/plugin.json`'s version. Newer: one line naming
+  both versions and the two commands. Otherwise silent.
+- The time of the last check in `~/.claude/jeeves/update-check` (outside the plugin and the data repo); a
+  file that does not read counts as never checked. Network failure, no git, bad output: silent, retried the
+  next day. Skipped on a development checkout (`dev-checkouts`) and with `JEEVES_UPDATE_CHECK=off`.
+- Tag names are parsed strictly (`v` digits `.` digits `.` digits); anything else is ignored, so a
+  repository's output never reaches the message unchecked.
+- `/jeeves:setup` mentions auto-update in one line in its report (`/plugin` > Marketplaces); it changes no
+  settings itself.
+- README ("Updates"), repo CLAUDE.md (the hook's network calls), tests with a stand-in `git ls-remote`:
+  newer, same, older, failing, junk tags, checked today already, dev checkout.
+
+What can fail (runs unattended): no network or GitHub down (deadline, silent); a hung git (the deadline);
+an unreadable or future-dated record (treated as never checked); a renamed repo (silent, no tags).
 
 ## Prompt injection hardening (planned 2026-11-19, the user's choice: 1 and 2 next, 4 later, 3 not taken)
 
