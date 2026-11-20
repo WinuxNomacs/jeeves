@@ -32,10 +32,11 @@ for t in $TARGETS; do
     { echo "build-go: $t failed" >&2; exit 1; }
 done
 names() { for t in $TARGETS; do f=jeeves-${t%/*}-${t#*/}; [ "${t%/*}" = windows ] && f=$f.exe; echo "$f"; done; }
+# "<sha256>  <name>" per build (Git Bash's sha256sum marks a binary file " *<name>"; dropped).
+hashes() { (cd dist && names | while read -r f; do "${SHA256[@]}" "$f"; done) | awk '{ sub(/^\*/, "", $2); print $1 "  " $2 }'; }
 case $mode in
-  record) (cd dist && names | while read -r f; do "${SHA256[@]}" "$f"; done) > "$RECORD" &&
-            echo "build-go: recorded $RECORD"; exit ;;
-  check) if (cd dist && names | while read -r f; do "${SHA256[@]}" "$f"; done) | diff "$RECORD" -; then
+  record) hashes > "$RECORD" && echo "build-go: recorded $RECORD"; exit ;;
+  check) if hashes | diff "$RECORD" -; then
            echo "build-go: all five builds match $RECORD"; exit 0
          fi
          echo "build-go: the builds differ from $RECORD (lines above: < recorded, > built here)" >&2; exit 1 ;;
