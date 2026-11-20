@@ -10,8 +10,8 @@
       "source": {
         "source": "github",
         "repo": "WinuxNomacs/jeeves",
-        "ref": "v1.4.0",
-        "sha": "53c812efc9f3540745d652f8cf77e23520332b25"
+        "ref": "v1.4.1",
+        "sha": "fb537d7fe0f6a440587f9a10d5219a86431177bb"
       },
       "description": "Turns what your sessions and memories teach into CLAUDE.md rules, shared with your agents, commands and skills across devices"
     }
