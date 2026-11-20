@@ -36,7 +36,8 @@ already snapshotted the data repo when the plugin is installed.
   encrypted data repo; git runs it once per file, so it sources only `lib/crypt.sh`), `jeeves-memories`
   (the memories the session review has not reviewed yet, and the shared record `hosts/.memory-review`),
   `jeeves-git` (git in the data repo), `jeeves-update-check` (once a day from the session-start hook: a newer release
-  tag on GitHub, read with `git ls-remote`, gets a one-line notice; tests turn it off), `jeeves-verify` (the plugin's files against its signed `MANIFEST`,
+  than this one in the marketplace pin on GitHub's `main`, read with curl, gets a one-line notice; not the
+  newest tag, which comes before its pin; tests turn it off), `jeeves-verify` (the plugin's files against its signed `MANIFEST`,
   the release key recorded at setup in `~/.claude/jeeves/allowed_signers`; standalone, sources nothing).
 - `skills/` — `update` (`/jeeves:update`: when the user runs it, a review of the session and of every
   device's unreviewed memories: it decides on its own what to save to the global and project CLAUDE.md,
@@ -76,7 +77,7 @@ already snapshotted the data repo when the plugin is installed.
   gets no plugin options: skills pass the literal `${user_config.data_repo}`, which the scripts ignore in
   favour of the recorded data repo (checked headless, 2026-11-19). After first adding the env, start a new
   session: when `/reload-plugins` swapped the installed copy for the inline one, the VS Code panel's command
-  menu showed no Jeeves commands, while a fresh session listed all nine (2026-11-19).
+  menu showed no Jeeves commands, while a fresh session listed them all (2026-11-19).
 - To run a `bin/` script by hand against scratch folders, `export CLAUDE_HOME=<scratch>/.claude
   JEEVES_DATA=<scratch>/data` (and `JEEVES_HOST=<name>` to act as another host) first; never put `env ...`
   in a variable and run `$VAR cmd`, which zsh (the macOS shell) does not split.

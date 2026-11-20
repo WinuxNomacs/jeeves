@@ -295,9 +295,11 @@ adding `--config data_repo=~/jeeves-data` to the install (or another folder), th
 `claude plugin marketplace update jeeves` and `claude plugin update jeeves@jeeves`, or turn on auto-update in
 `/plugin` > Marketplaces. The marketplace installs only signed releases: its entry is pinned to the latest
 release's tag and commit, so a new version arrives with each release; see [CHANGELOG.md](CHANGELOG.md).
-Once a day, the session-start hook asks GitHub for the release tags (anonymously, `git ls-remote`, at most 10
-seconds) and says so in one line when a newer release than yours is out, with the commands above; it says
-nothing otherwise, on a development checkout, or with `JEEVES_UPDATE_CHECK=off` in Claude Code's environment. To stay on one release, add the marketplace as `WinuxNomacs/jeeves#v<version>`.
+Once a day, the session-start hook reads which release the marketplace on GitHub installs (anonymously,
+`.claude-plugin/marketplace.json` on `main`, with curl, at most 10 seconds) and says so in one line when it
+is newer than yours, with the commands above; it says nothing otherwise, on a development checkout, or with
+`JEEVES_UPDATE_CHECK=off` in Claude Code's environment. To stay on a release, leave auto-update off and don't
+run the update commands (set `JEEVES_UPDATE_CHECK=off` to silence the notice too).
 
 **Working on Jeeves:** load a clone over the installed copy, and edits take effect on `/reload-plugins`. Add
 this to `~/.claude/settings.json` (or start `claude --plugin-dir <clone>` for one session), and list the

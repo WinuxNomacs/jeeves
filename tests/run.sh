@@ -66,7 +66,8 @@ check() { # check <description> <command...>
 run_test() { # run_test <name> <function>
   case "$1" in *"$filter"*) ;; *) return ;; esac
   local out
-  if out=$( FAILS=0; setup "$2"; "$2" 2>&1; exit $FAILS ); then
+  if out=$( declare -F "$2" >/dev/null || { echo "no test function $2"; exit 1; }
+             FAILS=0; setup "$2"; "$2" 2>&1; exit $FAILS ); then
     passed=$((passed + 1)); echo "ok   $1"
   else
     failed=$((failed + 1)); echo "FAIL $1"; printf '%s\n' "$out" | sed 's/^/    /'
@@ -767,18 +768,22 @@ t_names_with_control_characters_are_not_taken() {
   check "a plain name is taken" bash -c '. "$1/lib/lib.sh"; [ -z "$(bad_name skills/ab.md)" ]' _ "$SRC"
 }
 
-t_the_update_notice_names_a_newer_release_once_a_day() {
-  local rel=$W/releases u=$SRC/bin/jeeves-update-check ours major out
+t_the_update_notice_names_the_release_installs_get_once_a_day() {
+  local mk=$W/marketplace.json u=$SRC/bin/jeeves-update-check ours major out
   ours=$(sed -n 's/.*"version": "\([0-9.]*\)".*/\1/p' "$SRC/.claude-plugin/plugin.json"); major=${ours%%.*}
-  git init -q "$rel" && git -C "$rel" commit -q --allow-empty -m r
-  git -C "$rel" update-ref "refs/tags/v$ours" HEAD; git -C "$rel" update-ref refs/tags/v0.9.0 HEAD
-  export JEEVES_UPDATE_CHECK= JEEVES_RELEASES_URL=$rel
-  check "the same release: nothing" [ -z "$("$u" --now)" ]
-  git -C "$rel" update-ref "refs/tags/v$((major + 1)).0.0x" HEAD; git -C "$rel" update-ref "refs/tags/x$((major + 1)).0.0" HEAD; git -C "$rel" update-ref "refs/tags/v$((major + 1)).0" HEAD
-  check "tags not named exactly vX.Y.Z are ignored" [ -z "$("$u" --now)" ]
-  git -C "$rel" update-ref "refs/tags/v$((major + 1)).0.0" HEAD; git -C "$rel" update-ref "refs/tags/v$major.99.0" HEAD
+  # The marketplace file as release step 9 writes it, pinning the given ref.
+  pin() { printf '{\n  "plugins": [\n    {\n      "name": "jeeves",\n      "source": {\n        "source": "github",\n        "repo": "WinuxNomacs/jeeves",\n        "ref": "%s",\n        "sha": "0123456789abcdef0123456789abcdef01234567"\n      }\n    }\n  ]\n}\n' "$1" > "$mk"; }
+  export JEEVES_UPDATE_CHECK= JEEVES_RELEASES_URL=$mk
+  pin "v$ours"
+  check "pinned to this release: nothing" [ -z "$("$u" --now)" ]
+  pin "v0.9.0"
+  check "pinned to an older release: nothing" [ -z "$("$u" --now)" ]
+  for bad in "v$((major + 1)).0.0x" "x$((major + 1)).0.0" "v$((major + 1)).0" "main"; do
+    pin "$bad"; check "a ref not exactly vX.Y.Z ($bad) is ignored" [ -z "$("$u" --now)" ]
+  done
+  pin "v$((major + 1)).0.0"
   out=$("$u" --now)
-  check "a newer release is named, the highest one, with this version" bash -c 'grep -q "Jeeves $2.0.0 is out (this is $3)" <<< "$1" && grep -q "claude plugin update jeeves@jeeves" <<< "$1"' _ "$out" "$((major + 1))" "$ours"
+  check "a newer pinned release is named, with this version" bash -c 'grep -q "Jeeves $2.0.0 is out (this is $3)" <<< "$1" && grep -q "claude plugin update jeeves@jeeves" <<< "$1"' _ "$out" "$((major + 1))" "$ours"
   check "once a day: the next session says nothing" [ -z "$("$u")" ]
   echo 9999999999 > "$CLAUDE_HOME/jeeves/update-check"
   check "a record in the future counts as never checked" grep -q "is out" <<< "$("$u")"
@@ -790,7 +795,10 @@ t_the_update_notice_names_a_newer_release_once_a_day() {
   rm "$CLAUDE_HOME/jeeves/dev-checkouts"
   rm -f "$CLAUDE_HOME/jeeves/update-check"
   out=$(JEEVES_RELEASES_URL=$W/nowhere "$u"; echo "rc=$?")
-  check "an unreachable repo: silent, exit 0, and not tried again today" bash -c '[ "$1" = rc=0 ] && [ -s "$2" ]' _ "$out" "$CLAUDE_HOME/jeeves/update-check"
+  check "an unreadable marketplace file: silent, exit 0, and not tried again today" bash -c '[ "$1" = rc=0 ] && [ -s "$2" ]' _ "$out" "$CLAUDE_HOME/jeeves/update-check"
+  rm -f "$CLAUDE_HOME/jeeves/update-check"
+  out=$(JEEVES_RELEASES_URL=https://127.0.0.1:9/marketplace.json "$u" --now; echo "rc=$?")
+  check "an https URL that does not answer: silent, exit 0" [ "$out" = rc=0 ]
   rm -f "$CLAUDE_HOME/jeeves/update-check"
   check "the session-start hook shows it" grep -q "is out" <<< "$(snap --hook)"
   rm -f "$CLAUDE_HOME/jeeves/update-check"
@@ -1970,7 +1978,7 @@ run_test "verify --trust keeps the key recorded at setup" t_trust_keeps_the_key_
 run_test "session start runs nothing else when the plugin differs from its signed release" t_session_start_runs_nothing_else_when_the_plugin_differs
 run_test "verify without OpenSSH 8.1 says so and Jeeves carries on" t_verify_without_openssh_8_1_says_so_and_jeeves_carries_on
 run_test "development checkouts take a ~ path, and a worktree's .git file is ignored" t_development_checkouts_take_a_home_path_and_a_worktree
-run_test "the update notice names a newer release, once a day, and is silent otherwise" t_the_update_notice_names_a_newer_release_once_a_day
+run_test "the update notice names the release installs get, once a day, and is silent otherwise" t_the_update_notice_names_the_release_installs_get_once_a_day
 run_test "names with control characters are not taken" t_names_with_control_characters_are_not_taken
 run_test "an incoming skill or agent is held until that version is accepted; CLAUDE.md is installed" t_an_incoming_skill_or_agent_is_held_until_that_version_is_accepted
 run_test "apply --show prints every incoming change with its flags and installs nothing" t_apply_show_prints_every_incoming_change_and_installs_nothing

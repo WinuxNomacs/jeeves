@@ -63,6 +63,13 @@ Design:
 What can fail (runs unattended): no network or GitHub down (deadline, silent); a hung git (the deadline);
 an unreadable or future-dated record (treated as never checked); a renamed repo (silent, no tags).
 
+Changed in the 1.4.0 review (2026-11-19): the newest tag comes before its marketplace pin (release step 9),
+so a notice from tags could name a release the update commands do not deliver yet (for hours, or for good
+if the tag's CI fails). The check now reads the pinned `ref` from `.claude-plugin/marketplace.json` on
+`main` (`raw.githubusercontent.com`, curl `-q --proto =https`, the same deadline); no curl: silent. The
+README's "add the marketplace as `#v<version>`" was dropped: a tag's marketplace file pins the release
+before it.
+
 ## Prompt injection hardening (planned 2026-11-19, the user's choice: 1 and 2 next, 4 later, 3 not taken)
 
 Threat: text Jeeves reads (web pages and tool output in the session, project CLAUDE.md files, memory bodies,
