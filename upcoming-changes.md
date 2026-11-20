@@ -400,6 +400,10 @@ Suite 105 passed (2026-11-19).
   same, junk tags, daily limit, future and unreadable records, off, dev checkout, unreachable, the hook;
   the hook check seen failing without the wiring). Checked once against GitHub. README, setup's report,
   repo CLAUDE.md. Suite 120 passed.
+- New splash image (2026-11-19, from new.md): the user's new pair (an elderly butler with a monocle, on
+  green) replaces `docs/images/jeeves-butler.jpg` (1366x675, in the README) and `jeeves-butler-full.jpg`
+  (2912x1440) under the same names; README alt text updated. The full image carries Google's AI content
+  credentials (C2PA), no personal data.
 
 ## Review text gaps (found by the 2026-11-19 dry run; older text, not this phase's)
 

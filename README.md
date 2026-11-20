@@ -2,7 +2,7 @@
 
 **Your Claude Code, a little wiser with every session.**
 
-![Jeeves, a butler in a dark tailcoat and white bow tie](docs/images/jeeves-butler.jpg)
+![Jeeves, an elderly butler with a monocle, white bow tie and dark tailcoat](docs/images/jeeves-butler.jpg)
 
 > **Just work as usual.** Now and then, run `/jeeves:update` (or `/jeeves`): Jeeves reviews the session and
 > the memories Claude saved in your projects, keeps what is worth learning, and writes it into your
