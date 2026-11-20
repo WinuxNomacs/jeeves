@@ -5,12 +5,18 @@
 #   bash .claude/skills/release/rehearse.sh <scratch folder> <last release tag, e.g. vold>
 # Prints ok/FAIL per check and REHEARSAL OK at the end. Touches only the scratch folder (and a git worktree
 # of the tag, removed at the end). The notice check expects plugin.json to still hold the old version
-# (run it before the release branch's version bump) or names the next one.
-[ $# = 2 ] || { echo "usage: rehearse.sh <scratch folder> <last release tag>" >&2; exit 2; }
-S=$1 TAG=$2 NEW=$(cd "$(dirname "$0")/../../.." && pwd -P)
+# (run it before the release branch's version bump) or names the next one. Exits 1 when a check failed.
+# The scratch path must not hold spaces (lib/crypt.sh runs JEEVES_ASKPASS unquoted).
+[ $# = 2 ] && [ -n "$1" ] && [ -n "$2" ] || { echo "usage: rehearse.sh <scratch folder> <last release tag>" >&2; exit 2; }
+case "$1" in *' '*) echo "rehearse.sh: the scratch path must not contain spaces" >&2; exit 2 ;; esac
+mkdir -p "$1" && S=$(cd "$1" && pwd -P) || exit 2
+TAG=$2 NEW=$(cd "$(dirname "$0")/../../.." && pwd -P)
 W=$S/rehearse; rm -rf "${W:?}"; mkdir -p "$W"
 git -C "$NEW" worktree add -q --detach "$W/old" "$TAG" || exit 1
 OLD=$W/old
+# The tag's worktree is registered in the real repo: remove it on every exit, an interrupted run included.
+trap 'git -C "$NEW" worktree remove --force "$OLD" 2>/dev/null' EXIT
+trap 'exit 130' INT TERM
 export JEEVES_UPDATE_CHECK=off JEEVES_KEYSTORE=file PASS=rehearsal-pass-1
 printf '#!/bin/sh\necho "%s"\n' "$PASS" > "$W/askpass"; chmod +x "$W/askpass"; export JEEVES_ASKPASS=$W/askpass
 fail=0; ok() { echo "ok   $1"; }; bad() { echo "FAIL $1"; fail=1; }
@@ -74,5 +80,5 @@ ours=$(sed -n 's/.*"version": "\([0-9.]*\)".*/\1/p' "$NEW/.claude-plugin/plugin.
 printf '{\n  "plugins": [\n    {\n      "source": {\n        "ref": "v%s"\n      }\n    }\n  ]\n}\n' "99.0.0" > "$T/marketplace.json"
 out=$(JEEVES_UPDATE_CHECK= JEEVES_RELEASES_URL=$T/marketplace.json CLAUDE_HOME=$W/plain/claudeA JEEVES_HOST=hosta JEEVES_DATA=$W/plain/repoA "$NEW/bin/jeeves-snapshot" --hook 2>&1)
 chk "the notice names a newer pinned release" grep -q "Jeeves 99.0.0 is out (this is $ours)" <<< "$out"
-git -C "$NEW" worktree remove --force "$OLD"
 [ $fail = 0 ] && echo "REHEARSAL OK" || echo "REHEARSAL FAILED"
+exit $fail
