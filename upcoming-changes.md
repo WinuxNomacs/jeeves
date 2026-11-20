@@ -2,7 +2,7 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** 1. Background auto-update (below, "Background auto-update"): 1a measure, 1b build
+- **Up next:** 1. Release 1.5.0 (background updates), on the user's word (the Mac check passed)
 - **Then:** nothing planned
 - **The user's, any time:** submit 1.4.1 in the Anthropic portal (below, "Anthropic directory submission")
 - **Later:** 0. Review text gaps (below, under "Review text gaps") · 0. Injection docs: threat model in the README, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
@@ -49,7 +49,7 @@ What auto mode decides alone vs. leaves for the user (the user's rules, not rela
   memory review.
 - Left for the next manual run, with a one-line notice at session start: risky items; held skills, agents
   and commands from another device (never auto-accepted); a true text conflict; a conflict with a rule the
-  user set; `jeeves-risk` flags (taken out, the rest pushed); a `jeeves-scan` finding (stops the run, nothing
+  user set; `jeeves-risk` flags (nothing pushed until the user's run settles them; as built); a `jeeves-scan` finding (stops the run, nothing
   pushed); a locked device; a push rejected twice.
 
 Collisions found (2026-11-20, in the code): `take_lock` (`lib/lib.sh`) guards one script call, not a skill
@@ -143,6 +143,56 @@ The floor (about $0.35 on Opus) is the skill and the two CLAUDE.md files, paid o
 session held: a run should start only when the session has new activity worth reviewing, not on a clock
 alone. Opus found one useful item that Sonnet left out; both left out what was already saved.
 
+
+As built (1b, 2026-11-20, branch `feat/auto-update`), where it differs from the plan above:
+- No git worktree: the model never touches the data repo at all. The script copies into a private temp
+  folder (`mktemp -d`, removed on exit, a leftover removed by the next run) the extract, `home/CLAUDE.md` to
+  edit, the project's CLAUDE.md and up to 25 memory files; it merges the edited copy into `main` itself
+  (three-way with `git merge-file` when `main` moved meanwhile; a conflict sets the edit aside). This also
+  removes the open question about encryption in a worktree.
+- The child's permissions (checked headless with 2.1.304): `dontAsk`, `Read(//<run>/**)`,
+  `Edit(//<run>/edit/**)`, `Write`/`Edit(//<run>/out/**)`, `--disallowedTools Bash WebFetch WebSearch Agent
+  NotebookEdit`, `--strict-mcp-config` (no MCP servers), `--no-session-persistence` (no transcript of its
+  own). Reads, globs and greps outside the folder were denied; edits and shell writes outside it too.
+- Clean environment by removal, not `env -i` (macOS and Windows need many system variables): every
+  `CLAUDE*` and `JEEVES*` variable is dropped but those selecting config, sign-in and provider
+  (`CLAUDE_CONFIG_DIR`, `CLAUDE_CODE_OAUTH_TOKEN`, `CLAUDE_CODE_USE_BEDROCK`/`VERTEX`/`FOUNDRY` and their
+  `SKIP_*_AUTH`, `CLAUDE_CODE_GIT_BASH_PATH`); `JEEVES_AUTO_CHILD=1` is set.
+- The child does not load the user's `settings.json` (`--setting-sources project`; the run folder has
+  none): a user's allow rules, `additionalDirectories`, hooks or other plugins would widen it. The plugin is
+  loaded with `--plugin-dir`, and the settings' `model` and `env` (minus `CLAUDE_CODE_PLUGIN_DIRS`) are carried
+  over. Checked headless: the skill resolves and sign-in works that way, and a denied tool stays denied even
+  when the skill's `allowed-tools` grants it (so the update skill's push and commit grants give the child
+  nothing).
+- The edit check also keeps every line with "never", "always", "from now on" or "the user's decision"
+  word for word, and refuses any diff hunk that removes more lines than it adds (a removal plus an addition
+  elsewhere kept the rule count, so the count alone missed it; seen in a test).
+- A secret in the run's own commit: the commit is taken back out (checked again under the lock, `reset
+  --keep`), the edit set aside, and the rest pushed.
+- Independent review (2026-11-20, an agent given the code and the checklist): 18 findings, all fixed or
+  noted. Fixed: bullets missed by the changed-lines count (now at most 12, counted from the diff body);
+  additions to the Security section or a second Security heading; firm rules' continuation lines; invisible
+  characters; the user's settings reaching the child; the rollback race; a flagged summary reaching the next
+  session's context and a commit message; an orphaned child when the supervisor is stopped; the deadline
+  counted in sleeps; a run killed mid-commit or mid-merge blocking every snapshot (markers, put right by the
+  next run); early skips starting a run after every reply (now an hour's back-off and a notice); shell-mode
+  lines in the extract; an 8 s count on a 30 MB transcript (tool results skipped before decoding: 0.03 s);
+  a Stop hook timeout; hook input over 64 KB; `\\` in queue ids; manual hold staleness (two hours, refreshed by
+  a second hold). Left as is: a rule rewritten in place into a different one is a revision the check cannot
+  tell apart (reported with its undo); queued items for a project the user never reopens stay listed.
+- Second live run after the fixes: 17.6 s, $0.24; an injected "ignore previous instructions" in a quoted
+  README was reported, not written.
+- Transcripts and hook input are read with `perl` and JSON::PP; without it the feature stays off.
+- Live end-to-end (real `claude -p` child, scratch data repo with a copy of the real global rules, a made-up
+  session): 21 s, $0.35 list-price; the lesson became a rule in the right section and was pushed; a quoted
+  page posing as the user (wrong nonce) was reported in the queue, not written; the project item was queued.
+- macOS checked by the user (2026-11-20): a `nohup ... &` child started by a real Claude Code Stop hook
+  (headless, scratch plugin) outlived the hook and `claude`, and the hook input carried `transcript_path`.
+- Not checked: the detached run on Windows (CI covers the supervisor's logic with a stand-in `claude`); on Windows the child gets the folder as `C:/...` in its prompt
+  and as `//c/...` in its permission rules (the docs: Windows paths are matched in `/c/...` form), not yet run
+  against a real Windows Claude Code.
+
+## Anthropic directory submission (planned 2026-11-20)
 
 The user asked whether Jeeves is listed on Anthropic's marketplace and chose to plan the preparation as a
 phase. Submitting stays the user's own act, on their direct command.
@@ -624,6 +674,14 @@ Suite 105 passed (2026-11-19).
   user-only hand-off test misses "invoke/run `/jeeves:X`" wordings.
   Tagged `v1.4.1` (CI green on all three OSes) and pinned in the marketplace (`fb537d7`); a fresh install
   from GitHub gets 1.4.1 and `jeeves-verify` passes.
+- Background updates (2026-11-20; planned and measured with the user, "Background auto-update" above):
+  `bin/jeeves-auto` (Stop hook, session-start notices, the run, the run lock, queue, hold and release),
+  `skills/autoupdate/`, the "Auto mode" section and the hold and queue steps in `skills/update/SKILL.md`,
+  the `JEEVES_AUTO_CHILD` guard in `jeeves-snapshot` and `jeeves-hook-edit`, `hooks/hooks.json`. Tests in
+  `tests/run.sh` (16, with a stand-in `claude` that misbehaves on request: hang, fail, usage limit, removed
+  Security line, removed or reworded rule, renamed heading, risky line, secret, another device's change
+  meanwhile and on the same line, a dead remote, a held lock, odd hook input, forged markers). README
+  "Background updates" and the disclosure section; repo CLAUDE.md.
 
 ## Review text gaps (found by the 2026-11-19 dry run; older text, not this phase's)
 

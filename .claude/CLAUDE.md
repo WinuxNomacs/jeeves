@@ -30,7 +30,9 @@ code that runs, and the release check would warn at every session start.
 - `.claude-plugin/plugin.json` — manifest (`userConfig.data_repo`); `.claude-plugin/marketplace.json` — the repo
   is its own marketplace; its plugin entry is pinned to the last release's tag and commit (a `github` source),
   so installs get only signed releases. `MANIFEST`, `MANIFEST.sig`, `release-key.pub` — the signed release.
-- `hooks/hooks.json` — SessionStart → `jeeves-snapshot --hook`; PostToolUse `Write|Edit` → `jeeves-hook-edit`.
+- `hooks/hooks.json` — SessionStart → `jeeves-snapshot --hook` and `jeeves-auto --session-start`; PostToolUse
+  `Write|Edit` → `jeeves-hook-edit`; Stop → `jeeves-auto --hook-stop`. With `JEEVES_AUTO_CHILD=1` (a
+  background run's own session) every hook does nothing.
 - `bin/` — on the Bash tool's PATH while the plugin is enabled, so every name starts with `jeeves-`.
   `jeeves-snapshot` (`~/.claude` → data repo, commits on its `main`), `jeeves-apply` (data repo → `~/.claude`),
   `jeeves-hook-edit` (snapshots after an edit to `~/.claude/CLAUDE.md`), `jeeves-status` (read-only: what is
@@ -44,7 +46,10 @@ code that runs, and the release check would warn at every session start.
   (the memories the session review has not reviewed yet, and the shared record `hosts/.memory-review`),
   `jeeves-git` (git in the data repo), `jeeves-update-check` (once a day from the session-start hook: a newer release
   than this one in the marketplace pin on GitHub's `main`, read with curl, gets a one-line notice; not the
-  newest tag, which comes before its pin; tests turn it off), `jeeves-verify` (the plugin's files against its signed `MANIFEST`,
+  newest tag, which comes before its pin; tests turn it off), `jeeves-auto` (background updates, off by default, per device: the Stop hook starts
+  a detached `run` when due; the run gives a headless `claude -p` only a private temp folder, under
+  `dontAsk` with no shell, web or MCP tools, then checks its edit, merges, scans and pushes itself; state in
+  `~/.claude/jeeves/auto/`; the plan and its failure list are in `upcoming-changes.md`), `jeeves-verify` (the plugin's files against its signed `MANIFEST`,
   the release key recorded at setup in `~/.claude/jeeves/allowed_signers`; standalone, sources nothing).
 - `skills/` — `update` (`/jeeves:update`: when the user runs it, a review of the session and of every
   device's unreviewed memories: it decides on its own what to save to the global and project CLAUDE.md,
@@ -54,7 +59,9 @@ code that runs, and the release check would warn at every session start.
   named after the plugin, so the bare `/jeeves` reaches it), `review` (`/jeeves:review`: with the user, the
   rules that hold results back, the user's firm ones included; rewords them once the user agrees; reads
   every memory through `jeeves-memories list --all`), `setup`, `restore`,
-  `cleanup` (`/jeeves:cleanup`: history cleanup and its `jeeves.conf` settings), `encryption` (`/jeeves:encryption`: by the state, turn
+  `cleanup` (`/jeeves:cleanup`: history cleanup and its `jeeves.conf` settings), `autoupdate`
+  (`/jeeves:autoupdate`: background updates on or off; `update`'s "Auto mode" section is what the background
+  session follows), `encryption` (`/jeeves:encryption`: by the state, turn
   on, unlock, change the passphrase, lock). Every skill but `update` is one only the user starts
   (`disable-model-invocation`), and the Skill tool refuses to start such a skill from another: `encryption`'s
   and `restore`'s steps are in a `steps.md` beside them, which they read through `${CLAUDE_SKILL_DIR}` and
@@ -127,7 +134,8 @@ code that runs, and the release check would warn at every session start.
   processes running, so end them by the PID of their top `bash.exe` (`taskkill /PID <pid> /T /F`). No
   GNU-only flags (no `sed -i`, no `\|` in sed), no `timeout`, no `date -d` or `date -r` (missing or different
   on macOS; format dates with git), no associative arrays, no `set -u`, no `jq`.
-  No `mkdir` as a lock: uutils coreutils (Ubuntu 26.04's default) lets two processes create the same folder
+  `jeeves-auto` alone also uses `perl` with JSON::PP (a core module; on macOS, Linux and Git for Windows by
+  default) to read transcripts and hook input; without it, background updates stay off. No `mkdir` as a lock: uutils coreutils (Ubuntu 26.04's default) lets two processes create the same folder
   at once; `take_lock` in `lib/lib.sh` uses bash's `noclobber` instead.
 - When a test's own git command writes files (switch, merge, checkout), give it `-c core.autocrlf=false`, as
   the scripts' `git_repo` does: Git for Windows would write CRLF and the scripts would see a dirty repo.
@@ -135,10 +143,11 @@ code that runs, and the release check would warn at every session start.
 - Data integrity: check every copy (`copy_file`, `copy_settled`) and stop with nothing recorded when one
   fails; a sync record (`set_base`) holds the hash of what was copied and committed, never of the disk file
   read again later; nothing reaches `~/.claude` from a data repo that is not on a clean `main`.
-- The scripts never push, with one exception: `jeeves-cleanup` force-pushes the data repo's `main`, always
+- The scripts never push, with two exceptions: `jeeves-cleanup` force-pushes the data repo's `main`, always
   with a lease (`--force-with-lease=main:<the origin/main it checked>`), after `jeeves-scan`, and puts `main`
-  back if the push fails. Otherwise they contact the remote only for `fetch` + fast-forward in `snapshot`,
-  and only the `update` and `cleanup` skills push.
+  back if the push fails; `jeeves-auto run` (background updates, which the user turned on) pushes the commit
+  it checked with `jeeves-scan` and `jeeves-risk` (`<sha>:refs/heads/main`, never forced). Otherwise they contact the remote only for `fetch` + fast-forward in `snapshot`,
+  and only the `update` and `cleanup` skills (and a background run, above) push.
 - Never copy secrets: `.credentials.json`, `~/.claude.json`, transcripts, history.
 - Encryption: a passphrase never goes through the chat or a command line (a dialog, or `--terminal` in the
   user's own terminal; to age only as `AGE_PASSPHRASE` of that one process); the key goes to stores on
