@@ -70,6 +70,35 @@ Design (proposed, to settle in 1a):
   start no run.
 - Model (the user's decision, 2026-11-20): the same model as the session (no `--model` override).
 
+Security and integrity safeguards (all eight decided with the user, 2026-11-20; each gets a test):
+1. **Prompt injection.** The child reads only an extract: no tool results; each message wrapped in a marker
+   with a per-run random nonce, so text inside a message cannot pose as the user ("USER:" in quoted text
+   passes today). Risky items are deferred, never written. The script check (3) runs before any push.
+2. **Least privilege.** `--permission-mode dontAsk` (anything not allowed is denied), with an allowlist:
+   Read, Edit/Write limited to the child's worktree, and named `jeeves-` commands. No web tools, no general
+   Bash, never `bypassPermissions`. To verify in 1b: `dontAsk` honours path-scoped Edit rules.
+3. **The model writes text; a script does the rest.** The child edits in a separate git worktree of the
+   data repo (never the main folder, so session snapshots and the auto run never switch branches under each
+   other). `jeeves-auto` then checks the result: only `home/CLAUDE.md` and the queue file changed; nothing
+   under `hosts/` or `.sync-state/`; the Security section and protected rules unchanged or only added to
+   (compared with the version before). Only then does it merge into `main`, run `jeeves-scan` and push,
+   under the run lock. A result that fails is set aside (not pushed) with a session-start notice. To verify
+   in 1b: the encryption filters work in a worktree.
+4. **Clean environment.** The child starts with only the variables it needs (`env -i` plus `HOME`, `PATH`,
+   locale, `JEEVES_AUTO_CHILD=1` and the like); the parent's `CLAUDE_CODE_MESSAGING_TOKEN`, socket and
+   session variables are not passed on (seen in the hook's environment in 1a).
+5. **Input validation.** Without `jq`, the transcript path from the hook's JSON is accepted only under
+   `~/.claude/projects/` and matching a strict pattern (no `..`, no newlines, no shell metacharacters);
+   always quoted, never in an `eval` or the prompt unvalidated. Missing or odd fields: skip and log.
+6. **Private, minimal logs.** `umask 077`; per run only the usage figures, outcome, and commits made; never
+   transcript text or the child's final message. Kept to the last N runs.
+7. **A run lock for the whole run.** Recording PID and start time (a reused PID is not mistaken for the
+   holder), stale after the run's deadline or when the PID is gone. A second due run skips; a manual
+   `/jeeves:update` waits briefly, then says an auto run holds it.
+8. **Nothing silent, nothing removed.** The next session start shows a one-line notice listing what the
+   auto run changed, with the `/jeeves:update revert <commit>` command. Auto runs may add and revise rules,
+   never remove one: removals (curation) are queued for the next manual run, where the report shows them.
+
 Failure list (global rule for unattended work; each gets an injected-failure test): no network or GitHub
 down (fetch or push fails: nothing lost, retried next run); the child hangs (deadline, SIGTERM then
 SIGKILL, lock released); the child is killed mid-run (stale lock taken over; a `pref/` branch left behind is
