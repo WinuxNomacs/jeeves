@@ -59,6 +59,8 @@ finish() { if [ $hook = 1 ]; then exit 0; else exit "$1"; fi; }
 if [ $hook = 1 ]; then
   verify_out=$("$(dirname "$0")/jeeves-verify" --hook 2>&1)
   case $? in 0) ;; 3) printf '%s\n' "$verify_out" ;; *) printf '%s\n' "$verify_out"; exit 0 ;; esac
+  # At session start (not after an edit), at most once a day: is a newer release out?
+  [ $pull = 1 ] && "$(dirname "$0")/jeeves-update-check"
 fi
 
 find_data_repo || { say "skipped, $DATA_REPO_PROBLEM"; finish 1; }
