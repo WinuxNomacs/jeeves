@@ -2,6 +2,20 @@
 
 **Your Claude Code, a little wiser with every session.**
 
+Install (then start a new session and run `/jeeves:setup`; details under [Install](#install)):
+
+```sh
+claude plugin marketplace add WinuxNomacs/jeeves
+claude plugin install jeeves@jeeves
+```
+
+Upgrade to the latest release:
+
+```sh
+claude plugin marketplace update jeeves
+claude plugin update jeeves@jeeves
+```
+
 ![Jeeves, an elderly butler with a monocle, white bow tie and dark tailcoat](docs/images/jeeves-butler.jpg)
 
 > **Just work as usual.** Now and then, run `/jeeves:update` (or `/jeeves`): Jeeves reviews the session and
