@@ -45,7 +45,8 @@ Decided with the user (2026-11-20):
   the user may be in.
 
 What auto mode decides alone vs. leaves for the user (the user's rules, not relaxed by this phase):
-- Alone: sync, non-overlapping merges, `learn:` and `curate:` items within curation's limits, memory review.
+- Alone: sync, non-overlapping merges, `learn:` items and revisions in place (a curation that removes a rule is queued, safeguard 8),
+  memory review.
 - Left for the next manual run, with a one-line notice at session start: risky items; held skills, agents
   and commands from another device (never auto-accepted); a true text conflict; a conflict with a rule the
   user set; `jeeves-risk` flags (taken out, the rest pushed); a `jeeves-scan` finding (stops the run, nothing
