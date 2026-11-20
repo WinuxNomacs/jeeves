@@ -59,19 +59,37 @@ MAX_EXTRACT=$(num_conf max_extract_chars 200000)
 have_perl() { perl -MJSON::PP -e 1 >/dev/null 2>&1; }
 
 # The session's variables never reach a run: the supervisor keeps only what finds the data repo; the child
-# (Claude Code itself) keeps only CLAUDE_CONFIG_DIR, so it reads the same config, and gets JEEVES_AUTO_CHILD=1,
-# so its own hooks do nothing.
+# (Claude Code itself) keeps only what selects its config, sign-in and provider (none of the session's: its
+# messaging token and socket, plugin variables, the age key), and gets JEEVES_AUTO_CHILD=1, so its own hooks
+# do nothing.
+CHILD_KEEPS=" CLAUDE_CONFIG_DIR CLAUDE_CODE_OAUTH_TOKEN CLAUDE_CODE_USE_BEDROCK CLAUDE_CODE_USE_VERTEX CLAUDE_CODE_USE_FOUNDRY CLAUDE_CODE_SKIP_BEDROCK_AUTH CLAUDE_CODE_SKIP_VERTEX_AUTH CLAUDE_CODE_SKIP_FOUNDRY_AUTH CLAUDE_CODE_GIT_BASH_PATH "
 scrub_env() { # scrub_env supervisor|child
   local v
   for v in $(env | sed -n 's/^\(CLAUDE[A-Za-z0-9_]*\)=.*/\1/p; s/^\(JEEVES[A-Za-z0-9_]*\)=.*/\1/p'); do
     case "$1:$v" in
-      *:CLAUDE_CONFIG_DIR) ;;
       supervisor:JEEVES_AGE_KEY) unset "$v" ;;
       supervisor:CLAUDE_HOME|supervisor:CLAUDE_PLUGIN_OPTION_DATA_REPO|supervisor:JEEVES_*) ;;
+      supervisor:*) case "$CHILD_KEEPS" in *" $v "*) ;; *) unset "$v" ;; esac ;;
+      child:*) case "$CHILD_KEEPS" in *" $v "*) ;; *) unset "$v" ;; esac ;;
       *) unset "$v" ;;
     esac
   done
 }
+
+# The user's settings.json is not loaded by the child (its permission rules, hooks and other plugins would
+# widen what the child may do); only its model and its env block (minus CLAUDE_CODE_PLUGIN_DIRS: the plugin
+# is loaded by path) are carried over. user_settings model|env prints the model, or the env as NUL-separated
+# NAME=value pairs.
+user_settings() {
+  perl -MJSON::PP -e 'local $/; my $d = eval { JSON::PP->new->utf8->decode(<STDIN>) }; exit 0 unless ref $d eq "HASH";
+    if ($ARGV[0] eq "model") { my $m = $d->{model}; print "$m\n" if defined $m && !ref $m && $m =~ /^[A-Za-z0-9._:\[\]-]{1,100}$/; exit 0 }
+    my $e = ref $d->{env} eq "HASH" ? $d->{env} : {};
+    for my $k (sort keys %$e) { next unless $k =~ /^[A-Za-z_][A-Za-z0-9_]*$/ && $k ne "CLAUDE_CODE_PLUGIN_DIRS";
+      next if ref $e->{$k}; my $v = $e->{$k} // ""; next if $v =~ /\0/; print "$k=$v\0" }' "$1" \
+    < "$CLAUDE_HOME/settings.json" 2>/dev/null
+}
+# A path as native Windows programs take it (C:/...), from Git Bash; unchanged elsewhere.
+native_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s\n' "$1"; fi; }
 
 # ---- Notices (printed once by the session-start hook) and the log ----
 
@@ -87,7 +105,7 @@ log_run() { # log_run <outcome> [figures]: one line per run, the last 50 kept; n
 
 # ---- The run lock: one background run (or the user's /jeeves:update) per device ----
 # "<pid> <start> <owner>". An auto run's lock is stale when its PID is gone or it is older than the deadline
-# plus five minutes (a PID reused meanwhile is not mistaken for the run); a manual hold after 30 minutes.
+# plus five minutes (a PID reused meanwhile is not mistaken for the run); a manual hold after two hours.
 
 lock_stale() {
   local pid start owner age
@@ -95,7 +113,7 @@ lock_stale() {
   case "$start" in ''|*[!0-9]*) [ -n "$(find "$LOCK" -mmin +1 2>/dev/null)" ]; return ;; esac
   age=$(( $(now) - start ))
   case "$owner" in
-    manual) [ $age -gt 1800 ] ;;
+    manual) [ $age -gt 7200 ] ;;
     *) ! kill -0 "$pid" 2>/dev/null || [ $age -gt $(( DEADLINE + 300 )) ] ;;
   esac
 }
@@ -137,7 +155,8 @@ my ($pos, $chars, $count) = ($offset, 0, $nonce eq "-");
 while (my $line = <$fh>) {
   last unless $line =~ /\n\z/;
   my $next = $pos + length($line);
-  my $d = eval { $json->decode($line) };
+  # A tool result (often large) is never read: skipped before decoding, which keeps the hook fast.
+  my $d = $line =~ /(?<!\\)"tool_use_id"/ && $line =~ /(?<!\\)"type":"user"/ ? undef : eval { $json->decode($line) };
   my $piece = "";
   if (ref $d eq "HASH" && ($d->{type} // "") =~ /^(user|assistant)$/ && !$d->{isMeta} && !$d->{isSidechain}
       && !$d->{isCompactSummary}) {
@@ -150,7 +169,7 @@ while (my $line = <$fh>) {
       if ($t eq "text") {
         my $s = $b->{text} // "";
         next if $s =~ /^\s*$/;
-        next if $role eq "USER" && $s =~ /^\s*<(system-reminder|local-command|command-name|command-message|command-args|task-notification)/;
+        next if $role eq "USER" && $s =~ /^\s*<(system-reminder|local-command|command-name|command-message|command-args|task-notification|bash-input|bash-stdout|bash-stderr|user-prompt-submit-hook)/;
         $piece .= "<<<$nonce $role>>>\n$s\n<<<$nonce END>>>\n\n";
       } elsif ($t eq "tool_use" && $role eq "CLAUDE") {
         my $in = eval { JSON::PP->new->canonical->encode($b->{input} // {}) } // "";
@@ -221,46 +240,83 @@ queue_count() { ls "$AUTO_DIR/queue" 2>/dev/null | grep -c '\.md$'; }
 
 # ---- Checking the model's edit before it goes anywhere ----
 
-# section <file> <heading>: the lines of the "## <heading>" section, the heading included.
-section() { awk -v h="## $2" '$0 == h { on = 1; print; next } on && /^## / { exit } on { print }' "$1"; }
-# check_edit <old> <new>: prints why the edited global rules are refused, or nothing.
+# Background runs may add rules and revise them in place, nothing more (the update skill's Auto mode). The
+# structural checks, in perl: every section whose heading names Security stays exactly as it was and no new one
+# appears; every heading stays; every rule the user set firmly (a bullet, with its continuation lines, saying
+# never, always, from now on, or recorded as the user's decision) stays word for word; no hunk removes more
+# lines than it adds (so a rule dropped here and another added elsewhere does not pass for a revision); at
+# most 12 lines changed per run; no invisible or direction-changing characters added.
+CHECK_PL='
+use strict; use warnings;
+sub slurp { local $/; open(my $f, "<:raw", $_[0]) or return undef; my $t = <$f>; utf8::decode($t); return $t }
+my ($old, $new) = (slurp($ARGV[0]), slurp($ARGV[1]));
+defined $old && defined $new or do { print "the rules could not be read\n"; exit };
+$new =~ /\S/ or do { print "the edited rules are empty\n"; exit };
+my @ol = split /\n/, $old, -1; my @nl = split /\n/, $new, -1;
+sub sections { my @l = @_; my (@out, $cur);
+  for (@l) { if (/^#{1,6}\s/) { $cur = /security/i ? [$_] : undef; push @out, $cur if $cur; next } push @$cur, $_ if $cur }
+  return join("\n---\n", map { my @s = @$_; pop @s while @s && $s[-1] =~ /^\s*$/; join("\n", @s) } @out) }
+sections(@ol) eq sections(@nl) or do { print "the Security section was changed (background runs never change it)\n"; exit };
+my %have = map { $_ => 1 } @nl;
+for (@ol) { next unless /^#{1,6}\s/; $have{$_} or do { print "a heading was changed or removed\n"; exit } }
+my (@blocks, $b);
+for (@ol) {
+  if (/^\s*[-*] / || /^#/ || /^\s*$/) { push @blocks, $b if defined $b; $b = /^\s*[-*] / ? $_ : undef; next }
+  $b .= "\n$_" if defined $b }
+push @blocks, $b if defined $b;
+for my $k (@blocks) {
+  next unless $k =~ /(^|[^a-z])(never|always|from now on)([^a-z]|$)/i || $k =~ /the user.s (decision|request|rule|standing)/i;
+  index($new, $k) >= 0 or do { print "a rule the user set firmly was reworded or removed\n"; exit } }
+my $hidden = qr/[\x{200B}-\x{200F}\x{202A}-\x{202E}\x{2060}-\x{2064}\x{FEFF}\x{00AD}]/;
+my @oh = ($old =~ /$hidden/g); my @nh = ($new =~ /$hidden/g);
+@nh <= @oh or do { print "invisible or direction-changing characters were added\n"; exit };
+'
 check_edit() {
-  local old=$1 new=$2 line removed
-  [ -s "$new" ] || { echo "the edited rules are empty"; return; }
+  local old=$1 new=$2 why removed
   [ "$(wc -c < "$new")" -le $(( $(wc -c < "$old") * 2 + 20000 )) ] || { echo "the edited rules grew past the limit"; return; }
   has_conflict_markers "$new" && { echo "the edited rules hold conflict markers"; return; }
   LC_ALL=C grep -q "$(printf '[\001-\010\013\014\016-\037]')" "$new" && { echo "the edited rules hold control characters"; return; }
-  while IFS= read -r line; do
-    grep -qxF -- "$line" "$new" || { echo "a line of the Security section was changed or removed"; return; }
-  done < <(section "$old" Security | grep -v '^[[:space:]]*$')
-  while IFS= read -r line; do
-    grep -qxF -- "$line" "$new" || { echo "a heading was changed or removed"; return; }
-  done < <(grep -E '^#{1,4} ' "$old")
-  # The user's firm rules stay word for word (curation never rewords them either).
-  while IFS= read -r line; do
-    grep -qxF -- "$line" "$new" || { echo "a rule the user set firmly was reworded or removed"; return; }
-  done < <(grep -Ei '(^|[^a-z])(never|always|from now on)([^a-z]|$)|the user.s (decision|request|rule|standing)' "$old")
+  why=$(perl -e "$CHECK_PL" -- "$old" "$new" 2>/dev/null) || why="the edited rules could not be checked"
+  [ -n "$why" ] && { echo "$why"; return; }
   [ "$(grep -cE '^[[:space:]]*- ' "$new")" -ge "$(grep -cE '^[[:space:]]*- ' "$old")" ] ||
     { echo "a rule was removed (removals wait for the user's /jeeves:update)"; return; }
-  # Each change replaces lines in place or adds them: a hunk that removes more lines than it adds is a removal
-  # (a rule dropped here and another added elsewhere keeps the count, so the count alone is not enough).
-  git diff --no-index --no-color -U0 -- "$old" "$new" 2>/dev/null | awk '/^@@/ {
-      split($2, o, ","); split($3, n, ","); oc = (o[2] == "" ? 1 : o[2]) + 0; nc = (n[2] == "" ? 1 : n[2]) + 0
-      if (oc > nc) bad = 1 } END { exit !bad }' && { echo "a rule was removed (removals wait for the user's /jeeves:update)"; return; }
-  removed=$(git diff --no-index --no-color -U0 -- "$old" "$new" 2>/dev/null | grep -c '^-[^-]')
-  [ "$removed" -le 30 ] || { echo "too many lines changed at once ($removed)"; return; }
+  # Hunk by hunk: removed lines counted from the diff body (a removed rule shows as "-- ...").
+  removed=$(git diff --no-index --no-color -U0 -- "$old" "$new" 2>/dev/null | awk '
+    /^@@/ { hunk = 1; split($2, o, ","); split($3, n, ","); oc = (o[2] == "" ? 1 : o[2]) + 0
+            nc = (n[2] == "" ? 1 : n[2]) + 0; if (oc > nc) bad = 1; next }
+    hunk && /^-/ { r++ }
+    END { print (bad ? "removal" : r + 0) }')
+  [ "$removed" = removal ] && { echo "a rule was removed (removals wait for the user's /jeeves:update)"; return; }
+  [ "$removed" -le 12 ] || { echo "too many lines changed at once ($removed)"; return; }
   [ -z "$(added_lines "$old" "$new" | risk_flags)" ] ||
     { echo "an added line was flagged as risky (such items wait for the user)"; return; }
 }
 
 # ---- One run ----
 
-RUN=
+RUN= CHILD=
 cleanup_run() {
+  [ -n "$CHILD" ] && kill -0 "$CHILD" 2>/dev/null && stop_child "$CHILD"
   [ -n "$RUN" ] && [ -d "$RUN" ] && rm -rf "${RUN:?}"
   rm -f "$AUTO_DIR/run-dir"
   release_lock
   release_run_lock
+}
+
+# A step a kill could leave half done in the data repo is marked first, so the next run puts it right: a
+# home/CLAUDE.md written but not committed (put back, if it still holds what this run wrote), a merge of
+# origin/main started but not finished (aborted). Without that, every snapshot would skip a dirty repo.
+MARK=$AUTO_DIR/in-progress
+recover_steps() {
+  local step h
+  [ -f "$MARK" ] || return 0
+  read -r step h < "$MARK"
+  case "$step" in
+    commit) [ "$(hash_of "$HOME_COPY/CLAUDE.md")" = "$h" ] && [ -n "$(git_repo status --porcelain -- home/CLAUDE.md)" ] &&
+              { git_repo reset -q -- home/CLAUDE.md; git_repo checkout -q -- home/CLAUDE.md; } ;;
+    merge) [ -f "$REPO/.git/MERGE_HEAD" ] && git_repo merge --abort >/dev/null 2>&1 ;;
+  esac
+  rm -f "$MARK"
 }
 
 # The data repo's lock (lib.sh), keeping this run's own cleanup on exit (take_lock sets its own trap).
@@ -301,25 +357,28 @@ push_scanned() {
     # Refused: what another device pushed is merged in (a conflict leaves it all for the user), then again.
     remote_git fetch -q origin main >/dev/null 2>&1 || break
     take_lock 30 || break
+    echo merge > "$MARK"
     if [ "$(git_repo symbolic-ref --short -q HEAD)" = main ] && [ -z "$(git_repo status --porcelain)" ] &&
        git_repo merge -q --no-ff -m "Merge origin/main (background update on $HOST)" origin/main >/dev/null 2>&1; then
-      release_lock
+      rm -f "$MARK"; release_lock
     else
-      git_repo merge --abort >/dev/null 2>&1; release_lock; break
+      git_repo merge --abort >/dev/null 2>&1; rm -f "$MARK"; release_lock; break
     fi
   done
   echo local
 }
 
+backoff() { echo $(( $(now) + $1 )) > "$AUTO_DIR/backoff"; }
+
 cmd_run() {
-  local sid=$1 tp=$2 folder=$3 nonce top proj f pid rc result cost ms turns err summary why hash= out i
+  local sid=$1 tp=$2 folder=$3 nonce top proj f rc result cost ms turns err summary why hash= out end model run_n
   SESSION=$(printf '%s' "$sid" | cut -c1-8)
   umask 077
   { valid_session "$sid" && valid_transcript "$tp" && valid_folder "$folder"; } || { log_run "skipped" "(input refused)"; exit 0; }
   enabled || exit 0
   take_run_lock auto || exit 0   # another run, or the user's /jeeves:update, is at work
   trap cleanup_run EXIT
-  trap 'exit 143' TERM INT
+  trap 'exit 143' TERM INT HUP
   scrub_env supervisor
 
   # A run killed earlier left its folder: removed now.
@@ -330,17 +389,19 @@ cmd_run() {
   fi
   command -v claude >/dev/null 2>&1 || {
     notice problem-claude "jeeves: background updates could not start: the claude command is not on the PATH."
-    log_run "skipped" "(no claude)"; exit 0; }
+    log_run "skipped" "(no claude)"; backoff 3600; exit 0; }
   have_perl || { notice problem-perl "jeeves: background updates need perl with JSON::PP, which is not installed here."
-    log_run "skipped" "(no perl)"; exit 0; }
+    log_run "skipped" "(no perl)"; backoff 3600; exit 0; }
   find_data_repo || { notice problem-repo "jeeves: a background update was skipped: $DATA_REPO_PROBLEM."
-    log_run "skipped" "(no data repo)"; exit 0; }
+    log_run "skipped" "(no data repo)"; backoff 3600; exit 0; }
+  data_lock && { recover_steps; release_lock; }
 
   # Sync first: what other devices pushed, and what changed on disk.
   "$BIN/jeeves-snapshot" >/dev/null 2>&1
   if [ "$(git_repo symbolic-ref --short -q HEAD)" != main ] || [ -f "$REPO/.git/MERGE_HEAD" ] ||
      [ -n "$(git_repo status --porcelain -- home)" ]; then
-    log_run "skipped" "(data repo not on a clean main)"; exit 0
+    notice problem-repo "jeeves: background updates are waiting: the data repo is not on a clean main (run /jeeves:update)."
+    log_run "skipped" "(data repo not on a clean main)"; backoff 3600; exit 0
   fi
 
   read_session "$sid"
@@ -383,39 +444,48 @@ cmd_run() {
 - write: $RUN/out/summary.txt, $RUN/out/queue.md, $RUN/out/memories.tsv
 EOF
 
-  # The child: Claude Code headless, confined to the run folder, with no shell, web or MCP tools.
+  # The child: Claude Code headless, confined to the run folder, with no shell, web or MCP tools. The user's
+  # settings are not loaded (their permission rules and hooks would widen it): this plugin is loaded by path,
+  # and only the settings' model and env carried over. Deny rules win over a skill's allowed-tools (checked
+  # headless), so the update skill's own grants give it no shell either.
+  run_n=$(native_path "$RUN") model=$(user_settings model)
+  user_settings env > "$RUN/settings-env"
   (
     scrub_env child
+    while IFS= read -r -d '' f; do export "$f"; done < "$RUN/settings-env"
     export JEEVES_AUTO_CHILD=1
     cd "$RUN" || exit 1
-    exec claude -p "/jeeves:update auto $RUN" --permission-mode dontAsk --strict-mcp-config \
+    exec claude -p "/jeeves:update auto $run_n" --setting-sources project --plugin-dir "$(native_path "${BIN%/bin}")" \
+      ${model:+--model "$model"} --permission-mode dontAsk --strict-mcp-config \
       --no-session-persistence --max-turns 40 --output-format json \
-      --allowedTools "Read(/$RUN/**)" "Edit(/$RUN/edit/**)" "Write(/$RUN/out/**)" "Edit(/$RUN/out/**)" \
+      --allowedTools "Read(/$run_n/**)" "Edit(/$run_n/edit/**)" "Write(/$run_n/out/**)" "Edit(/$run_n/out/**)" \
       --disallowedTools Bash WebFetch WebSearch Agent NotebookEdit \
       < /dev/null > "$RUN/result.json" 2> /dev/null
   ) &
-  pid=$!
-  i=0
-  while kill -0 "$pid" 2>/dev/null; do
-    if [ $i -ge $(( DEADLINE * 10 )) ]; then
-      stop_child "$pid"
-      echo $(( $(now) + 3600 )) > "$AUTO_DIR/backoff"
+  CHILD=$!
+  # The deadline by the clock (a count of sleeps drifts, most on Windows).
+  end=$(( $(now) + DEADLINE ))
+  while kill -0 "$CHILD" 2>/dev/null; do
+    if [ "$(now)" -ge "$end" ]; then
+      stop_child "$CHILD"; CHILD=
+      backoff 3600
       log_run "failed" "(stopped at the deadline, ${DEADLINE}s)"; exit 0
     fi
-    sleep 0.1; i=$((i + 1))
+    sleep 0.5
   done
-  wait "$pid"; rc=$?
+  wait "$CHILD"; rc=$?; CHILD=
   err=$(json_field is_error < "$RUN/result.json")
   cost=$(json_field total_cost_usd < "$RUN/result.json") ms=$(json_field duration_ms < "$RUN/result.json")
   turns=$(json_field num_turns < "$RUN/result.json")
   if [ $rc != 0 ] || [ "$err" != false ]; then
     result=$(json_field result < "$RUN/result.json")
     if printf '%s' "$result" | grep -qiE 'usage limit|rate limit|limit reached|quota|credit balance'; then
-      echo $(( $(now) + 86400 )) > "$AUTO_DIR/backoff"
+      backoff 86400
       notice problem-usage "jeeves: background updates are paused for a day: the plan's usage limit was reached."
       log_run "failed" "(usage limit; paused a day) cost=$cost"
     else
-      echo $(( $(now) + 3600 )) > "$AUTO_DIR/backoff"
+      backoff 3600
+      notice problem-child "jeeves: a background update failed (Claude Code exit $rc; signed out, or the plugin not found?) and is paused for an hour; jeeves-auto status shows the last runs."
       log_run "failed" "(child exit $rc) cost=$cost ms=$ms turns=$turns"
     fi
     exit 0
@@ -423,6 +493,16 @@ EOF
 
   OUTCOME=reviewed
   summary=$(tr -d '\r' < "$RUN/out/summary.txt" 2>/dev/null | tr -d '\000-\010\013-\037' | grep -v '^[[:space:]]*$' | head -20 | cut -c1-200)
+  # It goes into the next session's context (the notice) and a commit message: withheld if anything in it is
+  # flagged, looks like a secret, or holds invisible characters.
+  if [ -n "$summary" ]; then
+    why=
+    [ -n "$(printf '%s\n' "$summary" | sed 's/^/summary	/' | risk_flags)" ] && why=1
+    printf '%s\n' "$summary" | grep -qE 'sk-ant-|gh[pousr]_|github_pat_|A(KIA|SIA)[0-9A-Z]{16}|xox[abprs]-|PRIVATE KEY|[A-Za-z0-9_./+=-]{40,}' && why=1
+    printf '%s' "$summary" | perl -CS -ne 'exit 1 if /[\x{200B}-\x{200F}\x{202A}-\x{202E}\x{2060}-\x{2064}\x{FEFF}]/' 2>/dev/null || why=1
+    [ -n "$why" ] && summary="revised the global rules (the run's summary was withheld: it held flagged text)"
+    why=
+  fi
   if ! cmp -s "$RUN/orig/CLAUDE.md" "$RUN/edit/CLAUDE.md"; then
     why=$(check_edit "$RUN/orig/CLAUDE.md" "$RUN/edit/CLAUDE.md")
     if [ -n "$why" ]; then set_aside "$why"
@@ -440,6 +520,7 @@ EOF
       else
         encrypted && load_key
         [ -n "$summary" ] || summary="revised the global rules"
+        echo "commit $(hash_of "$RUN/merged")" > "$MARK"
         if copy_file "$RUN/merged" "$HOME_COPY/CLAUDE.md" && git_repo add -- home/CLAUDE.md &&
            git_repo commit -q -m "learn: $(printf '%s\n' "$summary" | head -1) (background update on $HOST)" \
              -m "$summary" -- home/CLAUDE.md; then
@@ -448,6 +529,7 @@ EOF
           git_repo reset -q -- home/CLAUDE.md 2>/dev/null; git_repo checkout -q -- home/CLAUDE.md 2>/dev/null
           set_aside "the commit failed"
         fi
+        rm -f "$MARK"
         unset JEEVES_AGE_KEY
         release_lock
       fi
@@ -476,10 +558,12 @@ EOF
   pushed=$(push_scanned)
   # The scan stopped it and this run's own commit is the tip (never pushed): that commit is taken back out
   # and set aside, and the rest is tried again.
-  if [ "$pushed" = scan ] && [ -n "$hash" ] && [ "$(git_repo rev-parse --short HEAD)" = "$hash" ] && data_lock; then
-    git_repo reset -q --hard HEAD~1 && hash= && set_aside "a line looked like a secret"
-    release_lock
-    pushed=$(push_scanned)
+  if [ "$pushed" = scan ] && [ -n "$hash" ] && data_lock; then
+    if [ "$(git_repo rev-parse --short HEAD)" = "$hash" ] && git_repo reset -q --keep HEAD~1; then
+      hash=; set_aside "a line looked like a secret"
+      release_lock; pushed=$(push_scanned)
+    else release_lock
+    fi
   fi
   case "$pushed" in
     pushed) OUTCOME="$OUTCOME,pushed" ;;
@@ -506,7 +590,7 @@ cmd_hook_stop() {
   [ "$JEEVES_AUTO_CHILD" = 1 ] && exit 0
   enabled || exit 0
   have_perl || exit 0
-  input=$(head -c 65536)
+  input=$(cat)
   sid=$(printf '%s' "$input" | json_field session_id)
   tp=$(posix_path "$(printf '%s' "$input" | json_field transcript_path)")
   folder=$(posix_path "$(printf '%s' "$input" | json_field cwd)")
@@ -536,8 +620,8 @@ cmd_session_start() {
     [ -f "$f" ] || continue
     cat "$f"; rm -f "$f"
   done
-  n=$(queue_count)
-  [ "$n" -gt 0 ] && echo "jeeves: $n item(s) from background updates wait for the user's next /jeeves:update (project rules, or decisions only the user makes)."
+  n=$(( $(queue_count) + $(ls "$AUTO_DIR/set-aside" 2>/dev/null | grep -c '\.patch$') ))
+  [ "$n" -gt 0 ] && echo "jeeves: $n item(s) from background updates wait for the user's next /jeeves:update (project rules, changes set aside, or decisions only the user makes)."
   exit 0
 }
 
@@ -570,7 +654,7 @@ case "$1" in
   hold)
     i=0 wait=${JEEVES_AUTO_HOLD_WAIT:-120}
     while ! take_run_lock manual; do
-      [ "$(lock_owner)" = manual ] && break   # the user's own other run
+      if [ "$(lock_owner)" = manual ]; then printf '%s %s manual\n' "$$" "$(now)" > "$LOCK"; break; fi   # the user's own other run
       [ $i -ge $(( wait * 10 )) ] && { say "a background update is still at work; try again in a few minutes"; exit 1; }
       [ $i = 0 ] && say "a background update is at work; waiting for it to finish (up to $wait seconds)"
       sleep 0.1; i=$((i + 1))
@@ -583,7 +667,7 @@ case "$1" in
     if [ "$2" = clear ]; then
       shift 2
       for id in "$@"; do
-        case "$id" in ''|*/*|.*) say "not a queue item: $id"; continue ;; esac
+        case "$id" in ''|*/*|*\\*|.*) say "not a queue item: $id"; continue ;; esac
         rm -f "$AUTO_DIR/queue/${id%.md}.md"
         case "$id" in *.patch) rm -f "$AUTO_DIR/set-aside/$id" ;; esac
       done

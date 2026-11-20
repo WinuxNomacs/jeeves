@@ -49,7 +49,7 @@ What auto mode decides alone vs. leaves for the user (the user's rules, not rela
   memory review.
 - Left for the next manual run, with a one-line notice at session start: risky items; held skills, agents
   and commands from another device (never auto-accepted); a true text conflict; a conflict with a rule the
-  user set; `jeeves-risk` flags (taken out, the rest pushed); a `jeeves-scan` finding (stops the run, nothing
+  user set; `jeeves-risk` flags (nothing pushed until the user's run settles them; as built); a `jeeves-scan` finding (stops the run, nothing
   pushed); a locked device; a push rejected twice.
 
 Collisions found (2026-11-20, in the code): `take_lock` (`lib/lib.sh`) guards one script call, not a skill

@@ -19,7 +19,7 @@
     "Stop": [
       {
         "hooks": [
-          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/jeeves-auto --hook-stop" }
+          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/jeeves-auto --hook-stop", "timeout": 30 }
         ]
       }
     ]
