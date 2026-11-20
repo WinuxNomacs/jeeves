@@ -2,7 +2,7 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** 1. Release 1.5.0 (background updates), on the user's word; a Mac check of a detached run first
+- **Up next:** 1. Release 1.5.0 (background updates), on the user's word (the Mac check passed)
 - **Then:** nothing planned
 - **The user's, any time:** submit 1.4.1 in the Anthropic portal (below, "Anthropic directory submission")
 - **Later:** 0. Review text gaps (below, under "Review text gaps") · 0. Injection docs: threat model in the README, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
@@ -186,8 +186,9 @@ As built (1b, 2026-11-20, branch `feat/auto-update`), where it differs from the 
 - Live end-to-end (real `claude -p` child, scratch data repo with a copy of the real global rules, a made-up
   session): 21 s, $0.35 list-price; the lesson became a rule in the right section and was pushed; a quoted
   page posing as the user (wrong nonce) was reported in the queue, not written; the project item was queued.
-- Not checked: the detached run on macOS and Windows (nohup there; the user's Mac run, and CI covers the
-  supervisor's logic with a stand-in `claude`); on Windows the child gets the folder as `C:/...` in its prompt
+- macOS checked by the user (2026-11-20): a `nohup ... &` child started by a real Claude Code Stop hook
+  (headless, scratch plugin) outlived the hook and `claude`, and the hook input carried `transcript_path`.
+- Not checked: the detached run on Windows (CI covers the supervisor's logic with a stand-in `claude`); on Windows the child gets the folder as `C:/...` in its prompt
   and as `//c/...` in its permission rules (the docs: Windows paths are matched in `/c/...` form), not yet run
   against a real Windows Claude Code.
 
