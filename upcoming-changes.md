@@ -65,7 +65,10 @@ Design (proposed, to settle in 1a):
   and stop escalation; `JEEVES_AUTO_CHILD=1` so its own hooks do nothing (no recursion); the update skill
   gets an "auto" section (no AskUserQuestion; defer instead; queue project items and deferred items in a
   file the manual run and the session-start notice read).
-- Interval default: 60 minutes since the last run and new activity in the session (to settle after 1a).
+- Interval (the user's decision, 2026-11-20, after 1a): at most once an hour per session, and only when the
+  session has grown by a set amount since its watermark (the threshold settled in 1b); idle or light sessions
+  start no run.
+- Model (the user's decision, 2026-11-20): the same model as the session (no `--model` override).
 
 Failure list (global rule for unattended work; each gets an injected-failure test): no network or GitHub
 down (fetch or push fails: nothing lost, retried next run); the child hangs (deadline, SIGTERM then
