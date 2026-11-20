@@ -506,6 +506,8 @@ Suite 105 passed (2026-11-19).
   in skill text and Read opens plugin files without a prompt (scratch plugin, headless). Not fixed, minor:
   `lib/crypt.sh` runs `$JEEVES_ASKPASS` unquoted (a test hook; a path with spaces breaks it); the
   user-only hand-off test misses "invoke/run `/jeeves:X`" wordings.
+  Tagged `v1.4.1` (CI green on all three OSes) and pinned in the marketplace (`fb537d7`); a fresh install
+  from GitHub gets 1.4.1 and `jeeves-verify` passes.
 
 ## Review text gaps (found by the 2026-11-19 dry run; older text, not this phase's)
 
