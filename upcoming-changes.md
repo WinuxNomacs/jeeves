@@ -2,7 +2,7 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** 1. Background auto-update (below, "Background auto-update"): 1a measure, 1b build
+- **Up next:** 1. Release 1.5.0 (background updates), on the user's word; a Mac check of a detached run first
 - **Then:** nothing planned
 - **The user's, any time:** submit 1.4.1 in the Anthropic portal (below, "Anthropic directory submission")
 - **Later:** 0. Review text gaps (below, under "Review text gaps") · 0. Injection docs: threat model in the README, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
@@ -143,6 +143,32 @@ The floor (about $0.35 on Opus) is the skill and the two CLAUDE.md files, paid o
 session held: a run should start only when the session has new activity worth reviewing, not on a clock
 alone. Opus found one useful item that Sonnet left out; both left out what was already saved.
 
+
+As built (1b, 2026-11-20, branch `feat/auto-update`), where it differs from the plan above:
+- No git worktree: the model never touches the data repo at all. The script copies into a private temp
+  folder (`mktemp -d`, removed on exit, a leftover removed by the next run) the extract, `home/CLAUDE.md` to
+  edit, the project's CLAUDE.md and up to 25 memory files; it merges the edited copy into `main` itself
+  (three-way with `git merge-file` when `main` moved meanwhile; a conflict sets the edit aside). This also
+  removes the open question about encryption in a worktree.
+- The child's permissions (checked headless with 2.1.304): `dontAsk`, `Read(//<run>/**)`,
+  `Edit(//<run>/edit/**)`, `Write`/`Edit(//<run>/out/**)`, `--disallowedTools Bash WebFetch WebSearch Agent
+  NotebookEdit`, `--strict-mcp-config` (no MCP servers), `--no-session-persistence` (no transcript of its
+  own). Reads, globs and greps outside the folder were denied; edits and shell writes outside it too.
+- Clean environment by removal, not `env -i` (macOS and Windows need many system variables): every
+  `CLAUDE*` and `JEEVES*` variable is dropped but `CLAUDE_CONFIG_DIR`; `JEEVES_AUTO_CHILD=1` is set.
+- The edit check also keeps every line with "never", "always", "from now on" or "the user's decision"
+  word for word, and refuses any diff hunk that removes more lines than it adds (a removal plus an addition
+  elsewhere kept the rule count, so the count alone missed it; seen in a test).
+- A secret in the run's own commit: the commit is taken back out (it is the unpushed tip), the edit set
+  aside, and the rest pushed.
+- Transcripts and hook input are read with `perl` and JSON::PP; without it the feature stays off.
+- Live end-to-end (real `claude -p` child, scratch data repo with a copy of the real global rules, a made-up
+  session): 21 s, $0.35 list-price; the lesson became a rule in the right section and was pushed; a quoted
+  page posing as the user (wrong nonce) was reported in the queue, not written; the project item was queued.
+- Not checked: the detached run on macOS and Windows (nohup there; the user's Mac run, and CI covers the
+  supervisor's logic with a stand-in `claude`); Windows path forms in the permission rules.
+
+## Anthropic directory submission (planned 2026-11-20)
 
 The user asked whether Jeeves is listed on Anthropic's marketplace and chose to plan the preparation as a
 phase. Submitting stays the user's own act, on their direct command.
@@ -624,6 +650,14 @@ Suite 105 passed (2026-11-19).
   user-only hand-off test misses "invoke/run `/jeeves:X`" wordings.
   Tagged `v1.4.1` (CI green on all three OSes) and pinned in the marketplace (`fb537d7`); a fresh install
   from GitHub gets 1.4.1 and `jeeves-verify` passes.
+- Background updates (2026-11-20; planned and measured with the user, "Background auto-update" above):
+  `bin/jeeves-auto` (Stop hook, session-start notices, the run, the run lock, queue, hold and release),
+  `skills/autoupdate/`, the "Auto mode" section and the hold and queue steps in `skills/update/SKILL.md`,
+  the `JEEVES_AUTO_CHILD` guard in `jeeves-snapshot` and `jeeves-hook-edit`, `hooks/hooks.json`. Tests in
+  `tests/run.sh` (16, with a stand-in `claude` that misbehaves on request: hang, fail, usage limit, removed
+  Security line, removed or reworded rule, renamed heading, risky line, secret, another device's change
+  meanwhile and on the same line, a dead remote, a held lock, odd hook input, forged markers). README
+  "Background updates" and the disclosure section; repo CLAUDE.md.
 
 ## Review text gaps (found by the 2026-11-19 dry run; older text, not this phase's)
 

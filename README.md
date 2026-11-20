@@ -46,6 +46,8 @@ them for you:
 |---|---|---|
 | SessionStart | every session start | `jeeves-snapshot --hook`: once a day, says when a newer Jeeves release is out; pulls the data repo, records what changed in `~/.claude`, backs up this device, commits on `main`; then the automatic history cleanup, if it is turned on and due |
 | PostToolUse (`Write\|Edit`) | right after Claude edits `~/.claude/CLAUDE.md` | `jeeves-snapshot --hook --no-pull`, reported as a system message when something needs attention |
+| SessionStart | every session start | `jeeves-auto --session-start`: what background updates changed or left for you, and until you decide, a one-line reminder of `/jeeves:autoupdate` |
+| Stop | each time Claude finishes a reply | `jeeves-auto --hook-stop`: only with background updates on, starts one in the background when it is due; otherwise ends at once |
 
 In hook mode the scripts print only when something needs attention (a conflict, newer files to install, a
 shared file deleted for every device, a problem), never a routine commit, and they never block a session:
@@ -65,6 +67,7 @@ offers choices as clickable options.
 | `/jeeves:review [concern]` | you | Goes over your rules with you, your own firm rules included, for any that hold back the results you want; talks through what you meant and rewrites them once you agree. See below. |
 | `/jeeves:cleanup <days>` | you | Removes history older than that many days (1 or more), keeping every file, after a fresh backup and your confirmation; `/jeeves:cleanup auto <every> [<keep>]` or `off` sets the automatic cleanup. See below. |
 | `/jeeves:encryption [passphrase \| lock]` | you | Goes by the state: turns on encryption with a passphrase (and removes the plain history from GitHub), unlocks this device once with the passphrase (the key then stays in its credential store), or, on an unlocked device, changes the passphrase or locks the device (removes the key). See below. |
+| `/jeeves:autoupdate [on \| off]` | you | Turns background updates on or off on this device (off until you decide; the session start reminds you once a session until you answer). See below. |
 | `/jeeves:restore <host>` | you | Copies a device's backed-up `settings.json`, `keybindings.json` (and on request memories) onto this machine, then fixes paths that only worked there (`data_repo`, a local marketplace folder) and lists other machine-specific values. Replaced files are saved first. |
 
 ### The `update` skill
@@ -144,6 +147,37 @@ yours changes without your agreement. Rules you did not set firmly it tidies on 
 agreed change is its own commit, undone with `/jeeves:update revert <commit>`. `/jeeves:review <concern>`
 starts from a rule or a result you are unhappy with.
 
+### Background updates
+
+Off until you turn them on, per device: `/jeeves:autoupdate`. When on, at most once an hour per session (once
+the session has grown enough to be worth it), the end of one of Claude's replies starts a separate headless
+Claude Code session in the background. It reviews what the session taught, as `/jeeves:update` does, adds or
+revises global rules, syncs and pushes; your session is not interrupted. The next session start says what
+changed, with the command to undo it, and what waits for you. Each run uses your plan's usage: measured at
+about $0.35 to $0.80 of list-price usage per run on Opus (2026-11-20).
+
+What it may do alone is narrower than `/jeeves:update`: it adds rules and revises them in place, and never
+removes or merges one, renames a heading, or changes the Security section or a rule you set firmly. Project
+rules, removals, risky items, skills from other devices and anything that needs your decision are queued for
+your next `/jeeves:update`, which takes them up.
+
+How it keeps your data safe:
+- The headless session sees only a private temporary folder: an extract of the conversation (your messages
+  and Claude's replies, without tool output, each marked with a random code so quoted text cannot pass for
+  yours), a copy of the global rules, the project's rules and up to 25 memories. It may edit only that copy
+  and write its notes; it has no shell, no web access and no MCP servers, and gets none of your session's
+  variables. The folder is deleted when the run ends.
+- A script, not the model, changes the data repo. It checks the edited copy (the Security section, headings
+  and firm rules unchanged; nothing removed; no line the risk check flags), merges it into `main`, scans for
+  secrets and risky lines, and pushes exactly the commit it checked. An edit that fails a check is set aside
+  for you, never pushed.
+- One run at a time per device; a run that hangs is stopped after 15 minutes; a failure pauses runs for an
+  hour, a usage limit for a day. Logs hold only times, outcomes and usage figures, never conversation text.
+
+Settings, in `~/.claude/jeeves/auto.conf` on each device: `enabled`, `interval_minutes` (60),
+`min_new_chars` (8000), `deadline_minutes` (15). Background updates need `perl` with JSON::PP (on macOS,
+Linux and Git for Windows by default) to read transcripts.
+
 ### History cleanup
 
 The data repo gains a commit for every change, on every device. To keep it small and readable over the
@@ -213,6 +247,7 @@ The plugin's `bin/` is on the PATH of Claude's Bash tool, so Claude (or you, by 
 | `jeeves-init <folder> [<url>]` | (new repo) | Creates an empty data repo (`.gitignore`, `.gitattributes`, README), optionally with a remote. |
 | `jeeves-status` | (read-only) | Lists each path out of sync (`disk`, `repo` or `conflict`) with its disk, repo and last-synced hashes, and how `main` stands against `origin/main`. |
 | `jeeves-memories list` / `record <hash> <outcome>...` | data repo | The memory files the session review has not reviewed yet (this machine's and other devices' backups), and the shared record of those it has, committed on `main`. |
+| `jeeves-auto status` / `on` / `off` / `queue` | `~/.claude` → data repo → origin | Background updates: the setting, the last runs and what waits; `queue` lists the items and set-aside changes left for `/jeeves:update` (`queue clear <id>...` once taken). The hooks run `--hook-stop` and `--session-start`; `hold` and `release` are for `/jeeves:update`. |
 | `jeeves-git <git arguments>` | data repo | Runs git in the data repo, so the skills never `cd` into it. |
 | `jeeves-verify` | (read-only) | Checks the plugin's files against its signed `MANIFEST` and the release key recorded at setup; lists every changed, missing or added file. `--trust` records the release key on first setup; `--hook` prints only a difference (the session-start check). |
 | `jeeves-risk` | (read-only) | Flags lines a push would add under `home/` that could make a session run outside code, gain permissions or hooks, or obey text it reads; lists file, line, commit and the kind of risk. |
@@ -239,7 +274,8 @@ How the data stays whole:
 - Each machine has an ID (`~/.claude/.jeeves-machine-id`) that it writes into its `hosts/<host>/` backup;
   a second machine reporting the same host name is stopped before it overwrites that backup (set
   `JEEVES_HOST` to give it a name of its own).
-- One Jeeves run at a time per data repo (a lock in `.git/jeeves/`).
+- One Jeeves run at a time per data repo (a lock in `.git/jeeves/`), and one background update or
+  `/jeeves:update` at a time per device (`~/.claude/jeeves/auto/run.lock`).
 
 `jeeves-snapshot` only commits onto a clean `main`. While the data repo is on another branch or has
 uncommitted changes (other than its own copies from a run that failed or was stopped), it skips and says so.
@@ -288,12 +324,15 @@ project or a `JEEVES_DATA=` prefix, so commands written that way would each ask 
 Everything Jeeves does runs from the bash scripts in `bin/` (readable source, no binaries) and from the
 skills' instructions to Claude. In full:
 
-**Network.** Jeeves sends nothing to Anthropic or the plugin's author and collects no usage data.
+**Network.** Jeeves sends nothing to the plugin's author and collects no usage data. It sends nothing to
+Anthropic itself, except through Claude Code when you turn background updates on (below).
 - Your data repo's own remote (the GitHub repo you chose at setup), through your git and its credentials:
   - `git fetch` at each session start (the hook), and whenever a command syncs, unlocks or cleans up; a
     `git clone` in `/jeeves:setup` on a new device.
   - `git push` from `/jeeves:update` (also run by `/jeeves:setup`'s first sync), `/jeeves:review`,
     `/jeeves:cleanup` and `/jeeves:encryption` (after a passphrase change or turning encryption on).
+  - From a background update, when on: `git push` of the data repo's `main` (after the secrets and risk
+    checks), and the fetch and merge a refused push needs.
   - A force-push, always with a lease, from the history cleanup: by hand (`/jeeves:cleanup`, or turning
     encryption on, after you confirm), or from the session-start hook once you turn the automatic cleanup
     on in `jeeves.conf`, without asking again each time.
@@ -303,6 +342,10 @@ skills' instructions to Claude. In full:
 - `raw.githubusercontent.com`, once a day from the session-start hook: an anonymous `curl` of this repo's
   `.claude-plugin/marketplace.json`, to say when a newer release is out. Nothing is sent but the request
   itself. Turn it off with `JEEVES_UPDATE_CHECK=off`.
+- Anthropic, only with background updates on (`/jeeves:autoupdate`; off by default): the Stop hook starts
+  `claude -p` (headless Claude Code, under your account and plan), which sends what it reads to Anthropic's
+  API as any Claude Code session does: an extract of the session's conversation (no tool output), your
+  global rules, the project's CLAUDE.md and up to 25 memory files.
 - GitHub during `/jeeves:setup` only: your GitHub CLI (`gh`) checks you are signed in, finds or creates your
   private data repo and tags it with a topic; `ssh -T git@github.com` checks whether your SSH key is
   accepted (it never adds GitHub's host key for you).
@@ -319,7 +362,8 @@ config, again only on a yes.
     commands from another device are held until you accept them.
   - Project memories: `/jeeves:update` may save new ones, as Claude Code saves memories.
   - `jeeves/`: Jeeves's own state on this device (the data repo's path, the trusted release key, the last
-    verified manifest, the daily check's time, development checkouts).
+    verified manifest, the daily check's time, development checkouts), and with background updates the
+    setting (`auto.conf`), the log, notices, the queue of items for you and set-aside changes (`auto/`).
   - `settings.json`, `keybindings.json` and memories: only by `/jeeves:restore`, which you start, from the
     backup of a device you pick (settings exist there only with `backup_settings=yes`). That device's
     `settings.json` comes back whole, its permissions and hooks included; every file replaced is kept under
@@ -335,7 +379,9 @@ config, again only on a yes.
 - With encryption on: the key in your system's credential store (Keychain, Windows Credential Manager,
   `secret-tool`) or, if you choose a key file, in `~/.config/jeeves/keys/`.
 
-It never copies secrets: not `.credentials.json`, `~/.claude.json`, transcripts or history.
+It never copies secrets: not `.credentials.json`, `~/.claude.json`, transcripts or history into the data repo.
+A background update reads the session's transcript to make its extract, which it keeps in a private temporary
+folder (deleted when the run ends) and never commits.
 
 ## Install
 
