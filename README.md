@@ -271,37 +271,55 @@ project or a `JEEVES_DATA=` prefix, so commands written that way would each ask 
 
 ## What Jeeves runs, sends and changes
 
-Everything Jeeves does runs from the bash scripts in `bin/` (readable source, no binaries, no packages
-downloaded) and the skills' instructions to Claude. In full:
+Everything Jeeves does runs from the bash scripts in `bin/` (readable source, no binaries) and from the
+skills' instructions to Claude. In full:
 
-**Network.** Jeeves sends nothing to Anthropic or the plugin's author, and collects no usage data.
+**Network.** Jeeves sends nothing to Anthropic or the plugin's author and collects no usage data.
 - Your data repo's own remote (the GitHub repo you chose at setup), through your git and its credentials:
-  `git fetch` at each session start (the hook), and `git push` only from `/jeeves:update`, `/jeeves:review`
-  and `/jeeves:cleanup` (the cleanup's push replaces history, always with a lease, after you confirm). What
-  is pushed: copies of the shared files and this device's backups listed at the top; secrets are checked
-  for first (`jeeves-scan`), and with encryption on only encrypted copies leave the device.
+  - `git fetch` at each session start (the hook), and whenever a command syncs, unlocks or cleans up; a
+    `git clone` in `/jeeves:setup` on a new device.
+  - `git push` from `/jeeves:update` (also run by `/jeeves:setup`'s first sync), `/jeeves:review`,
+    `/jeeves:cleanup` and `/jeeves:encryption` (after a passphrase change or turning encryption on).
+  - A force-push, always with a lease, from the history cleanup: by hand (`/jeeves:cleanup`, or turning
+    encryption on, after you confirm), or from the session-start hook once you turn the automatic cleanup
+    on in `jeeves.conf`, without asking again each time.
+  - What is pushed: copies of the shared files and this device's backups listed at the top, checked for
+    secrets first (`jeeves-scan`). With encryption on, file contents leave the device only encrypted; file
+    names (including project paths), sizes and commit messages stay readable.
 - `raw.githubusercontent.com`, once a day from the session-start hook: an anonymous `curl` of this repo's
   `.claude-plugin/marketplace.json`, to say when a newer release is out. Nothing is sent but the request
   itself. Turn it off with `JEEVES_UPDATE_CHECK=off`.
-- GitHub, through your GitHub CLI (`gh`), only during `/jeeves:setup`: it checks you are signed in, finds or
-  creates your private data repo and tags it with a topic.
+- GitHub during `/jeeves:setup` only: your GitHub CLI (`gh`) checks you are signed in, finds or creates your
+  private data repo and tags it with a topic; `ssh -T git@github.com` checks whether your SSH key is
+  accepted (it never adds GitHub's host key for you).
+
+**Software it may install.** None by itself. When `gh` or `age` is missing, `/jeeves:setup` and
+`/jeeves:encryption` show your system's install command (such as `brew install gh` or `sudo apt install gh`)
+and run it only after you agree. Setup may also offer `gh auth setup-git`, which changes your global git
+config, again only on a yes.
 
 **Files it changes.**
-- Under `~/.claude` (or `CLAUDE_CONFIG_DIR`): `CLAUDE.md`, `agents/`, `commands/` and `skills/` when
-  installing shared copies from the data repo; with encryption on, the key in your system's key store (or a
-  key file). New or changed skills, agents and commands from another device are held until you accept them.
-- `~/.claude/jeeves/`: Jeeves's own state (the sync record, the data repo's path, the release key, the daily
-  check's time).
-- `settings.json`, `keybindings.json` and project memories: only by `/jeeves:restore`, which you start, from
-  the backup of a device you pick (with `backup_settings=yes` there). That device's `settings.json` comes
-  back whole, its permissions and hooks included; every file replaced is kept under the data repo's
-  `.sync-state/overwritten/`, and Claude Code asks before the follow-up edit of machine-specific values.
-- **Permission settings:** besides a restore, only when you say yes at the end of `/jeeves:setup`, which adds
-  two `permissions.deny` rules to `~/.claude/settings.json` so no session's Edit or Write tool can change the
-  installed plugin or its trusted key. Nothing else in Jeeves adds, removes or changes permissions or hooks
-  in your settings.
-- Project `CLAUDE.md` files: only from `/jeeves:update`, which reports each change with its revert.
-- The data repo folder (commits on its `main`).
+- Under `~/.claude` (or `CLAUDE_CONFIG_DIR`):
+  - `CLAUDE.md`, `agents/`, `commands/` and `skills/`, when installing shared copies from the data repo; a
+    file deleted from the data repo for every device is deleted here too. New or changed skills, agents and
+    commands from another device are held until you accept them.
+  - Project memories: `/jeeves:update` may save new ones, as Claude Code saves memories.
+  - `jeeves/`: Jeeves's own state on this device (the data repo's path, the trusted release key, the last
+    verified manifest, the daily check's time, development checkouts).
+  - `settings.json`, `keybindings.json` and memories: only by `/jeeves:restore`, which you start, from the
+    backup of a device you pick (settings exist there only with `backup_settings=yes`). That device's
+    `settings.json` comes back whole, its permissions and hooks included; every file replaced is kept under
+    the data repo's `.sync-state/overwritten/`, and Claude Code asks before the follow-up edit of
+    machine-specific values.
+  - **Permission settings:** besides a restore, only when you say yes at the end of `/jeeves:setup`, which
+    adds two `permissions.deny` rules to `settings.json` so no session's Edit or Write tool can change the
+    installed plugin or its trusted key. Nothing else in Jeeves adds, removes or changes permissions or
+    hooks in your settings.
+- Project `CLAUDE.md` files: from `/jeeves:update` and `/jeeves:review`, committed in that project's git
+  (never pushed unless its own CLAUDE.md allows it); each change is reported with its revert.
+- The data repo folder: commits on its `main`, and Jeeves's sync record in `.sync-state/`.
+- With encryption on: the key in your system's credential store (Keychain, Windows Credential Manager,
+  `secret-tool`) or, if you choose a key file, in `~/.config/jeeves/keys/`.
 
 It never copies secrets: not `.credentials.json`, `~/.claude.json`, transcripts or history.
 
