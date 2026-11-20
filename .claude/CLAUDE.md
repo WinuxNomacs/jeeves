@@ -91,7 +91,9 @@ already snapshotted the data repo when the plugin is installed.
   user's word.
 - After changing a manifest or `hooks.json`: `claude plugin validate .` and
   `claude plugin validate .claude-plugin/marketplace.json`.
-- Rehearse an upgrade in a scratch `CLAUDE_CONFIG_DIR`: `claude plugin marketplace add WinuxNomacs/jeeves`
+- Rehearse an upgrade in a scratch `CLAUDE_CONFIG_DIR`, with `CLAUDE_CODE_PLUGIN_DIRS` unset (inherited from
+  the development setup, it loads the checkout as a second `jeeves`, and the install "failed to load", its
+  `--config` not applied; seen 2026-11-19): `claude plugin marketplace add WinuxNomacs/jeeves`
   and `claude plugin install jeeves@jeeves --config data_repo=<scratch>` (the published version); after the
   new tag's pin is pushed, `claude plugin marketplace update jeeves` and `claude plugin update jeeves@jeeves`,
   then check `<scratch>/plugins/cache/jeeves/jeeves/<version>/` and run its `bin/jeeves-verify --trust` and
@@ -101,7 +103,9 @@ already snapshotted the data repo when the plugin is installed.
 ## Rules for the scripts
 
 - Portable bash: macOS bash 3.2, Git Bash, Linux. Run the tests under Windows Git Bash too when a change
-  could differ there (from WSL: copy the tree to a `C:` folder and run `bash.exe -lc tests/run.sh`). No
+  could differ there (from WSL: copy the tree to a `C:` folder and run `bash.exe -lc tests/run.sh`). There the
+  suite takes about two hours (CI's Windows job, about 17 minutes); stopping the WSL command leaves the Windows
+  processes running, so end them by the PID of their top `bash.exe` (`taskkill /PID <pid> /T /F`). No
   GNU-only flags (no `sed -i`, no `\|` in sed), no `timeout`, no `date -d` or `date -r` (missing or different
   on macOS; format dates with git), no associative arrays, no `set -u`, no `jq`.
   No `mkdir` as a lock: uutils coreutils (Ubuntu 26.04's default) lets two processes create the same folder
