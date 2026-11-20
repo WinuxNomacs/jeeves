@@ -2,9 +2,9 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** the user submits 1.4.1 in the Anthropic portal (below, "Anthropic directory submission"), on
-  their own command
+- **Up next:** 1. Background auto-update (below, "Background auto-update"): 1a measure, 1b build
 - **Then:** nothing planned
+- **The user's, any time:** submit 1.4.1 in the Anthropic portal (below, "Anthropic directory submission")
 - **Later:** 0. Review text gaps (below, under "Review text gaps") · 0. Injection docs: threat model in the README, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
   must differ per host)
@@ -26,7 +26,61 @@ Also seen (development loads only): with the plugin loaded inline, `${user_confi
 filled in, and inside double quotes bash rejects it before the script runs ("Parse error"); the model
 retried with single quotes. Installed copies get the real path. Not fixed.
 
-## Anthropic directory submission (planned 2026-11-20)
+## Background auto-update (requested and planned 2026-11-20)
+
+The request: a toggle (`/jeeves:autoupdate`, default off) and, when on, `/jeeves:update` running every so
+often in the background of each session, as silently as possible, resolving what it can on its own with the
+judgement the update skill already uses.
+
+Decided with the user (2026-11-20):
+- **Mechanism: detached headless.** A Stop hook (runs each time Claude finishes a reply) checks whether a
+  run is due and, if so, starts a detached `claude -p` that runs the update in auto mode on the parent
+  session's transcript, then exits at once. The user's session is never interrupted and its context is not
+  spent; each run costs plan usage.
+- **Asking: once per device.** While off and never answered on this device, the session-start hook prints a
+  one-line offer; after a yes or no it stays quiet. `/jeeves:autoupdate` (user-only) turns it on or off.
+- **Setting: per device** (`~/.claude/jeeves/`), not `jeeves.conf`.
+- **Project CLAUDE.md: queued.** Auto mode writes only the global rules (data repo) and memories; project
+  items are kept for the next manual `/jeeves:update`, which offers them. It never touches a working tree
+  the user may be in.
+
+What auto mode decides alone vs. leaves for the user (the user's rules, not relaxed by this phase):
+- Alone: sync, non-overlapping merges, `learn:` and `curate:` items within curation's limits, memory review.
+- Left for the next manual run, with a one-line notice at session start: risky items; held skills, agents
+  and commands from another device (never auto-accepted); a true text conflict; a conflict with a rule the
+  user set; `jeeves-risk` flags (taken out, the rest pushed); a `jeeves-scan` finding (stops the run, nothing
+  pushed); a locked device; a push rejected twice.
+
+Collisions found (2026-11-20, in the code): `take_lock` (`lib/lib.sh`) guards one script call, not a skill
+run, and the update switches branches in the one data repo folder, so two runs on one machine would switch
+branches under each other. Needed: a run lock for the whole auto run (PID and start time, stale after the
+deadline or a dead PID), and a second due run skips rather than waits. A manual `/jeeves:update` while an
+auto run holds it waits briefly, then says so. Other devices: already safe (fetch, merge, push; never forced).
+
+Design (proposed, to settle in 1a):
+- `jeeves-auto` script: `status`, `on`, `off`, `due` (from the hook: on, idle interval passed, lock free),
+  `start` (spawns the child detached, logs to `~/.claude/jeeves/auto/`), and the per-session watermark
+  (how far each transcript was reviewed).
+- Child: `claude -p "/jeeves:update auto <transcript path>"` with a fixed `--allowedTools` list, a deadline
+  and stop escalation; `JEEVES_AUTO_CHILD=1` so its own hooks do nothing (no recursion); the update skill
+  gets an "auto" section (no AskUserQuestion; defer instead; queue project items and deferred items in a
+  file the manual run and the session-start notice read).
+- Interval default: 60 minutes since the last run and new activity in the session (to settle after 1a).
+
+Failure list (global rule for unattended work; each gets an injected-failure test): no network or GitHub
+down (fetch or push fails: nothing lost, retried next run); the child hangs (deadline, SIGTERM then
+SIGKILL, lock released); the child is killed mid-run (stale lock taken over; a `pref/` branch left behind is
+finished or removed by the next run); the parent session ends (child keeps going to its deadline); two
+sessions due at once (one runs, one skips); a manual run meanwhile (waits, then says so); disk full (copy
+checks stop with nothing recorded, as today); the transcript moved or unreadable (skip, log); `claude` not
+on the PATH or signed out (log once, notice at session start); a locked encrypted device (skip, notice);
+plan usage exhausted (child fails: log, back off a day); the log grows (kept to the last N runs).
+
+1a, before building: verify from primary sources that the Stop hook's input carries `transcript_path` and
+the session id, and how `claude -p` behaves with plugin skills and `--allowedTools` unattended (some of it
+checked headless 2026-11-20); measure one auto run's usage and time on a real session, small scale first,
+and report it to the user before the interval is chosen.
+
 
 The user asked whether Jeeves is listed on Anthropic's marketplace and chose to plan the preparation as a
 phase. Submitting stays the user's own act, on their direct command.
