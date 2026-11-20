@@ -1282,6 +1282,8 @@ t_plugin_files() {
   done
   check "no steps.md uses a variable only skill text gets filled in" bash -c '! grep -nE "[$][{]" "$1"/skills/*/steps.md' _ "$SRC"
   check "the restore steps keep the restore" grep -qF 'jeeves-restore <host>' "$SRC/skills/restore/steps.md"
+  check "setup goes on unencrypted when the encryption steps stop" grep -qF 'only the encryption ends' "$SRC/skills/setup/SKILL.md"
+  check "setup sends a locked clone to /jeeves:encryption, then setup again" grep -qF '`/jeeves:encryption` unlocks this device and `/jeeves:setup` run again' "$SRC/skills/setup/SKILL.md"
   check "the /jeeves menu tells the user to type /jeeves:review" grep -qF 'to type `/jeeves:review`' "$SRC/skills/jeeves/SKILL.md"
   voice=$(awk '/^## Voice$/ { on = 1 } on && /^## / && !/^## Voice$/ { exit } on' "$SRC/skills/update/SKILL.md")
   for f in "$SRC"/skills/*/SKILL.md; do
