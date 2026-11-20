@@ -494,6 +494,32 @@ repo by itself (otherwise give its URL: `/jeeves:setup <url>`), clones it, asks 
 encrypted, offers to restore another device's settings, and merges this machine's shared files with the repo's (keeping what both hold, asking before
 dropping text).
 
+## Uninstall
+
+On each device you want it gone from:
+
+1. If the data repo is encrypted, run `/jeeves:encryption` and lock this device first: that removes the key
+   from this machine's store (Keychain, Windows Credential Manager, the Secret Service, or the key file
+   under `~/.config/jeeves/keys/`). The passphrase still opens the data repo anywhere else.
+2. Remove the plugin, and the marketplace if you added it only for Jeeves:
+
+   ```sh
+   claude plugin uninstall jeeves@jeeves
+   claude plugin marketplace remove jeeves
+   ```
+
+   A development clone loaded with `CLAUDE_CODE_PLUGIN_DIRS` keeps loading until you remove that `env`
+   entry from `~/.claude/settings.json` (`claude plugin list` shows what still loads).
+3. Optionally, remove what Jeeves kept on the device:
+   - `~/.claude/jeeves/` (the data repo record, the trusted release key, background update state, the
+     development-checkout list) and `~/.claude/.jeeves-machine-id`;
+   - the deny rules setup offered to add to `permissions.deny` in `~/.claude/settings.json`,
+     `Edit(~/.claude/plugins/**)` and `Edit(~/.claude/jeeves/**)` (the first protects every plugin, so
+     you may want to keep it).
+
+Your `~/.claude` files (CLAUDE.md, agents, commands, skills) stay as they are, and so do the data repo
+folder and its copy on GitHub: delete those yourself if you no longer want the backup or the history.
+
 ## Tests
 
 `tests/run.sh` (or `tests/run.sh <part of a test name>`). Each test uses a scratch `~/.claude`, data repo and
