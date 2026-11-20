@@ -107,7 +107,9 @@ with a `cd` into it. Run `jeeves-encrypt status`, then go by the state and the r
   that is still unlocked can set a new one there (**Change the passphrase**).
 - Then `jeeves-snapshot`: it takes the other devices' changes. If it reports newer files, a conflict or a
   diverged `main`, follow `/jeeves:update` (without its session review). Report in one line that this
-  device is unlocked and synced, then run `jeeves-encrypt status` and go by the state again.
+  device is unlocked and synced, then run `jeeves-encrypt status` and go by the state again, except that
+  with no request an `encryption unlocked` without `history plain` ends here: the user came to unlock, so
+  do not ask what else to do.
 
 ## Plain history still on GitHub
 
