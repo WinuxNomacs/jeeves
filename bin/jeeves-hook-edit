@@ -3,6 +3,9 @@
 # recorded at once. Reads the hook's JSON from stdin; any other file is ignored. Always exits 0, and
 # reports to the user through a systemMessage only when the snapshot printed something.
 
+# A background update's own session (jeeves-auto) touches nothing.
+[ "$JEEVES_AUTO_CHILD" = 1 ] && exit 0
+
 CLAUDE_HOME=${CLAUDE_HOME:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}}
 
 # tool_input.file_path, without jq (portable awk): the first "file_path" string value, with escapes undone

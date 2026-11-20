@@ -56,6 +56,8 @@ finish() { if [ $hook = 1 ]; then exit 0; else exit "$1"; fi; }
 
 # From a hook (session start, or after an edit), first the check that the plugin is its signed release: on a
 # difference, its notice and nothing else; when the signature cannot be checked here, its notice, then on.
+# A background update's own session (jeeves-auto) touches nothing: the run that started it does the work.
+[ $hook = 1 ] && [ "$JEEVES_AUTO_CHILD" = 1 ] && exit 0
 if [ $hook = 1 ]; then
   verify_out=$("$(dirname "$0")/jeeves-verify" --hook 2>&1)
   case $? in 0) ;; 3) printf '%s\n' "$verify_out" ;; *) printf '%s\n' "$verify_out"; exit 0 ;; esac
