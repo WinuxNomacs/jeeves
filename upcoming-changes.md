@@ -2,7 +2,7 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** release 1.4.0
+- **Up next:** nothing planned
 - **Then:** nothing planned
 - **Later:** 0. Review text gaps (below, under "Review text gaps") · 0. Injection docs: threat model in the README, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
@@ -411,6 +411,9 @@ Suite 105 passed (2026-11-19).
   green) replaces `docs/images/jeeves-butler.jpg` (1366x675, in the README) and `jeeves-butler-full.jpg`
   (2912x1440) under the same names; README alt text updated. The full image carries Google's AI content
   credentials (C2PA), no personal data.
+- Release 1.4.0 (2026-11-19): `/jeeves:encryption`, the update notice, the new splash image; review fixes
+  (the notice follows the marketplace pin, `jeeves-verify` reads a last line with no newline, no question
+  after a plain unlock, the test runner fails on a missing test function).
 
 ## Review text gaps (found by the 2026-11-19 dry run; older text, not this phase's)
 

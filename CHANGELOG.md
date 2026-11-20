@@ -2,6 +2,22 @@
 
 A new version reaches installed copies only when `version` in `.claude-plugin/plugin.json` changes.
 
+## 1.4.0 (2026-11-19)
+
+**One command for encryption, and word when a new release is out.**
+
+- **`/jeeves:encryption` replaces `/jeeves:encrypt`, `/jeeves:lock` and `/jeeves:unlock`.** It looks at the
+  data repo's state and offers what fits: turn encryption on, unlock this device, change the passphrase, or
+  lock it. `/jeeves:encryption lock` and `/jeeves:encryption passphrase` (to change it; the passphrase itself is still
+  asked for in a window, never in the chat) go straight there.
+  The `/` menu lists seven Jeeves commands instead of nine.
+- **Update notice:** once a day at session start, Jeeves says in one line when a newer release is available
+  to install, with the commands to update. It is silent otherwise, offline, or with
+  `JEEVES_UPDATE_CHECK=off` in Claude Code's environment.
+- **A new portrait of Jeeves** in the README.
+- A development checkout listed on the last line of `~/.claude/jeeves/dev-checkouts` with no line break
+  after it is now recognised by the session-start check too.
+
 ## 1.3.0 (2026-11-19)
 
 **Shorter to use, harder to slip things past: `/jeeves`, a rules review with you, and nothing installed or
