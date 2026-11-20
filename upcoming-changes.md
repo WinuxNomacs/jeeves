@@ -62,8 +62,9 @@ The spike answers the questions a full port depends on, on a branch, released to
    `CGO_ENABLED=0`, `-trimpath`, `-buildvcs=false` and an empty build ID, by a script beside the release
    scripts. Reproducible: two builds, and CI's build, give the same hashes.
 5. **Measured and reported to the user:** each binary's size; the five together (what each release would add
-   to the repo); `jeeves-status` time, Go against bash, on Linux, macOS and Windows (it runs at every session
-   start through the snapshot).
+   to the repo); `jeeves-status` time, Go against bash, on Linux, macOS and Windows (the skills run it at
+   each sync; the session-start hook runs `jeeves-snapshot`, which sources `lib.sh` but not `jeeves-status`,
+   so this measures the port of the library the hooks will use).
 6. **Real platforms:**
    - macOS: the user runs the launcher from a checkout of the branch. Does Gatekeeper question an unsigned
      binary that arrived through git (git sets no quarantine flag, so probably not; unverified)?
@@ -91,10 +92,61 @@ If go: the full port is planned as phases (the library and sync scripts, encrypt
 background updates, the rest), each released only when its tests pass on all three OSes. If no-go: the
 spike's findings are recorded here and bash stays.
 
-Failure list for the launcher (it runs at every session start through the snapshot hook): no binary for
+Failure list for the launcher (the skills run it at each sync; once the hooks' scripts are ported, at every
+session start): no binary for
 this OS or architecture (fall back to the bash script, and say so once); a binary that fails to start (same
 fallback); a binary that does not match the signed manifest (`jeeves-verify` covers `dist/` as it does
 `bin/`). Each gets a test that makes it happen.
+
+### Spike results (built 2026-11-20, branch `spike/go`)
+
+Built: `go.mod`, `cmd/jeeves/` (one program, `jeeves status` for now), `internal/lib/` (data repo discovery,
+the record, encryption state and `crypt_setup`'s git settings, tracked paths, blob hashes, the sync record,
+classification), `internal/status/`. `bin/jeeves-status` is now a launcher; the bash version moved to
+`lib/status.sh`. `.claude/skills/release/build-go.sh` (five targets; `--record` and `--check` against
+`go-builds.sha256`), `time-status.sh` (the timing). Go 1.27.4 installed on this machine in
+`~/.local/go-1.27.4`, linked from `~/.local/bin` (the user's yes, 2026-11-20).
+
+- **Parity:** the suite's status tests, plus a new test that runs both versions on every state (disk, repo,
+  conflict, no base, a name with a space and an accent, excluded folders, CRLF and empty files, a merge in
+  progress, the refusals) and compares stdout, stderr and exit status byte for byte. Full suite, encryption
+  tests included: 145 passed, 0 failed on Linux here, and in CI on Linux and macOS (bash 3.2, the arm64
+  build). Windows Git Bash on this PC: the status tests 5 passed. The parity
+  test was seen failing against a build that changes one word.
+- **Found by the parity test on Windows:** bash's `sort -u` in `all_tracked` followed the locale (Git Bash
+  put `CLAUDE.md` after `agents/`), so the bash version's own order differed between machines; fixed in bash
+  (`LC_ALL=C`), its own commit. Also found in the design: Git Bash hands a native program its paths in
+  Windows form (`C:\...`), while the scripts print and record `/c/...` or `/tmp/...`; the Go build converts
+  with `cygpath` (both ways) where a path is printed, recorded or read from a record, and the parity test
+  passes on Windows with the data repo under Git Bash's `/tmp`.
+- **Sizes** (stripped, `-s -w`): macOS arm64 2,011,666 bytes, macOS amd64 2,143,424, Linux amd64 2,183,292,
+  Linux arm64 2,097,276, Windows amd64 2,296,320; all five 10,731,982 bytes (about 10.2 MiB), each over the
+  directory's 256 KiB "held for a reviewer" line. Every release that changes the Go code adds about that
+  much to the repo if binaries are committed (git compresses them somewhat; unmeasured). More commands add
+  little: most of the size is Go's runtime.
+- **Reproducible:** two local builds, one with an empty build cache and one from another folder, gave the same
+  five SHA-256 hashes, and so did CI's builds on its Linux, macOS (arm64) and Windows runners: the same bytes
+  from any of the three OSes (`build-go.sh --check`).
+- **Time** (`time-status.sh`, the launcher included; nothing else heavy running):
+
+  | Machine | Files | Go | bash |
+  |---|---|---|---|
+  | Windows Git Bash (this PC) | 50 | 662 ms | 18,589 ms |
+  | Linux (WSL, this PC) | 500 | 51 ms | 2,672 ms |
+  | Linux (WSL, this PC) | 50 | 34 ms | 304 ms |
+
+  On Windows most of the Go build's time is the launcher's own bash and the processes it starts (uname,
+  cygpath, git); trimming them is for the full port.
+- **Windows Defender** (real-time and tamper protection on, signatures of 2026-11-20): the unsigned
+  `jeeves-windows-amd64.exe`, copied in from WSL, ran repeatedly with no block and no detection
+  (`Get-MpThreatDetection`: none in the last day). A file that arrives through git carries no
+  Mark-of-the-Web, as an install's clone does.
+- **macOS Gatekeeper:** open. The builds are on the throwaway branch `spike/go-dist` (never merged; deleted
+  after the user's check), so they reach the Mac through git, as an install's files do.
+- **CI:** not `actions/setup-go` (v7.1.0 was three days old; v7.0.0 of 2026-07-16 would have passed the
+  two-week rule): Go is installed as `age` already is, from go.dev's archive, pinned by its published
+  SHA-256, so no action and no dependencies are added. Then gofmt, vet, the unit tests and
+  `build-go.sh --check` on each OS, before the suite.
 
 ## Background auto-update (requested and planned 2026-11-20)
 
