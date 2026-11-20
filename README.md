@@ -166,9 +166,10 @@ How it keeps your data safe:
   and Claude's replies, without tool output, each marked with a random code so quoted text cannot pass for
   yours), a copy of the global rules, the project's rules and up to 25 memories. It may edit only that copy
   and write its notes; it has no shell, no web access and no MCP servers, and gets none of your session's
-  variables. The folder is deleted when the run ends.
+  variables, nor your settings' permission rules, hooks or other plugins (only your model and settings
+  environment). The folder is deleted when the run ends.
 - A script, not the model, changes the data repo. It checks the edited copy (the Security section, headings
-  and firm rules unchanged; nothing removed; no line the risk check flags), merges it into `main`, scans for
+  and firm rules unchanged; nothing removed; at most 12 lines changed; no line the risk check flags), merges it into `main`, scans for
   secrets and risky lines, and pushes exactly the commit it checked. An edit that fails a check is set aside
   for you, never pushed.
 - One run at a time per device; a run that hangs is stopped after 15 minutes; a failure pauses runs for an

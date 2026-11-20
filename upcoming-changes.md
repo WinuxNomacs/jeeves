@@ -155,12 +155,33 @@ As built (1b, 2026-11-20, branch `feat/auto-update`), where it differs from the 
   NotebookEdit`, `--strict-mcp-config` (no MCP servers), `--no-session-persistence` (no transcript of its
   own). Reads, globs and greps outside the folder were denied; edits and shell writes outside it too.
 - Clean environment by removal, not `env -i` (macOS and Windows need many system variables): every
-  `CLAUDE*` and `JEEVES*` variable is dropped but `CLAUDE_CONFIG_DIR`; `JEEVES_AUTO_CHILD=1` is set.
+  `CLAUDE*` and `JEEVES*` variable is dropped but those selecting config, sign-in and provider
+  (`CLAUDE_CONFIG_DIR`, `CLAUDE_CODE_OAUTH_TOKEN`, `CLAUDE_CODE_USE_BEDROCK`/`VERTEX`/`FOUNDRY` and their
+  `SKIP_*_AUTH`, `CLAUDE_CODE_GIT_BASH_PATH`); `JEEVES_AUTO_CHILD=1` is set.
+- The child does not load the user's `settings.json` (`--setting-sources project`; the run folder has
+  none): a user's allow rules, `additionalDirectories`, hooks or other plugins would widen it. The plugin is
+  loaded with `--plugin-dir`, and the settings' `model` and `env` (minus `CLAUDE_CODE_PLUGIN_DIRS`) are carried
+  over. Checked headless: the skill resolves and sign-in works that way, and a denied tool stays denied even
+  when the skill's `allowed-tools` grants it (so the update skill's push and commit grants give the child
+  nothing).
 - The edit check also keeps every line with "never", "always", "from now on" or "the user's decision"
   word for word, and refuses any diff hunk that removes more lines than it adds (a removal plus an addition
   elsewhere kept the rule count, so the count alone missed it; seen in a test).
-- A secret in the run's own commit: the commit is taken back out (it is the unpushed tip), the edit set
-  aside, and the rest pushed.
+- A secret in the run's own commit: the commit is taken back out (checked again under the lock, `reset
+  --keep`), the edit set aside, and the rest pushed.
+- Independent review (2026-11-20, an agent given the code and the checklist): 18 findings, all fixed or
+  noted. Fixed: bullets missed by the changed-lines count (now at most 12, counted from the diff body);
+  additions to the Security section or a second Security heading; firm rules' continuation lines; invisible
+  characters; the user's settings reaching the child; the rollback race; a flagged summary reaching the next
+  session's context and a commit message; an orphaned child when the supervisor is stopped; the deadline
+  counted in sleeps; a run killed mid-commit or mid-merge blocking every snapshot (markers, put right by the
+  next run); early skips starting a run after every reply (now an hour's back-off and a notice); shell-mode
+  lines in the extract; an 8 s count on a 30 MB transcript (tool results skipped before decoding: 0.03 s);
+  a Stop hook timeout; hook input over 64 KB; `\\` in queue ids; manual hold staleness (two hours, refreshed by
+  a second hold). Left as is: a rule rewritten in place into a different one is a revision the check cannot
+  tell apart (reported with its undo); queued items for a project the user never reopens stay listed.
+- Second live run after the fixes: 17.6 s, $0.24; an injected "ignore previous instructions" in a quoted
+  README was reported, not written.
 - Transcripts and hook input are read with `perl` and JSON::PP; without it the feature stays off.
 - Live end-to-end (real `claude -p` child, scratch data repo with a copy of the real global rules, a made-up
   session): 21 s, $0.35 list-price; the lesson became a rule in the right section and was pushed; a quoted
