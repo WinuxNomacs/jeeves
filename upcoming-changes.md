@@ -2,7 +2,7 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** 1. Release 1.5.0 (background updates), on the user's word (the Mac check passed)
+- **Up next:** nothing planned (1.5.0 released 2026-11-20; tag and pin on the user's word)
 - **Then:** nothing planned
 - **The user's, any time:** submit 1.4.1 in the Anthropic portal (below, "Anthropic directory submission")
 - **Later:** 0. Review text gaps (below, under "Review text gaps") · 0. Injection docs: threat model in the README, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
@@ -693,6 +693,9 @@ Suite 105 passed (2026-11-19).
   user-only hand-off test misses "invoke/run `/jeeves:X`" wordings.
   Tagged `v1.4.1` (CI green on all three OSes) and pinned in the marketplace (`fb537d7`); a fresh install
   from GitHub gets 1.4.1 and `jeeves-verify` passes.
+- Release 1.5.0 (2026-11-20): background updates (below), the worker cleanup, both independent reviews'
+  fixes, the friendlier splash image. Rehearsed from 1.4.1 (plain and encrypted, two devices; background
+  updates off and undecided after the upgrade).
 - Background updates (2026-11-20; planned and measured with the user, "Background auto-update" above):
   `bin/jeeves-auto` (Stop hook, session-start notices, the run, the run lock, queue, hold and release),
   `skills/autoupdate/`, the "Auto mode" section and the hold and queue steps in `skills/update/SKILL.md`,

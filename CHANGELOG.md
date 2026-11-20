@@ -2,6 +2,27 @@
 
 A new version reaches installed copies only when `version` in `.claude-plugin/plugin.json` changes.
 
+## 1.5.0 (2026-11-20)
+
+**Background updates: Jeeves can keep your rules up to date while you work. Off until you turn it on.**
+
+- **`/jeeves:autoupdate`** turns background updates on or off on each device. When on, at most once an hour
+  per session (once there is enough new to review), a separate headless Claude Code session reviews what the
+  session taught, as `/jeeves:update` does, adds or revises global rules, syncs and pushes. Your session is
+  not interrupted. Each run uses plan usage (measured at about $0.25 to $0.80 of list-price usage per run).
+- **The next session start tells you** what a background update changed, with the command to undo it, and
+  what waits for you. New sessions mention `/jeeves:autoupdate` once until you decide.
+- **Background runs do less than `/jeeves:update`:** they never remove or merge a rule, rename a heading, or
+  touch the Security section or a rule you set firmly. Project rules, removals, risky items and anything
+  needing your decision are queued for your next `/jeeves:update`, which takes them up.
+- **Built to be safe unattended:** the headless session sees only a private folder (an extract of the
+  conversation without tool output, the rules and up to 25 memories), has no shell, web or MCP tools, and
+  does not load your settings' permissions or hooks. A script checks its edit and scans for secrets before
+  anything is pushed; a refused edit is kept for you, never pushed. No worker is left behind: a watchdog
+  stops a stranded session, and each session start cleans up after a run that crashed.
+- Background updates need `perl` with JSON::PP (standard on macOS, Linux and Git for Windows).
+- New splash image: a friendlier Jeeves.
+
 ## 1.4.1 (2026-11-20)
 
 **Fixes for commands that hand off to each other, and a full account of what Jeeves does.**
