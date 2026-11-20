@@ -4,7 +4,8 @@
 
 - **Up next:** 1. Go spike (below, "Go rewrite: spike"): settle size, Gatekeeper, Defender and
   reproducibility before deciding on a full port
-- **The user's word:** tag `v1.5.0` (merged and signed; the marketplace pin follows the tag)
+- **Held:** 1.5.0 stays untagged, so installs keep 1.4.1 (the user's decision, 2026-11-20): the Go spike's
+  outcome decides what is released next
 - **Then:** nothing planned
 - **The user's, any time:** submit 1.4.1 in the Anthropic portal (below, "Anthropic directory submission")
 - **Later:** 0. Review text gaps (below, under "Review text gaps") · 0. Injection docs: threat model in the README, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
@@ -764,7 +765,8 @@ Suite 105 passed (2026-11-19).
   from GitHub gets 1.4.1 and `jeeves-verify` passes.
 - Release 1.5.0 (2026-11-20): background updates (below), the worker cleanup, both independent reviews'
   fixes, the friendlier splash image. Rehearsed from 1.4.1 (plain and encrypted, two devices; background
-  updates off and undecided after the upgrade).
+  updates off and undecided after the upgrade). Merged on `main` (8050958) but not tagged: installs keep
+  1.4.1 until the user decides, after the Go spike, what is released next.
 - Background updates (2026-11-20; planned and measured with the user, "Background auto-update" above):
   `bin/jeeves-auto` (Stop hook, session-start notices, the run, the run lock, queue, hold and release),
   `skills/autoupdate/`, the "Auto mode" section and the hold and queue steps in `skills/update/SKILL.md`,
