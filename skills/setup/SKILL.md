@@ -159,5 +159,6 @@ Report in a few lines: where the data repo is (folder and GitHub repo), whether 
 the first sync merged or installed, and what happens from now on: a snapshot at every session start and after
 each edit Claude makes to `~/.claude/CLAUDE.md`; `/jeeves:update` to sync by hand or change a preference;
 on another device, install Jeeves and run `/jeeves:setup`, which finds this data repo by itself when that
-device is signed in to GitHub with `gh` (and asks for the passphrase if it is encrypted). Without encryption,
+device is signed in to GitHub with `gh` (and asks for the passphrase if it is encrypted). Updates: once a
+day Jeeves says when a newer release is out; auto-update can be turned on in `/plugin` > Marketplaces. Without encryption,
 mention `/jeeves:encryption` in one line.

@@ -19,6 +19,8 @@ export JEEVES_HOST=testhost
 unset JEEVES_DATA CLAUDE_PLUGIN_OPTION_DATA_REPO CLAUDE_CONFIG_DIR
 # Never the real ~/.claude, even in a test that forgets setup (the scripts write the data repo pointer there).
 export CLAUDE_HOME=$SCRATCH/claude-home
+# No test asks GitHub for releases; the update notice test turns the check back on with a local repo.
+export JEEVES_UPDATE_CHECK=off
 
 # Fresh world: $W/remote.git, $W/repo (the data repo, a clone with home/), $W/claude (CLAUDE_HOME).
 setup() {
@@ -763,6 +765,36 @@ t_names_with_control_characters_are_not_taken() {
   . "$SRC/lib/lib.sh"
   check "a tab in a name is refused" bash -c '. "$1/lib/lib.sh"; [ -n "$(bad_name "skills/a$(printf "\t")b.md")" ]' _ "$SRC"
   check "a plain name is taken" bash -c '. "$1/lib/lib.sh"; [ -z "$(bad_name skills/ab.md)" ]' _ "$SRC"
+}
+
+t_the_update_notice_names_a_newer_release_once_a_day() {
+  local rel=$W/releases u=$SRC/bin/jeeves-update-check ours major out
+  ours=$(sed -n 's/.*"version": "\([0-9.]*\)".*/\1/p' "$SRC/.claude-plugin/plugin.json"); major=${ours%%.*}
+  git init -q "$rel" && git -C "$rel" commit -q --allow-empty -m r
+  git -C "$rel" update-ref "refs/tags/v$ours" HEAD; git -C "$rel" update-ref refs/tags/v0.9.0 HEAD
+  export JEEVES_UPDATE_CHECK= JEEVES_RELEASES_URL=$rel
+  check "the same release: nothing" [ -z "$("$u" --now)" ]
+  git -C "$rel" update-ref "refs/tags/v$((major + 1)).0.0x" HEAD; git -C "$rel" update-ref "refs/tags/x$((major + 1)).0.0" HEAD; git -C "$rel" update-ref "refs/tags/v$((major + 1)).0" HEAD
+  check "tags not named exactly vX.Y.Z are ignored" [ -z "$("$u" --now)" ]
+  git -C "$rel" update-ref "refs/tags/v$((major + 1)).0.0" HEAD; git -C "$rel" update-ref "refs/tags/v$major.99.0" HEAD
+  out=$("$u" --now)
+  check "a newer release is named, the highest one, with this version" bash -c 'grep -q "Jeeves $2.0.0 is out (this is $3)" <<< "$1" && grep -q "claude plugin update jeeves@jeeves" <<< "$1"' _ "$out" "$((major + 1))" "$ours"
+  check "once a day: the next session says nothing" [ -z "$("$u")" ]
+  echo 9999999999 > "$CLAUDE_HOME/jeeves/update-check"
+  check "a record in the future counts as never checked" grep -q "is out" <<< "$("$u")"
+  echo junk > "$CLAUDE_HOME/jeeves/update-check"
+  check "a record that does not read counts as never checked" grep -q "is out" <<< "$("$u")"
+  check "off: nothing" [ -z "$(JEEVES_UPDATE_CHECK=off "$u" --now)" ]
+  (cd "$SRC" && pwd -P) > "$CLAUDE_HOME/jeeves/dev-checkouts"
+  check "a development checkout: nothing" [ -z "$("$u" --now)" ]
+  rm "$CLAUDE_HOME/jeeves/dev-checkouts"
+  rm -f "$CLAUDE_HOME/jeeves/update-check"
+  out=$(JEEVES_RELEASES_URL=$W/nowhere "$u"; echo "rc=$?")
+  check "an unreachable repo: silent, exit 0, and not tried again today" bash -c '[ "$1" = rc=0 ] && [ -s "$2" ]' _ "$out" "$CLAUDE_HOME/jeeves/update-check"
+  rm -f "$CLAUDE_HOME/jeeves/update-check"
+  check "the session-start hook shows it" grep -q "is out" <<< "$(snap --hook)"
+  rm -f "$CLAUDE_HOME/jeeves/update-check"
+  check "the edit hook does not check" bash -c '! "$1/bin/jeeves-snapshot" --hook --no-pull | grep -q "is out"' _ "$SRC"
 }
 
 restore() { "$SRC/bin/jeeves-restore" "$@"; }
@@ -1938,6 +1970,7 @@ run_test "verify --trust keeps the key recorded at setup" t_trust_keeps_the_key_
 run_test "session start runs nothing else when the plugin differs from its signed release" t_session_start_runs_nothing_else_when_the_plugin_differs
 run_test "verify without OpenSSH 8.1 says so and Jeeves carries on" t_verify_without_openssh_8_1_says_so_and_jeeves_carries_on
 run_test "development checkouts take a ~ path, and a worktree's .git file is ignored" t_development_checkouts_take_a_home_path_and_a_worktree
+run_test "the update notice names a newer release, once a day, and is silent otherwise" t_the_update_notice_names_a_newer_release_once_a_day
 run_test "names with control characters are not taken" t_names_with_control_characters_are_not_taken
 run_test "an incoming skill or agent is held until that version is accepted; CLAUDE.md is installed" t_an_incoming_skill_or_agent_is_held_until_that_version_is_accepted
 run_test "apply --show prints every incoming change with its flags and installs nothing" t_apply_show_prints_every_incoming_change_and_installs_nothing

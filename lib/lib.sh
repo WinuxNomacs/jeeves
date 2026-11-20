@@ -431,6 +431,20 @@ shrink_repo() {
   git_repo reflog expire --expire=now --all && git_repo gc -q --prune=now 2>/dev/null
 }
 
+# True when the given plugin folder is a development checkout the user lists, one per line, in
+# ~/.claude/jeeves/dev-checkouts (`~` and `~/` taken as the home folder). jeeves-verify, which sources
+# nothing, has its own copy of this loop.
+is_dev_checkout() {
+  local d f=$CLAUDE_HOME/jeeves/dev-checkouts
+  [ -f "$f" ] || return 1
+  while IFS= read -r d || [ -n "$d" ]; do
+    d=${d%$'\r'}
+    case "$d" in "~") d=$HOME ;; "~/"*) d=$HOME/${d#"~/"} ;; esac
+    [ -n "$d" ] && [ "$(cd "$d" 2>/dev/null && pwd -P)" = "$1" ] && return 0
+  done < "$f"
+  return 1
+}
+
 # Run a command with a deadline in seconds (no `timeout` on macOS): past it, the command is stopped by its own
 # PID, gracefully and then by force, and this returns 124.
 with_deadline() {

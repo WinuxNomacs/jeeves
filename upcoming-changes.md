@@ -2,7 +2,7 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** 1. Update notice (below, under "Update notice"); then release 1.4.0
+- **Up next:** release 1.4.0
 - **Then:** nothing planned
 - **Later:** 0. Review text gaps (below, under "Review text gaps") · 0. Injection docs: threat model in the README, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
@@ -394,6 +394,12 @@ Suite 105 passed (2026-11-19).
   `bin/`, `lib/`, the setup, update and review skills, README and tests names `/jeeves:encryption`; checks in
   `t_plugin_files` (old names gone, seen failing with one planted). Skill text read through by an agent
   against nine states; its findings fixed. Suite 119 passed.
+- Update notice (2026-11-19): `bin/jeeves-update-check`, run by `jeeves-snapshot --hook` at session start
+  (not after an edit); `is_dev_checkout` in `lib/lib.sh`; `JEEVES_UPDATE_CHECK=off` for the whole test
+  suite. Test `t_the_update_notice_names_a_newer_release_once_a_day` against a local tag repo (newer,
+  same, junk tags, daily limit, future and unreadable records, off, dev checkout, unreachable, the hook;
+  the hook check seen failing without the wiring). Checked once against GitHub. README, setup's report,
+  repo CLAUDE.md. Suite 120 passed.
 
 ## Review text gaps (found by the 2026-11-19 dry run; older text, not this phase's)
 
