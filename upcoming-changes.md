@@ -141,8 +141,11 @@ classification), `internal/status/`. `bin/jeeves-status` is now a launcher; the 
   `jeeves-windows-amd64.exe`, copied in from WSL, ran repeatedly with no block and no detection
   (`Get-MpThreatDetection`: none in the last day). A file that arrives through git carries no
   Mark-of-the-Web, as an install's clone does.
-- **macOS Gatekeeper:** open. The builds are on the throwaway branch `spike/go-dist` (never merged; deleted
-  after the user's check), so they reach the Mac through git, as an install's files do.
+- **macOS Gatekeeper** (the user's Mac, 2026-11-20): the arm64 build, fetched through git from the throwaway
+  branch `spike/go-dist` (as an install's files arrive), ran with no dialog. `spctl --assess --type execute`
+  says "rejected": what Gatekeeper would do to the same file carrying a quarantine flag (a browser download),
+  so builds offered as downloads would need an Apple Developer ID signature and notarization (paid
+  program); builds that arrive through git do not.
 - **CI:** not `actions/setup-go` (v7.1.0 was three days old; v7.0.0 of 2026-07-16 would have passed the
   two-week rule): Go is installed as `age` already is, from go.dev's archive, pinned by its published
   SHA-256, so no action and no dependencies are added. Then gofmt, vet, the unit tests and
