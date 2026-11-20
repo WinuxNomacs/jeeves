@@ -2,9 +2,9 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** release 1.4.1 (the hand-off fix and the directory preparation)
-- **Then:** the user submits 1.4.1 in the Anthropic portal (below, "Anthropic directory submission"), on their
-  own command
+- **Up next:** the user submits 1.4.1 in the Anthropic portal (below, "Anthropic directory submission"), on
+  their own command
+- **Then:** nothing planned
 - **Later:** 0. Review text gaps (below, under "Review text gaps") · 0. Injection docs: threat model in the README, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
   must differ per host)
@@ -497,6 +497,15 @@ Suite 105 passed (2026-11-19).
   invokes or follows a user-only skill (seen failing on the old menu), the step files exist and are read,
   no step file uses a substitution. Checked headless: `/jeeves:restore` read its `steps.md` and listed the
   backups.
+- Release 1.4.1 (2026-11-20): the hand-off fix; the README section "What Jeeves runs, sends and changes"
+  (corrected by the release review: the automatic cleanup's force-push, pushes from encryption and setup,
+  the SSH probe, offered installs, where the sync record and key live, review's project edits, update's
+  memories); setup goes on unencrypted when the encryption steps stop, and sends a locked clone to
+  `/jeeves:encryption` then setup again (tests in `t_plugin_files`); `rehearse.sh` takes a relative path,
+  removes its worktree on any exit and exits 1 on a failure. Checked: `${CLAUDE_PLUGIN_ROOT}` is filled in
+  in skill text and Read opens plugin files without a prompt (scratch plugin, headless). Not fixed, minor:
+  `lib/crypt.sh` runs `$JEEVES_ASKPASS` unquoted (a test hook; a path with spaces breaks it); the
+  user-only hand-off test misses "invoke/run `/jeeves:X`" wordings.
 
 ## Review text gaps (found by the 2026-11-19 dry run; older text, not this phase's)
 

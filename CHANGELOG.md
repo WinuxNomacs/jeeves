@@ -2,6 +2,20 @@
 
 A new version reaches installed copies only when `version` in `.claude-plugin/plugin.json` changes.
 
+## 1.4.1 (2026-11-20)
+
+**Fixes for commands that hand off to each other, and a full account of what Jeeves does.**
+
+- **"Review my rules" in the `/jeeves` menu now tells you to type `/jeeves:review`**, which only you can
+  start, instead of failing.
+- **`/jeeves:setup` encrypts and restores again:** it follows the encryption and restore steps itself
+  instead of trying to start `/jeeves:encryption` and `/jeeves:restore`, which Claude Code refused.
+- **Setup no longer stops half-done** when you turn down installing age or need to set up a key store
+  first: on a new data repo it goes on unencrypted (`/jeeves:encryption` turns it on later); on a locked
+  copy it says to unlock with `/jeeves:encryption` and run `/jeeves:setup` again.
+- **The README now lists everything Jeeves runs, sends and changes:** every network call, every file it
+  writes, and the only two ways it touches permission settings.
+
 ## 1.4.0 (2026-11-19)
 
 **One command for encryption, and word when a new release is out.**
