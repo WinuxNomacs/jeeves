@@ -16,7 +16,7 @@ claude plugin marketplace update jeeves
 claude plugin update jeeves@jeeves
 ```
 
-![Jeeves, an elderly butler with a monocle, white bow tie and dark tailcoat](docs/images/jeeves-butler.jpg)
+![Jeeves, a smiling elderly butler with a monocle, white bow tie and dark tailcoat](docs/images/jeeves-butler.jpg)
 
 > **Just work as usual.** Now and then, run `/jeeves:update` (or `/jeeves`): Jeeves reviews the session and
 > the memories Claude saved in your projects, keeps what is worth learning, and writes it into your
