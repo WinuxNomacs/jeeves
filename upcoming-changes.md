@@ -132,6 +132,7 @@ classification), `internal/status/`. `bin/jeeves-status` is now a launcher; the 
   | Machine | Files | Go | bash |
   |---|---|---|---|
   | Windows Git Bash (this PC) | 50 | 662 ms | 18,589 ms |
+  | macOS (the user's Mac, arm64) | 50 | 34 ms | 556 ms |
   | Linux (WSL, this PC) | 500 | 51 ms | 2,672 ms |
   | Linux (WSL, this PC) | 50 | 34 ms | 304 ms |
 
