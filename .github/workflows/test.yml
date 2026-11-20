@@ -44,6 +44,35 @@ jobs:
           [ "$got" = "$sum" ] || { echo "::error::age-v1.3.2-$a has SHA-256 $got, expected $sum"; exit 1; }
           case "$a" in *.zip) unzip -q "age-$a" ;; *) tar xzf "age-$a" ;; esac
           echo "$RUNNER_TEMP/age" >> "$GITHUB_PATH"
+      # Go 1.27.4 for the Go build, pinned by the SHA-256 go.dev publishes for each archive (checked
+      # 2026-11-20); downloaded as age is, so no action is added.
+      - name: Install Go
+        shell: bash
+        run: |
+          case "$RUNNER_OS" in
+            Linux)   a=linux-amd64.tar.gz;  sum=7226736c2339719cda28fbf3a54d71aa63bcefe376e98cef00034268dab24840 ;;
+            macOS)   a=darwin-arm64.tar.gz; sum=91a44a2b8a716600ad94a4f143e156116620db8828086a6e3602291be9bd0bb4 ;;
+            Windows) a=windows-amd64.zip;   sum=178ab98950ac69ab25069307dc6ade79f3816e414cce95b4da166a115cde1e7e ;;
+          esac
+          cd "$RUNNER_TEMP"
+          curl -fsSL --retry 3 -o "go-$a" "https://go.dev/dl/go1.27.4.$a"
+          if command -v sha256sum >/dev/null; then got=$(sha256sum "go-$a"); else got=$(shasum -a 256 "go-$a"); fi
+          got=${got%% *}
+          [ "$got" = "$sum" ] || { echo "::error::go1.27.4.$a has SHA-256 $got, expected $sum"; exit 1; }
+          case "$a" in *.zip) unzip -q "go-$a" ;; *) tar xzf "go-$a" ;; esac
+          echo "$RUNNER_TEMP/go/bin" >> "$GITHUB_PATH"
+      # The five builds must match the hashes recorded from a local build: the same bytes from any machine.
+      - name: Go checks and builds
+        shell: bash
+        env:
+          GOTOOLCHAIN: local
+        run: |
+          go version
+          unformatted=$(gofmt -l cmd internal)
+          [ -z "$unformatted" ] || { echo "::error::not gofmt-formatted: $unformatted"; exit 1; }
+          go vet ./...
+          go test ./...
+          bash .claude/skills/release/build-go.sh --check
       - name: Tests
         shell: bash
         run: |

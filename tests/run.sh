@@ -485,6 +485,85 @@ t_status_reports_diverged_and_dirty() {
   check "dirty" grep -q "^branch	main	dirty$" <<< "$out"
 }
 
+# The Go build's name for this machine, as bin/jeeves-status picks it.
+go_build_name() {
+  local os arch
+  case "$(uname -s)" in Darwin) os=darwin ;; Linux) os=linux ;; MINGW*|MSYS*|CYGWIN*) os=windows ;; *) os=other ;; esac
+  case "$(uname -m)" in x86_64|amd64) arch=amd64 ;; arm64|aarch64) arch=arm64 ;; *) arch=other ;; esac
+  printf 'jeeves-%s-%s' "$os" "$arch"; [ $os = windows ] && printf .exe
+}
+# A copy of the plugin's scripts in $W/plugin, with no dist/ (tests add what they need).
+plugin_copy() { mkdir -p "$W/plugin" && cp -R "$SRC/bin" "$SRC/lib" "$W/plugin/"; }
+# Both versions' stdout, stderr and exit status for the same command, from the current folder.
+both_versions() { # both_versions <launcher> <args...>
+  local o e rc
+  o=$("$@" 2>"$W/go.err"); rc=$?; printf '%s\n--rc %s\n' "$o" $rc > "$W/go.out"
+  o=$(JEEVES_NO_GO=1 "$@" 2>"$W/bash.err"); rc=$?; printf '%s\n--rc %s\n' "$o" $rc > "$W/bash.out"
+}
+
+t_status_go_build_matches_the_bash_version() {
+  [ -x "$SRC/dist/$(go_build_name)" ] || { echo "skip: no Go build in dist/ (bash .claude/skills/release/build-go.sh)"; return; }
+  snap >/dev/null
+  both_versions status
+  check "in sync: the same output" cmp -s "$W/go.out" "$W/bash.out"
+  echo "disk side" > "$W/claude/CLAUDE.md"
+  echo "agent v2" > "$R/home/agents/a.md"
+  mkdir -p "$W/claude/commands" "$R/home/commands" "$W/claude/skills/n é" "$W/claude/skills/synced" "$R/home/skills/.trash"
+  echo k > "$W/claude/commands/c.md"; echo other > "$R/home/commands/c.md"
+  echo s > "$W/claude/skills/n é/SKILL.md"; echo x > "$W/claude/skills/synced/x.md"; echo t > "$R/home/skills/.trash/t.md"
+  printf 'crlf\r\n' > "$W/claude/agents/B.md"; : > "$R/home/agents/empty.md"
+  git -C "$R" add -A; git -C "$R" commit -qam "repo edits"
+  echo stray > "$R/stray.txt"
+  both_versions status
+  check "every state, odd names and excluded folders: the same output" cmp -s "$W/go.out" "$W/bash.out"
+  check "and it lists them" [ "$(grep -c '^[a-z]*	[A-Za-z]' "$W/go.out")" -ge 5 ]
+  check "no messages from either" [ ! -s "$W/go.err" ] && [ ! -s "$W/bash.err" ]
+  both_versions status extra
+  check "an extra argument: the same refusal" cmp -s "$W/go.out" "$W/bash.out" && cmp -s "$W/go.err" "$W/bash.err"
+  (cd "$SCRATCH" && JEEVES_DATA=$W/claude both_versions "$SRC/bin/jeeves-status")
+  check "not a git repository: the same message" cmp -s "$W/go.out" "$W/bash.out"
+  (unset JEEVES_DATA; cd "$SCRATCH" && HOME=$W/nohome both_versions "$SRC/bin/jeeves-status")
+  check "not set up: the same message" cmp -s "$W/go.out" "$W/bash.out"
+  check "which says so" grep -q "not set up on this machine" "$W/go.out"
+  rm -f "$R/stray.txt"; git -C "$R" switch -q -c side; echo z > "$R/home/CLAUDE.md"; git -C "$R" commit -qam side
+  git -C "$R" switch -q main; echo w > "$R/home/CLAUDE.md"; git -C "$R" commit -qam main
+  git -C "$R" -c core.autocrlf=false merge -q side >/dev/null 2>&1
+  both_versions status
+  check "a merge in progress: the same output" cmp -s "$W/go.out" "$W/bash.out"
+  check "which says merging" grep -q "^branch	main	merging$" "$W/go.out"
+  if ! cmp -s "$W/go.out" "$W/bash.out"; then diff "$W/bash.out" "$W/go.out"; fi
+}
+
+t_status_without_a_go_build_for_this_machine_runs_the_bash_version_and_says_so_once() {
+  snap >/dev/null; plugin_copy
+  mkdir -p "$W/plugin/dist"; echo x > "$W/plugin/dist/jeeves-plan9-mips"
+  out=$("$W/plugin/bin/jeeves-status" 2>"$W/err"); rc=$?
+  check "exit status 0" [ $rc = 0 ]
+  check "the bash version's output" grep -q "^datarepo	$R$" <<< "$out"
+  check "says why" grep -q "running the bash version of status: no Go build for" "$W/err"
+  "$W/plugin/bin/jeeves-status" >/dev/null 2>"$W/err"
+  check "and only once" [ ! -s "$W/err" ]
+  rm -rf "$W/plugin/dist"
+  out=$("$W/plugin/bin/jeeves-status" 2>"$W/err")
+  check "no dist/ at all: the bash version, silently" grep -q "^datarepo	$R$" <<< "$out" && [ ! -s "$W/err" ]
+}
+
+t_status_with_a_go_build_that_cannot_start_runs_the_bash_version() {
+  snap >/dev/null; plugin_copy
+  mkdir -p "$W/plugin/dist"; f=$W/plugin/dist/$(go_build_name)
+  printf '\177ELF garbage' > "$f"; chmod +x "$f"
+  out=$("$W/plugin/bin/jeeves-status" 2>"$W/err"); rc=$?
+  check "exit status 0" [ $rc = 0 ]
+  check "the bash version's output" grep -q "^datarepo	$R$" <<< "$out"
+  check "says the build did not start, and nothing else" [ "$(cat "$W/err")" = "jeeves: running the bash version of status: the Go build dist/$(go_build_name) did not start" ]
+  case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) ;; *)
+    chmod -x "$f"; rm -f "$W/claude/jeeves/go-fallback"
+    out=$("$W/plugin/bin/jeeves-status" 2>"$W/err")
+    check "a build that is not executable: the bash version" grep -q "^datarepo	$R$" <<< "$out"
+    check "and says so" grep -q "did not start" "$W/err" ;;
+  esac
+}
+
 t_scan_flags_secrets_without_printing_them() {
   snap >/dev/null
   tok="sk-ant-api03-$(printf 'x%.0s' 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24)"
@@ -2451,6 +2530,9 @@ run_test "the edit hook ignores edits to other files" t_edit_hook_ignores_other_
 run_test "the edit hook's systemMessage is valid JSON" t_edit_hook_escapes_json
 run_test "status lists out-of-sync paths with their disk, repo and base hashes" t_status_lists_out_of_sync_paths
 run_test "status reports a diverged main and a dirty data repo" t_status_reports_diverged_and_dirty
+run_test "status: the Go build matches the bash version, byte for byte" t_status_go_build_matches_the_bash_version
+run_test "status without a Go build for this machine runs the bash version and says so once" t_status_without_a_go_build_for_this_machine_runs_the_bash_version_and_says_so_once
+run_test "status with a Go build that cannot start runs the bash version" t_status_with_a_go_build_that_cannot_start_runs_the_bash_version
 run_test "scan flags secrets in outgoing commits without printing them" t_scan_flags_secrets_without_printing_them
 run_test "scan checks every outgoing commit, not only the last" t_scan_checks_every_outgoing_commit_not_only_the_last
 run_test "scan checks the commits of a branch merged into main" t_scan_checks_a_branch_merged_into_main

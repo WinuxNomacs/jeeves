@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Report, without changing anything, what is out of sync between ~/.claude and the data repo.
+# The bash version of jeeves-status, which bin/jeeves-status runs when dist/ holds no Go build for this
+# machine. It reports, without changing anything, what is out of sync between ~/.claude and the data repo.
 #
 #   jeeves-status   one line per tracked path that is not in sync, then the state of the data repo:
 #
@@ -14,7 +15,7 @@
 # main is compared with the local origin/main ref: run jeeves-snapshot first to fetch.
 # The data repo is found as lib/lib.sh describes.
 
-. "$(dirname "$0")/../lib/lib.sh"
+. "$(dirname "$0")/lib.sh"
 
 [ $# = 0 ] || { echo "status: takes no options" >&2; exit 2; }
 find_data_repo || { echo "jeeves status: $DATA_REPO_PROBLEM"; exit 1; }
