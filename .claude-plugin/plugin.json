@@ -1,7 +1,7 @@
 {
   "name": "jeeves",
   "displayName": "Jeeves",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Your Claude Code, a little wiser with every session: /jeeves:update turns what your sessions and every device's memories teach into global and project CLAUDE.md rules, and shares CLAUDE.md, agents, commands and skills across your devices through a git repo of your own, with a snapshot at every session start and after each edit to the global CLAUDE.md; memories (and, if you turn it on, settings) are backed up per device",
   "author": {
     "name": "Winux Nomacs"
