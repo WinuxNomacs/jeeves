@@ -297,13 +297,54 @@ check_edit() {
 
 # ---- One run ----
 
-RUN= CHILD=
+RUN= CHILD= WATCH=
 cleanup_run() {
   [ -n "$CHILD" ] && kill -0 "$CHILD" 2>/dev/null && stop_child "$CHILD"
+  [ -n "$WATCH" ] && kill "$WATCH" 2>/dev/null && wait "$WATCH" 2>/dev/null
   [ -n "$RUN" ] && [ -d "$RUN" ] && rm -rf "${RUN:?}"
-  rm -f "$AUTO_DIR/run-dir"
+  rm -f "$AUTO_DIR/run-dir" "$AUTO_DIR/child"
   release_lock
   release_run_lock
+}
+
+# The child's command line names its run folder ("/jeeves:update auto <folder>"): a recorded PID is acted on
+# only when its command line still says so, never on the PID alone (it may have been reused). Where ps cannot
+# show command lines (Git Bash), nothing is stopped: the child then ends at its turn limit.
+our_child() { # our_child <pid> <run folder>
+  local args
+  args=$(ps -o args= -p "$1" 2>/dev/null) || return 1
+  case "$args" in *"jeeves:update auto "*"${2##*/}"*) return 0 ;; esac
+  return 1
+}
+# stop_pid <pid>: SIGTERM, up to ten seconds, then SIGKILL (for a process this shell did not start).
+stop_pid() {
+  local i=0
+  kill "$1" 2>/dev/null || return 0
+  while kill -0 "$1" 2>/dev/null && [ $i -lt 100 ]; do sleep 0.1; i=$((i + 1)); done
+  kill -9 "$1" 2>/dev/null
+  return 0
+}
+# What a run killed outright (SIGKILL, a crash, a reboot) left behind: its child, if still running, and its
+# temp folder (an extract of the session). Called at session start, at each run and by status, also when
+# background updates are off; does nothing while a live run owns them. Prints what it did.
+reap_leftovers() { # reap_leftovers [owned]: "owned" when this process holds the run lock
+  local cpid cstart cdir dir
+  [ -f "$AUTO_DIR/run-dir" ] || [ -f "$AUTO_DIR/child" ] || return 0
+  if [ "$1" != owned ] && [ -f "$LOCK" ] && ! lock_stale; then return 0; fi
+  if [ -f "$AUTO_DIR/child" ]; then
+    read -r cpid cstart cdir < "$AUTO_DIR/child"
+    case "$cpid" in ''|*[!0-9]*) ;; *)
+      if kill -0 "$cpid" 2>/dev/null && our_child "$cpid" "$cdir"; then
+        stop_pid "$cpid"; echo "stopped a background update's child left running ($cpid)"
+      fi ;;
+    esac
+    rm -f "$AUTO_DIR/child"
+  fi
+  if [ -f "$AUTO_DIR/run-dir" ]; then
+    read -r dir < "$AUTO_DIR/run-dir"
+    case "$dir" in */jeeves-auto.??????) [ -d "$dir" ] && rm -rf "${dir:?}" && echo "removed a background update's temp folder" ;; esac
+    rm -f "$AUTO_DIR/run-dir"
+  fi
 }
 
 # A step a kill could leave half done in the data repo is marked first, so the next run puts it right: a
@@ -384,12 +425,8 @@ cmd_run() {
   trap 'exit 143' TERM INT HUP
   scrub_env supervisor
 
-  # A run killed earlier left its folder: removed now.
-  if [ -f "$AUTO_DIR/run-dir" ]; then
-    read -r RUN < "$AUTO_DIR/run-dir"
-    case "$RUN" in */jeeves-auto.??????) [ -d "$RUN" ] && rm -rf "${RUN:?}" ;; esac
-    RUN=
-  fi
+  # A run killed earlier left its child or folder: put right now.
+  out=$(reap_leftovers owned); [ -n "$out" ] && log_run "cleaned" "($(printf '%s\n' "$out" | join_lines))"
   command -v claude >/dev/null 2>&1 || {
     notice problem-claude "jeeves: background updates could not start: the claude command is not on the PATH."
     log_run "skipped" "(no claude)"; backoff 3600; exit 0; }
@@ -466,17 +503,35 @@ EOF
       < /dev/null > "$RUN/result.json" 2> /dev/null
   ) &
   CHILD=$!
-  # The deadline by the clock (a count of sleeps drifts, most on Windows).
   end=$(( $(now) + DEADLINE ))
+  printf '%s %s %s\n' "$CHILD" "$(now)" "$RUN" > "$AUTO_DIR/child"
+  # A watchdog beside the child: if this supervisor dies without cleaning up (SIGKILL, a crash), or a minute
+  # past the deadline, it stops the child; it ends with the child. Without it a killed supervisor would leave
+  # the child running unsupervised.
+  (
+    trap - EXIT TERM INT HUP
+    sup=$$
+    while kill -0 "$CHILD" 2>/dev/null; do
+      if ! kill -0 "$sup" 2>/dev/null || [ "$(now)" -ge $(( end + 60 )) ]; then
+        stop_pid "$CHILD"; rm -f "$AUTO_DIR/child"; [ -d "$RUN" ] && rm -rf "${RUN:?}"; rm -f "$AUTO_DIR/run-dir"
+        exit 0
+      fi
+      sleep 2
+    done
+  ) < /dev/null > /dev/null 2>&1 &
+  WATCH=$!
+  # The deadline by the clock (a count of sleeps drifts, most on Windows).
   while kill -0 "$CHILD" 2>/dev/null; do
     if [ "$(now)" -ge "$end" ]; then
-      stop_child "$CHILD"; CHILD=
+      stop_child "$CHILD"; CHILD=; rm -f "$AUTO_DIR/child"
       backoff 3600
       log_run "failed" "(stopped at the deadline, ${DEADLINE}s)"; exit 0
     fi
     sleep 0.5
   done
   wait "$CHILD"; rc=$?; CHILD=
+  rm -f "$AUTO_DIR/child"
+  kill "$WATCH" 2>/dev/null; wait "$WATCH" 2>/dev/null; WATCH=
   err=$(json_field is_error < "$RUN/result.json")
   cost=$(json_field total_cost_usd < "$RUN/result.json") ms=$(json_field duration_ms < "$RUN/result.json")
   turns=$(json_field num_turns < "$RUN/result.json")
@@ -614,8 +669,10 @@ cmd_hook_stop() {
 }
 
 cmd_session_start() {
-  local f n
+  local f n out
   [ "$JEEVES_AUTO_CHILD" = 1 ] && exit 0
+  out=$(reap_leftovers)
+  [ -n "$out" ] && log_run "cleaned" "($(printf '%s\n' "$out" | join_lines))"
   if [ ! -f "$CONF" ]; then
     echo "jeeves: background updates (a /jeeves:update review about once an hour of use, in a separate headless session; off by default) are not decided on this device. Tell the user once, in one line, that /jeeves:autoupdate turns them on or keeps them off; either answer ends this reminder."
   fi
@@ -649,7 +706,11 @@ case "$1" in
   status)
     if [ ! -f "$CONF" ]; then say "off (not decided on this device)"; elif enabled; then say "on"; else say "off"; fi
     say "at most every $(( INTERVAL / 60 )) minutes per session, after $MIN_NEW new characters; deadline $(( DEADLINE / 60 )) minutes"
-    [ -f "$LOCK" ] && ! lock_stale && say "at work now ($(lock_owner))"
+    if [ -f "$LOCK" ] && ! lock_stale; then
+      say "at work now ($(lock_owner), $(( $(now) - $(cut -d' ' -f2 "$LOCK") ))s)$( [ -f "$AUTO_DIR/child" ] && echo ", child PID $(cut -d' ' -f1 "$AUTO_DIR/child")")"
+    else
+      out=$(reap_leftovers); [ -n "$out" ] && say "$out"
+    fi
     backoff_active && say "paused after a failure for $(( ($(backoff_until) - $(now)) / 60 + 1 )) more minutes"
     say "waiting for the user: $(queue_count) queued item(s), $(ls "$AUTO_DIR/set-aside" 2>/dev/null | grep -c '\.patch$') set-aside change(s)"
     [ -f "$AUTO_DIR/log" ] && { say "last runs:"; tail -5 "$AUTO_DIR/log" | sed 's/^/  /'; }

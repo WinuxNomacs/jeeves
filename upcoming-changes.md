@@ -180,6 +180,13 @@ As built (1b, 2026-11-20, branch `feat/auto-update`), where it differs from the 
   a Stop hook timeout; hook input over 64 KB; `\\` in queue ids; manual hold staleness (two hours, refreshed by
   a second hold). Left as is: a rule rewritten in place into a different one is a revision the check cannot
   tell apart (reported with its undo); queued items for a project the user never reopens stay listed.
+- Worker cleanup (the user's request, 2026-11-20): a watchdog process beside the child stops it if the
+  supervisor dies without cleaning up (SIGKILL, a crash) or a minute past the deadline, and ends with the
+  child; the child's PID, start and folder are recorded, and each session start, run and `status` stops a
+  leftover child (only when `ps` shows its command line naming the run folder; Git Bash cannot, so there it
+  ends at its turn limit) and removes a leftover temp folder, also with background updates off; never while a
+  live run holds the lock. Tests: the supervisor SIGKILLed, a leftover child, a PID that is not ours, a live
+  run's folder, cleanup with updates off.
 - Second live run after the fixes: 17.6 s, $0.24; an injected "ignore previous instructions" in a quoted
   README was reported, not written.
 - Transcripts and hook input are read with `perl` and JSON::PP; without it the feature stays off.

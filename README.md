@@ -173,7 +173,11 @@ How it keeps your data safe:
   secrets and risky lines, and pushes exactly the commit it checked. An edit that fails a check is set aside
   for you, never pushed.
 - One run at a time per device; a run that hangs is stopped after 15 minutes; a failure pauses runs for an
-  hour, a usage limit for a day. Logs hold only times, outcomes and usage figures, never conversation text.
+  hour, a usage limit for a day. No worker is left behind: the run stops its headless session whenever it
+  ends, stopped included; a watchdog beside that session stops it if the run itself is killed outright; and
+  each session start removes what a crashed run left (its temp folder, and its session if still running,
+  once its command line confirms it is one), even with background updates off. `jeeves-auto status` shows a
+  run at work with its process. Logs hold only times, outcomes and usage figures, never conversation text.
 
 Settings, in `~/.claude/jeeves/auto.conf` on each device: `enabled`, `interval_minutes` (60),
 `min_new_chars` (8000), `deadline_minutes` (15). Background updates need `perl` with JSON::PP (on macOS,

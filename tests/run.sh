@@ -1924,6 +1924,53 @@ t_stopping_a_background_run_stops_its_child() {
   check "the run folder is removed" bash -c '! grep -rqs UNIQUE-SESSION-TEXT "${TMPDIR:-/tmp}"/jeeves-auto.*'
 }
 
+t_a_killed_supervisors_child_is_stopped_by_its_watchdog() {
+  auto_env; FAKE_CLAUDE_MODE=hang
+  "$SRC/bin/jeeves-auto" run sess1 "$TP" "$W/proj" & sup=$!
+  wait_for 20 test -s "$FAKE_LOG.pid"
+  check "the child is recorded with its run folder" grep -q "jeeves-auto\." "$CLAUDE_HOME/jeeves/auto/child"
+  check "status shows the run at work and its child" grep -q "at work now (auto, .*child PID $(cat "$FAKE_LOG.pid")" <<< "$(autobin status)"
+  kill -9 $sup; wait $sup 2>/dev/null
+  check "the watchdog stops the child" wait_for 20 bash -c '! kill -0 "$(cat "$1")" 2>/dev/null' _ "$FAKE_LOG.pid"
+  check "and removes the run folder" wait_for 5 bash -c '! grep -rqs UNIQUE-SESSION-TEXT "${TMPDIR:-/tmp}"/jeeves-auto.*'
+  check "and the child record" wait_for 5 test ! -e "$CLAUDE_HOME/jeeves/auto/child"
+  check "no watchdog is left" wait_for 5 bash -c '! ps -o args= -A 2>/dev/null | grep -v grep | grep -q "jeeves-auto run sess1"'
+  rm -f "$FAKE_LOG.args" "$CLAUDE_HOME/jeeves/auto/backoff"; FAKE_CLAUDE_MODE=learn auto_run
+  check "the next run takes over the stale lock and works" grep -q "Run the linter" "$W/claude/CLAUDE.md"
+}
+
+t_a_leftover_child_and_folder_are_cleaned_up_at_session_start() {
+  auto_env; A=$CLAUDE_HOME/jeeves/auto; mkdir -p "$A"
+  dir=$(mktemp -d "${TMPDIR:-/tmp}/jeeves-auto.XXXXXX"); echo "LEFTOVER-EXTRACT" > "$dir/extract.txt"
+  # A stand-in that keeps its arguments on its command line (a bash -c 'sleep' would become plain sleep).
+  perl -e 'sleep 300' "/jeeves:update auto $dir" & orphan=$!
+  echo "$orphan $(date +%s) $dir" > "$A/child"; echo "$dir" > "$A/run-dir"
+  autobin --session-start >/dev/null
+  if ps -o args= -p $$ >/dev/null 2>&1; then
+    check "a leftover child whose command line is a run's is stopped" wait_for 15 bash -c '! kill -0 "$1" 2>/dev/null' _ $orphan
+    check "the log says what was cleaned" grep -q "cleaned (stopped a background update's child left running" "$A/log"
+  else   # Git Bash's ps shows no command lines: an unverified PID is never stopped (it ends at its turn limit)
+    check "without command lines, the PID is left alone" kill -0 $orphan
+    kill $orphan
+  fi
+  wait $orphan 2>/dev/null
+  check "its temp folder is removed" [ ! -e "$dir" ]
+  check "the records are removed" bash -c '[ ! -e "$1/child" ] && [ ! -e "$1/run-dir" ]' _ "$A"
+  sleep 300 & other=$!
+  echo "$other $(date +%s) $dir" > "$A/child"
+  autobin --session-start >/dev/null
+  check "a recorded PID whose command line is not a run's is left alone" kill -0 $other
+  kill $other; wait $other 2>/dev/null
+  dir=$(mktemp -d "${TMPDIR:-/tmp}/jeeves-auto.XXXXXX"); echo "$dir" > "$A/run-dir"
+  sleep 30 & live=$!; echo "$live $(date +%s) auto" > "$A/run.lock"
+  autobin --session-start >/dev/null
+  check "a live run's folder is left alone" [ -d "$dir" ]
+  kill $live; wait $live 2>/dev/null
+  rm -f "$A/backoff"; echo enabled=no > "$CLAUDE_HOME/jeeves/auto.conf"
+  autobin --session-start >/dev/null
+  check "with background updates off, leftovers are still cleaned up" [ ! -e "$dir" ]
+}
+
 t_a_run_killed_mid_commit_is_put_right_by_the_next() {
   auto_env
   printf 'half-written\n' > "$R/home/CLAUDE.md"
@@ -2450,6 +2497,8 @@ run_test "a push that fails keeps the commit for later" t_a_push_that_fails_keep
 run_test "another device's change meanwhile is merged, or the edit set aside" t_another_devices_change_meanwhile_is_merged_or_the_edit_set_aside
 run_test "session hooks do nothing in a background child" t_session_hooks_do_nothing_in_a_background_child
 run_test "stopping a background run stops its child" t_stopping_a_background_run_stops_its_child
+run_test "a killed background supervisor's child is stopped by its watchdog" t_a_killed_supervisors_child_is_stopped_by_its_watchdog
+run_test "a leftover background child and folder are cleaned up at session start" t_a_leftover_child_and_folder_are_cleaned_up_at_session_start
 run_test "a background run killed mid-commit is put right by the next" t_a_run_killed_mid_commit_is_put_right_by_the_next
 run_test "a background run that cannot start backs off and says why" t_a_run_that_cannot_start_backs_off_and_says_why
 run_test "the background log keeps the last 50 runs" t_the_background_log_keeps_the_last_50_runs
