@@ -89,7 +89,9 @@ Run each that applies; say which were skipped and why.
 - **macOS- or Windows-only code** (Keychain, Credential Manager, dialogs): ask the user for a live run on
   that machine, with the exact commands.
 - **Code or saved state:** the upgrade rehearsal: the last release's `bin/` (a `git worktree` of its
-  merge) against a scratch data repo, then the new `bin/` on the state it wrote; and the published plugin
+  merge) against a scratch data repo, then the new `bin/` on the state it wrote
+  (`bash .claude/skills/release/rehearse.sh <scratch> v<last>`: plain and encrypted, two devices, one left on
+  the old release; add checks there for what the release changes); and the published plugin
   in a scratch `CLAUDE_CONFIG_DIR` (see `.claude/CLAUDE.md`).
 - **Skill text only:** run each changed skill once against scratch folders.
 - **Docs only:** no rehearsal; say so.
