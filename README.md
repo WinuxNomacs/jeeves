@@ -269,6 +269,42 @@ option's default. Claude's Bash tool sees no plugin variables, so each skill pas
 `--data-repo` and runs everything after it bare: a permission rule does not match past a `cd` outside the
 project or a `JEEVES_DATA=` prefix, so commands written that way would each ask for approval.
 
+## What Jeeves runs, sends and changes
+
+Everything Jeeves does runs from the bash scripts in `bin/` (readable source, no binaries, no packages
+downloaded) and the skills' instructions to Claude. In full:
+
+**Network.** Jeeves sends nothing to Anthropic or the plugin's author, and collects no usage data.
+- Your data repo's own remote (the GitHub repo you chose at setup), through your git and its credentials:
+  `git fetch` at each session start (the hook), and `git push` only from `/jeeves:update`, `/jeeves:review`
+  and `/jeeves:cleanup` (the cleanup's push replaces history, always with a lease, after you confirm). What
+  is pushed: copies of the shared files and this device's backups listed at the top; secrets are checked
+  for first (`jeeves-scan`), and with encryption on only encrypted copies leave the device.
+- `raw.githubusercontent.com`, once a day from the session-start hook: an anonymous `curl` of this repo's
+  `.claude-plugin/marketplace.json`, to say when a newer release is out. Nothing is sent but the request
+  itself. Turn it off with `JEEVES_UPDATE_CHECK=off`.
+- GitHub, through your GitHub CLI (`gh`), only during `/jeeves:setup`: it checks you are signed in, finds or
+  creates your private data repo and tags it with a topic.
+
+**Files it changes.**
+- Under `~/.claude` (or `CLAUDE_CONFIG_DIR`): `CLAUDE.md`, `agents/`, `commands/` and `skills/` when
+  installing shared copies from the data repo; with encryption on, the key in your system's key store (or a
+  key file). New or changed skills, agents and commands from another device are held until you accept them.
+- `~/.claude/jeeves/`: Jeeves's own state (the sync record, the data repo's path, the release key, the daily
+  check's time).
+- `settings.json`, `keybindings.json` and project memories: only by `/jeeves:restore`, which you start, from
+  the backup of a device you pick (with `backup_settings=yes` there). That device's `settings.json` comes
+  back whole, its permissions and hooks included; every file replaced is kept under the data repo's
+  `.sync-state/overwritten/`, and Claude Code asks before the follow-up edit of machine-specific values.
+- **Permission settings:** besides a restore, only when you say yes at the end of `/jeeves:setup`, which adds
+  two `permissions.deny` rules to `~/.claude/settings.json` so no session's Edit or Write tool can change the
+  installed plugin or its trusted key. Nothing else in Jeeves adds, removes or changes permissions or hooks
+  in your settings.
+- Project `CLAUDE.md` files: only from `/jeeves:update`, which reports each change with its revert.
+- The data repo folder (commits on its `main`).
+
+It never copies secrets: not `.credentials.json`, `~/.claude.json`, transcripts or history.
+
 ## Install
 
 Requirements: Claude Code (the CLI or an IDE extension; claude.ai and Cowork don't install plugins with a

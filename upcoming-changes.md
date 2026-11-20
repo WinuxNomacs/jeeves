@@ -2,9 +2,9 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** release 1.4.1 (the hand-off fix)
-- **Then:** Anthropic directory submission: preparation only (below); the submission itself only on the user's
-  direct command
+- **Up next:** release 1.4.1 (the hand-off fix and the directory preparation)
+- **Then:** the user submits 1.4.1 in the Anthropic portal (below, "Anthropic directory submission"), on their
+  own command
 - **Later:** 0. Review text gaps (below, under "Review text gaps") · 0. Injection docs: threat model in the README, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
   must differ per host)
@@ -69,6 +69,21 @@ Open decisions (the user's):
   (the plugin is the repo root, so they do now).
 
 Then, the user only: Validate and Submit in the portal.
+
+Built (2026-11-20, branch `feat/directory-prep`): README section "What Jeeves runs, sends and changes" (every
+network call, every write under `~/.claude`, the restore that brings back a device's `settings.json` with its
+permissions and hooks, and setup's optional deny rules). `claude plugin validate --strict` passes for
+`plugin.json` and `marketplace.json` (note: `claude plugin validate .` reads only the marketplace when both
+exist). 48 files; none over 256 KiB but the images; no OS junk, symlinks or submodules; `MANIFEST.sig` is
+ASCII. Kept as is, to be **held** for a reviewer: hook scripts source `lib/lib.sh` and run other `bin/`
+scripts (the checklist: "The validator follows only plain shell scripts"); folding them into one file per
+hook would undo the shared library for a hold that is not a block. Hook paths are unquoted-literal rules in
+the checklist ("write each path in full from `${CLAUDE_PLUGIN_ROOT}`"); ours is quoted with an argument,
+which the portal's Validate will confirm. The open decisions above are the user's at submission time.
+
+Submission steps (for the user): claude.ai/directory/manage, Plugin bundle, repo `WinuxNomacs/jeeves`,
+folder the root, track the tag `v1.4.1` (move it with each release), Validate, fill in data handling (no
+personal data sent anywhere but the user's own GitHub repo; nothing retained by the author), Submit.
 
 ## One encryption command (requested 2026-11-19)
 
