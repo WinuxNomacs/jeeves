@@ -111,8 +111,8 @@ log_run() { # log_run <outcome> [figures]: one line per run, the last 50 kept; n
 # plus five minutes (a PID reused meanwhile is not mistaken for the run); a manual hold after two hours.
 
 lock_stale() {
-  local pid start owner age
-  read -r pid start owner < "$LOCK" 2>/dev/null || { [ -n "$(find "$LOCK" -mmin +1 2>/dev/null)" ]; return; }
+  local pid start owner count age
+  read -r pid start owner count < "$LOCK" 2>/dev/null || { [ -n "$(find "$LOCK" -mmin +1 2>/dev/null)" ]; return; }
   case "$start" in ''|*[!0-9]*) [ -n "$(find "$LOCK" -mmin +1 2>/dev/null)" ]; return ;; esac
   age=$(( $(now) - start ))
   case "$owner" in
@@ -120,7 +120,7 @@ lock_stale() {
     *) ! kill -0 "$pid" 2>/dev/null || [ $age -gt $(( DEADLINE + 300 )) ] ;;
   esac
 }
-lock_owner() { local pid start owner; read -r pid start owner < "$LOCK" 2>/dev/null && printf '%s\n' "$owner"; }
+lock_owner() { local pid start owner count; read -r pid start owner count < "$LOCK" 2>/dev/null && printf '%s\n' "$owner"; }
 take_run_lock() { # take_run_lock auto|manual: 0 when taken
   local held
   mkdir -p "$AUTO_DIR" || return 1
@@ -134,8 +134,8 @@ take_run_lock() { # take_run_lock auto|manual: 0 when taken
   ( set -o noclobber; printf '%s %s %s\n' "$$" "$(now)" "$1" > "$LOCK" ) 2>/dev/null
 }
 release_run_lock() {
-  local pid start owner
-  read -r pid start owner < "$LOCK" 2>/dev/null || return 0
+  local pid start owner count
+  read -r pid start owner count < "$LOCK" 2>/dev/null || return 0
   [ "$pid" = "$$" ] && [ "$owner" = auto ] && rm -f "$LOCK"
   return 0
 }
@@ -159,6 +159,8 @@ while (my $line = <$fh>) {
   last unless $line =~ /\n\z/;
   my $next = $pos + length($line);
   # A tool result (often large) is never read: skipped before decoding, which keeps the hook fast.
+  # Pasted images: their base64 data is dropped before decoding (pure-Perl JSON is slow on it).
+  $line =~ s/"data":"[A-Za-z0-9+\/=]{256,}"/"data":""/g;
   my $d = $line =~ /(?<!\\)"tool_use_id"/ && $line =~ /(?<!\\)"type":"user"/ ? undef : eval { $json->decode($line) };
   my $piece = "";
   if (ref $d eq "HASH" && ($d->{type} // "") =~ /^(user|assistant)$/ && !$d->{isMeta} && !$d->{isSidechain}
@@ -181,7 +183,8 @@ while (my $line = <$fh>) {
       }
     }
   }
-  last if $max && $chars > 0 && $chars + length($piece) > $max;
+  last if $count && $max && $chars >= $max;
+  last if !$count && $max && $chars > 0 && $chars + length($piece) > $max;
   $chars += length($piece); $pos = $next;
   print $piece if !$count;
 }
@@ -246,9 +249,11 @@ queue_count() { ls "$AUTO_DIR/queue" 2>/dev/null | grep -c '\.md$'; }
 # Background runs may add rules and revise them in place, nothing more (the update skill's Auto mode). The
 # structural checks, in perl: every section whose heading names Security stays exactly as it was and no new one
 # appears; every heading stays; every rule the user set firmly (a bullet, with its continuation lines, saying
-# never, always, from now on, or recorded as the user's decision) stays word for word; no hunk removes more
-# lines than it adds (so a rule dropped here and another added elsewhere does not pass for a revision); at
-# most 12 lines changed per run; no invisible or direction-changing characters added.
+# never, always, from now on, or recorded as the user's decision) stays word for word, nothing appended to it
+# or added under it, and every line saying so anywhere stays exactly; no hunk removes more lines than it adds
+# (so a rule dropped here and another added elsewhere does not pass for a revision); at most 12 lines replaced
+# per run (additions are bounded by the size limit); no HTML comment, invisible or direction-changing
+# characters added.
 CHECK_PL='
 use strict; use warnings;
 sub slurp { local $/; open(my $f, "<:raw", $_[0]) or return undef; my $t = <$f>; utf8::decode($t); return $t }
@@ -267,10 +272,21 @@ for (@ol) {
   if (/^\s*[-*] / || /^#/ || /^\s*$/) { push @blocks, $b if defined $b; $b = /^\s*[-*] / ? $_ : undef; next }
   $b .= "\n$_" if defined $b }
 push @blocks, $b if defined $b;
+my $firm = qr/(^|[^a-z])(never|always|from now on)([^a-z]|$)|the user.s (decision|request|rule|standing)/i;
+for (@ol) { next unless /$firm/; $have{$_} or do { print "a rule the user set firmly was reworded or removed\n"; exit } }
 for my $k (@blocks) {
-  next unless $k =~ /(^|[^a-z])(never|always|from now on)([^a-z]|$)/i || $k =~ /the user.s (decision|request|rule|standing)/i;
-  index($new, $k) >= 0 or do { print "a rule the user set firmly was reworded or removed\n"; exit } }
-my $hidden = qr/[\x{200B}-\x{200F}\x{202A}-\x{202E}\x{2060}-\x{2064}\x{FEFF}\x{00AD}]/;
+  next unless $k =~ $firm;
+  # The block whole, at a line start, and followed by a blank line, another rule, a heading or the end: nothing
+  # appended to its last line or added under it.
+  my $at = -1; my $ok = 0;
+  while (($at = index($new, $k, $at + 1)) >= 0) {
+    next unless $at == 0 || substr($new, $at - 1, 1) eq "\n";
+    my $rest = substr($new, $at + length($k));
+    if ($rest eq "" || $rest =~ /^\n(\s*\n|\s*[-*] |#|\z)/) { $ok = 1; last } }
+  $ok or do { print "a rule the user set firmly was reworded or added to\n"; exit } }
+my %was = map { $_ => 1 } @ol;
+for (@nl) { next if $was{$_}; /<!--|-->/ and do { print "an HTML comment was added (it could hide rules)\n"; exit } }
+my $hidden = qr/[\x{200B}-\x{200F}\x{202A}-\x{202E}\x{2060}-\x{2069}\x{FEFF}\x{00AD}\x{E0000}-\x{E007F}]/;
 my @oh = ($old =~ /$hidden/g); my @nh = ($new =~ /$hidden/g);
 @nh <= @oh or do { print "invisible or direction-changing characters were added\n"; exit };
 '
@@ -297,13 +313,54 @@ check_edit() {
 
 # ---- One run ----
 
-RUN= CHILD=
+RUN= CHILD= WATCH=
 cleanup_run() {
   [ -n "$CHILD" ] && kill -0 "$CHILD" 2>/dev/null && stop_child "$CHILD"
+  [ -n "$WATCH" ] && kill "$WATCH" 2>/dev/null && wait "$WATCH" 2>/dev/null
   [ -n "$RUN" ] && [ -d "$RUN" ] && rm -rf "${RUN:?}"
-  rm -f "$AUTO_DIR/run-dir"
+  rm -f "$AUTO_DIR/run-dir" "$AUTO_DIR/child" "$AUTO_DIR/settings-env"
   release_lock
   release_run_lock
+}
+
+# The child's command line names its run folder ("/jeeves:update auto <folder>"): a recorded PID is acted on
+# only when its command line still says so, never on the PID alone (it may have been reused). Where ps cannot
+# show command lines (Git Bash), nothing is stopped: the child then ends at its turn limit.
+our_child() { # our_child <pid> <run folder>
+  local args
+  args=$(ps -o args= -p "$1" 2>/dev/null) || return 1
+  case "$args" in *"jeeves:update auto "*"${2##*/}"*) return 0 ;; esac
+  return 1
+}
+# stop_pid <pid>: SIGTERM, up to ten seconds, then SIGKILL (for a process this shell did not start).
+stop_pid() {
+  local i=0
+  kill "$1" 2>/dev/null || return 0
+  while kill -0 "$1" 2>/dev/null && [ $i -lt 100 ]; do sleep 0.1; i=$((i + 1)); done
+  kill -9 "$1" 2>/dev/null
+  return 0
+}
+# What a run killed outright (SIGKILL, a crash, a reboot) left behind: its child, if still running, and its
+# temp folder (an extract of the session). Called at session start, at each run and by status, also when
+# background updates are off; does nothing while a live run owns them. Prints what it did.
+reap_leftovers() { # reap_leftovers [owned]: "owned" when this process holds the run lock
+  local cpid cstart cdir dir
+  [ -f "$AUTO_DIR/run-dir" ] || [ -f "$AUTO_DIR/child" ] || return 0
+  if [ "$1" != owned ] && [ -f "$LOCK" ] && ! lock_stale; then return 0; fi
+  if [ -f "$AUTO_DIR/child" ]; then
+    read -r cpid cstart cdir < "$AUTO_DIR/child"
+    case "$cpid" in ''|*[!0-9]*) ;; *)
+      if kill -0 "$cpid" 2>/dev/null && our_child "$cpid" "$cdir"; then
+        stop_pid "$cpid"; echo "stopped a background update's child left running ($cpid)"
+      fi ;;
+    esac
+    rm -f "$AUTO_DIR/child"
+  fi
+  if [ -f "$AUTO_DIR/run-dir" ]; then
+    read -r dir < "$AUTO_DIR/run-dir"
+    case "$dir" in */jeeves-auto.??????) [ -d "$dir" ] && rm -rf "${dir:?}" && echo "removed a background update's temp folder" ;; esac
+    rm -f "$AUTO_DIR/run-dir"
+  fi
 }
 
 # A step a kill could leave half done in the data repo is marked first, so the next run puts it right: a
@@ -373,8 +430,22 @@ push_scanned() {
 
 backoff() { echo $(( $(now) + $1 )) > "$AUTO_DIR/backoff"; }
 
+# Where run folders go. Claude Code reads every CLAUDE.md on the way up from the child's folder (checked
+# headless), so no folder on that path may be one another user can write: XDG_RUNTIME_DIR when it is this
+# user's and private, else a per-user TMPDIR (macOS, Windows), else ~/.cache/jeeves (never under ~/.claude,
+# where Claude Code refuses edits even with an allow rule). Never the shared /tmp.
+run_base() {
+  local d
+  if [ -n "$XDG_RUNTIME_DIR" ] && [ -d "$XDG_RUNTIME_DIR" ] && [ -O "$XDG_RUNTIME_DIR" ] &&
+     [ -n "$(find "$XDG_RUNTIME_DIR" -maxdepth 0 -perm 0700 2>/dev/null)" ]; then printf '%s\n' "$XDG_RUNTIME_DIR"; return; fi
+  d=${TMPDIR%/}
+  case "$d" in ''|/tmp|/var/tmp|/private/tmp) ;; *) [ -d "$d" ] && [ -O "$d" ] && { printf '%s\n' "$d"; return; } ;; esac
+  d=${XDG_CACHE_HOME:-$HOME/.cache}/jeeves
+  mkdir -p "$d" && chmod 700 "$d" && printf '%s\n' "$d"
+}
+
 cmd_run() {
-  local sid=$1 tp=$2 folder=$3 nonce top proj f rc result cost ms turns err summary why hash= out end model run_n run_r
+  local sid=$1 tp=$2 folder=$3 nonce top proj f rc result cost ms turns err summary why hash= out end model run_n run_r prescan
   SESSION=$(printf '%s' "$sid" | cut -c1-8)
   umask 077
   { valid_session "$sid" && valid_transcript "$tp" && valid_folder "$folder"; } || { log_run "skipped" "(input refused)"; exit 0; }
@@ -384,12 +455,8 @@ cmd_run() {
   trap 'exit 143' TERM INT HUP
   scrub_env supervisor
 
-  # A run killed earlier left its folder: removed now.
-  if [ -f "$AUTO_DIR/run-dir" ]; then
-    read -r RUN < "$AUTO_DIR/run-dir"
-    case "$RUN" in */jeeves-auto.??????) [ -d "$RUN" ] && rm -rf "${RUN:?}" ;; esac
-    RUN=
-  fi
+  # A run killed earlier left its child or folder: put right now.
+  out=$(reap_leftovers owned); [ -n "$out" ] && log_run "cleaned" "($(printf '%s\n' "$out" | join_lines))"
   command -v claude >/dev/null 2>&1 || {
     notice problem-claude "jeeves: background updates could not start: the claude command is not on the PATH."
     log_run "skipped" "(no claude)"; backoff 3600; exit 0; }
@@ -401,6 +468,9 @@ cmd_run() {
 
   # Sync first: what other devices pushed, and what changed on disk.
   "$BIN/jeeves-snapshot" >/dev/null 2>&1
+  # Whether what main would send passes the secrets scan before this run commits anything: a later failure is
+  # then this run's own commit.
+  prescan=fail; "$BIN/jeeves-scan" >/dev/null 2>&1 && prescan=ok
   if [ "$(git_repo symbolic-ref --short -q HEAD)" != main ] || [ -f "$REPO/.git/MERGE_HEAD" ] ||
      [ -n "$(git_repo status --porcelain -- home)" ]; then
     notice problem-repo "jeeves: background updates are waiting: the data repo is not on a clean main (run /jeeves:update)."
@@ -408,7 +478,7 @@ cmd_run() {
   fi
 
   read_session "$sid"
-  RUN=$(mktemp -d "${TMPDIR:-/tmp}/jeeves-auto.XXXXXX") && RUN=$(cd "$RUN" && pwd -P) || { RUN=; log_run "failed" "(no temp folder)"; exit 0; }
+  RUN=$(mktemp -d "$(run_base)/jeeves-auto.XXXXXX") && RUN=$(cd "$RUN" && pwd -P) || { RUN=; log_run "failed" "(no temp folder)"; exit 0; }
   printf '%s\n' "$RUN" > "$AUTO_DIR/run-dir"
   mkdir -p "$RUN/edit" "$RUN/orig" "$RUN/out" "$RUN/memories" || exit 0
   nonce=$(od -An -N16 -tx1 /dev/urandom 2>/dev/null | tr -d ' \n')
@@ -452,10 +522,13 @@ EOF
   # and only the settings' model and env carried over. Deny rules win over a skill's allowed-tools (checked
   # headless), so the update skill's own grants give it no shell either.
   run_n=$(native_path "$RUN") run_r=$(rule_path "$RUN") model=$(user_settings model)
-  user_settings env > "$RUN/settings-env"
+  # The settings' env (it may hold keys) stays outside the run folder, which the child can read, and is
+  # removed before the child starts.
+  user_settings env > "$AUTO_DIR/settings-env"
   (
     scrub_env child
-    while IFS= read -r -d '' f; do export "$f"; done < "$RUN/settings-env"
+    while IFS= read -r -d '' f; do export "$f"; done < "$AUTO_DIR/settings-env"
+    rm -f "$AUTO_DIR/settings-env"
     export JEEVES_AUTO_CHILD=1
     cd "$RUN" || exit 1
     exec claude -p "/jeeves:update auto $run_n" --setting-sources project --plugin-dir "$(native_path "${BIN%/bin}")" \
@@ -466,17 +539,38 @@ EOF
       < /dev/null > "$RUN/result.json" 2> /dev/null
   ) &
   CHILD=$!
-  # The deadline by the clock (a count of sleeps drifts, most on Windows).
   end=$(( $(now) + DEADLINE ))
+  printf '%s %s %s\n' "$CHILD" "$(now)" "$RUN" > "$AUTO_DIR/child"
+  # A watchdog beside the child: if this supervisor dies without cleaning up (SIGKILL, a crash), or a minute
+  # past the deadline, it stops the child; it ends with the child. Without it a killed supervisor would leave
+  # the child running unsupervised.
+  (
+    trap - EXIT TERM INT HUP
+    sup=$$
+    while kill -0 "$CHILD" 2>/dev/null; do
+      if ! kill -0 "$sup" 2>/dev/null || [ "$(now)" -ge $(( end + 60 )) ]; then
+        stop_pid "$CHILD"; [ -d "$RUN" ] && rm -rf "${RUN:?}"
+        # The records only while they are still this run's (a new run may have taken over meanwhile).
+        [ "$(cut -d' ' -f1 "$AUTO_DIR/child" 2>/dev/null)" = "$CHILD" ] && rm -f "$AUTO_DIR/child"
+        [ "$(cat "$AUTO_DIR/run-dir" 2>/dev/null)" = "$RUN" ] && rm -f "$AUTO_DIR/run-dir"
+        exit 0
+      fi
+      sleep 2
+    done
+  ) < /dev/null > /dev/null 2>&1 &
+  WATCH=$!
+  # The deadline by the clock (a count of sleeps drifts, most on Windows).
   while kill -0 "$CHILD" 2>/dev/null; do
     if [ "$(now)" -ge "$end" ]; then
-      stop_child "$CHILD"; CHILD=
+      stop_child "$CHILD"; CHILD=; rm -f "$AUTO_DIR/child"
       backoff 3600
       log_run "failed" "(stopped at the deadline, ${DEADLINE}s)"; exit 0
     fi
     sleep 0.5
   done
   wait "$CHILD"; rc=$?; CHILD=
+  rm -f "$AUTO_DIR/child"
+  kill "$WATCH" 2>/dev/null; wait "$WATCH" 2>/dev/null; WATCH=
   err=$(json_field is_error < "$RUN/result.json")
   cost=$(json_field total_cost_usd < "$RUN/result.json") ms=$(json_field duration_ms < "$RUN/result.json")
   turns=$(json_field num_turns < "$RUN/result.json")
@@ -495,14 +589,15 @@ EOF
   fi
 
   OUTCOME=reviewed
-  summary=$(tr -d '\r' < "$RUN/out/summary.txt" 2>/dev/null | tr -d '\000-\010\013-\037' | grep -v '^[[:space:]]*$' | head -20 | cut -c1-200)
+  summary=$(tr -d '\r' < "$RUN/out/summary.txt" 2>/dev/null | tr -d '\000-\010\013-\037' | grep -v '^[[:space:]]*$' | head -20 |
+    perl -CSD -ne 'print substr($_, 0, 200) =~ s/\n?$/\n/r' 2>/dev/null)
   # It goes into the next session's context (the notice) and a commit message: withheld if anything in it is
   # flagged, looks like a secret, or holds invisible characters.
   if [ -n "$summary" ]; then
     why=
     [ -n "$(printf '%s\n' "$summary" | sed 's/^/summary	/' | risk_flags)" ] && why=1
     printf '%s\n' "$summary" | grep -qE 'sk-ant-|gh[pousr]_|github_pat_|A(KIA|SIA)[0-9A-Z]{16}|xox[abprs]-|PRIVATE KEY|[A-Za-z0-9_./+=-]{40,}' && why=1
-    printf '%s' "$summary" | perl -CS -ne 'exit 1 if /[\x{200B}-\x{200F}\x{202A}-\x{202E}\x{2060}-\x{2064}\x{FEFF}]/' 2>/dev/null || why=1
+    printf '%s' "$summary" | perl -CS -ne 'exit 1 if /[\x{200B}-\x{200F}\x{202A}-\x{202E}\x{2060}-\x{2069}\x{FEFF}\x{00AD}\x{E0000}-\x{E007F}]/' 2>/dev/null || why=1
     [ -n "$why" ] && summary="revised the global rules (the run's summary was withheld: it held flagged text)"
     why=
   fi
@@ -551,6 +646,10 @@ EOF
   fi
 
   # Items for the user: project rules and decisions only the user makes.
+  if [ -s "$RUN/out/queue.md" ] &&
+     grep -qE 'sk-ant-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{30,}|github_pat_|A(KIA|SIA)[0-9A-Z]{16}|xox[abprs]-|PRIVATE KEY' "$RUN/out/queue.md"; then
+    echo "- (a queued item was withheld: it held text that looked like a secret)" > "$RUN/out/queue.md"
+  fi
   if [ -s "$RUN/out/queue.md" ]; then
     mkdir -p "$AUTO_DIR/queue" &&
     { printf 'session: %s\nproject: %s\nqueued: %s\n\n' "$sid" "${top:-(none)}" "$(date +%Y-%m-%d)"
@@ -561,7 +660,7 @@ EOF
   pushed=$(push_scanned)
   # The scan stopped it and this run's own commit is the tip (never pushed): that commit is taken back out
   # and set aside, and the rest is tried again.
-  if [ "$pushed" = scan ] && [ -n "$hash" ] && data_lock; then
+  if [ "$pushed" = scan ] && [ -n "$hash" ] && [ "$prescan" = ok ] && data_lock; then
     if [ "$(git_repo rev-parse --short HEAD)" = "$hash" ] && git_repo reset -q --keep HEAD~1; then
       hash=; set_aside "a line looked like a secret"
       release_lock; pushed=$(push_scanned)
@@ -605,7 +704,7 @@ cmd_hook_stop() {
   size=$(wc -c < "$tp" | tr -d ' ')
   [ "$OFFSET" -gt "$size" ] && OFFSET=0
   [ $(( size - OFFSET )) -ge "$MIN_NEW" ] || exit 0
-  n=$(extract "$tp" "$OFFSET" - 0 "" 2>/dev/null)
+  n=$(extract "$tp" "$OFFSET" - "$MIN_NEW" "" 2>/dev/null)
   case "$n" in ''|*[!0-9]*) exit 0 ;; esac
   [ "$n" -ge "$MIN_NEW" ] || exit 0
   # Detached: it outlives this hook and the session; its output goes nowhere, so the hook ends at once.
@@ -614,8 +713,10 @@ cmd_hook_stop() {
 }
 
 cmd_session_start() {
-  local f n
+  local f n out
   [ "$JEEVES_AUTO_CHILD" = 1 ] && exit 0
+  out=$(reap_leftovers)
+  [ -n "$out" ] && log_run "cleaned" "($(printf '%s\n' "$out" | join_lines))"
   if [ ! -f "$CONF" ]; then
     echo "jeeves: background updates (a /jeeves:update review about once an hour of use, in a separate headless session; off by default) are not decided on this device. Tell the user once, in one line, that /jeeves:autoupdate turns them on or keeps them off; either answer ends this reminder."
   fi
@@ -649,22 +750,33 @@ case "$1" in
   status)
     if [ ! -f "$CONF" ]; then say "off (not decided on this device)"; elif enabled; then say "on"; else say "off"; fi
     say "at most every $(( INTERVAL / 60 )) minutes per session, after $MIN_NEW new characters; deadline $(( DEADLINE / 60 )) minutes"
-    [ -f "$LOCK" ] && ! lock_stale && say "at work now ($(lock_owner))"
+    if [ -f "$LOCK" ] && ! lock_stale; then
+      say "at work now ($(lock_owner), $(( $(now) - $(cut -d' ' -f2 "$LOCK") ))s)$( [ -f "$AUTO_DIR/child" ] && echo ", child PID $(cut -d' ' -f1 "$AUTO_DIR/child")")"
+    else
+      out=$(reap_leftovers); [ -n "$out" ] && say "$out"
+    fi
     backoff_active && say "paused after a failure for $(( ($(backoff_until) - $(now)) / 60 + 1 )) more minutes"
     say "waiting for the user: $(queue_count) queued item(s), $(ls "$AUTO_DIR/set-aside" 2>/dev/null | grep -c '\.patch$') set-aside change(s)"
     [ -f "$AUTO_DIR/log" ] && { say "last runs:"; tail -5 "$AUTO_DIR/log" | sed 's/^/  /'; }
     exit 0 ;;
   hold)
-    i=0 wait=${JEEVES_AUTO_HOLD_WAIT:-120}
+    i=0 wait=${JEEVES_AUTO_HOLD_WAIT:-100}   # under the Bash tool's two-minute limit
     while ! take_run_lock manual; do
-      if [ "$(lock_owner)" = manual ]; then printf '%s %s manual\n' "$$" "$(now)" > "$LOCK"; break; fi   # the user's own other run
+      # Another /jeeves:update of the user's holds it: one more hold, so its release does not free this one.
+      if [ "$(lock_owner)" = manual ]; then
+        read -r p0 s0 o0 c0 < "$LOCK"; case "$c0" in ''|*[!0-9]*) c0=1 ;; esac
+        printf '%s %s manual %s\n' "$$" "$(now)" $((c0 + 1)) > "$LOCK"; break
+      fi
       [ $i -ge $(( wait * 10 )) ] && { say "a background update is still at work; try again in a few minutes"; exit 1; }
       [ $i = 0 ] && say "a background update is at work; waiting for it to finish (up to $wait seconds)"
       sleep 0.1; i=$((i + 1))
     done
     say "held" ;;
   release)
-    [ "$(lock_owner)" = manual ] && rm -f "$LOCK"
+    if [ "$(lock_owner)" = manual ]; then
+      read -r p0 s0 o0 c0 < "$LOCK"; case "$c0" in ''|*[!0-9]*) c0=1 ;; esac
+      if [ "$c0" -gt 1 ]; then printf '%s %s manual %s\n' "$p0" "$s0" $((c0 - 1)) > "$LOCK"; else rm -f "$LOCK"; fi
+    fi
     say "released" ;;
   queue)
     if [ "$2" = clear ]; then

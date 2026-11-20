@@ -50,6 +50,11 @@ for kind in plain crypt; do
   chk "new hook records the work in progress" A bash -c 'git -C "$1" cat-file --textconv main:home/CLAUDE.md | grep -q "v3 in progress"' _ "$K/repoA"
   st=$(A "$NEW/bin/jeeves-status" 2>&1)
   chk "new status: clean main" grep -q "^branch	main	clean" <<< "$st"
+  # background updates (1.5.0): off on an upgraded device until the user decides; their hooks change nothing
+  n=$(git -C "$K/repoA" rev-list --count main)
+  chk "new: background updates offered, undecided" A bash -c '"$1/bin/jeeves-auto" --session-start | grep -q /jeeves:autoupdate' _ "$NEW"
+  printf '{"session_id":"s1","transcript_path":"%s/projects/p/s1.jsonl","cwd":"%s"}' "$K/claudeA" "$K" | A "$NEW/bin/jeeves-auto" --hook-stop
+  chk "new: the Stop hook does nothing while undecided" bash -c '[ ! -e "$1/jeeves/auto/log" ] && [ "$(git -C "$2" rev-list --count main)" = "$3" ]' _ "$K/claudeA" "$K/repoA" "$n"
   if [ $kind = crypt ]; then
     chk "new: encryption unlocked on the old key" grep -q "^encryption	unlocked" <<< "$(A "$NEW/bin/jeeves-encrypt" status)"
     chk "new: stored encrypted" bash -c '[ "$(git -C "$1" cat-file -p main:home/CLAUDE.md | head -c 21)" = age-encryption.org/v1 ]' _ "$K/repoA"
