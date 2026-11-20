@@ -74,7 +74,7 @@ Checklist:
 
 ```bash
 for f in bin/* lib/*.sh tests/run.sh; do bash -n "$f" || echo "FAIL $f"; done
-claude plugin validate . --strict
+claude plugin validate --strict .claude-plugin/plugin.json   # '.' would check only the marketplace
 claude plugin validate .claude-plugin/marketplace.json
 bash tests/run.sh
 ```
