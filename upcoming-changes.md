@@ -2,7 +2,7 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** 0. Bug: `/jeeves` > "Review my rules" fails (below, under "Bug: /jeeves hand-off to review")
+- **Up next:** release 1.4.1 (the hand-off fix)
 - **Then:** nothing planned
 - **Later:** 0. Review text gaps (below, under "Review text gaps") · 0. Injection docs: threat model in the README, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
@@ -15,6 +15,15 @@ refuses, since `review` has `disable-model-invocation: true` ("Ask the user to r
 themselves"). Shipped in 1.3.0 and 1.4.0. Fix to plan: the option tells the user to type `/jeeves:review`
 (or drop it from the menu); check every other hand-off between skills for the same refusal (`jeeves` to
 `update`, `review` and `setup` to `update`, setup to `restore` and `encryption`).
+
+Decided with the user (2026-11-19): the menu option tells the user to type `/jeeves:review`; setup's
+hand-offs to restore and encryption (both user-only, so likely refused too) go through shared step files
+beside those skills (`skills/<name>/steps.md`), read by the skill and by setup. Hand-offs to `update` are
+fine (it is not user-only).
+
+Also seen (development loads only): with the plugin loaded inline, `${user_config.data_repo}` is not
+filled in, and inside double quotes bash rejects it before the script runs ("Parse error"); the model
+retried with single quotes. Installed copies get the real path. Not fixed.
 
 ## One encryption command (requested 2026-11-19)
 
@@ -422,6 +431,12 @@ Suite 105 passed (2026-11-19).
 - Release 1.4.0 (2026-11-19): `/jeeves:encryption`, the update notice, the new splash image; review fixes
   (the notice follows the marketplace pin, `jeeves-verify` reads a last line with no newline, no question
   after a plain unlock, the test runner fails on a missing test function).
+- /jeeves hand-off fix (2026-11-19): `skills/jeeves/SKILL.md` tells the user to type `/jeeves:review`;
+  `skills/restore/steps.md` and `skills/encryption/steps.md` hold those skills' steps, read by them
+  (`${CLAUDE_SKILL_DIR}`) and by setup (`${CLAUDE_PLUGIN_ROOT}`). Tests in `t_plugin_files`: no skill
+  invokes or follows a user-only skill (seen failing on the old menu), the step files exist and are read,
+  no step file uses a substitution. Checked headless: `/jeeves:restore` read its `steps.md` and listed the
+  backups.
 
 ## Review text gaps (found by the 2026-11-19 dry run; older text, not this phase's)
 

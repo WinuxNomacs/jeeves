@@ -48,7 +48,11 @@ already snapshotted the data repo when the plugin is installed.
   rules that hold results back, the user's firm ones included; rewords them once the user agrees; reads
   every memory through `jeeves-memories list --all`), `setup`, `restore`,
   `cleanup` (`/jeeves:cleanup`: history cleanup and its `jeeves.conf` settings), `encryption` (`/jeeves:encryption`: by the state, turn
-  on, unlock, change the passphrase, lock).
+  on, unlock, change the passphrase, lock). Every skill but `update` is one only the user starts
+  (`disable-model-invocation`), and the Skill tool refuses to start such a skill from another: `encryption`'s
+  and `restore`'s steps are in a `steps.md` beside them, which they read through `${CLAUDE_SKILL_DIR}` and
+  setup through `${CLAUDE_PLUGIN_ROOT}`; `/jeeves` tells the user to type `/jeeves:review`. A file read with
+  the Read tool gets no substitution, so `${user_config.data_repo}` stays in the skill itself.
   They get the data repo from `${user_config.data_repo}` (substituted into skill text; the Bash tool sees no
   plugin variables), passed once as `jeeves-status --data-repo "..."`, which records it in
   `~/.claude/jeeves/data-repo`; every later command is bare (`jeeves-git` for git), never after a `cd` into

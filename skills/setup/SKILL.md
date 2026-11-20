@@ -47,7 +47,12 @@ picks rather than types; ask for typing only for a URL or a name. Never search f
 ask for a password or token: sign-ins are the user's own, in their terminal. Never copy credentials,
 `~/.claude.json`, history or transcripts anywhere. Anything that installs software or changes global
 settings is shown as the exact command and run only after the user agrees. A passphrase never goes through
-the chat: `jeeves-encrypt` asks for it in a window of the OS (see `/jeeves:encryption` for how to handle that).
+the chat: `jeeves-encrypt` asks for it in a window of the OS (the encryption steps below say how to handle that).
+
+`/jeeves:encryption` and `/jeeves:restore` are commands only the user starts, so never invoke them with the
+Skill tool: where a step says to follow their steps, read the file it names with the Read tool and follow it.
+- Encryption steps: `${CLAUDE_PLUGIN_ROOT}/skills/encryption/steps.md`
+- Restore steps: `${CLAUDE_PLUGIN_ROOT}/skills/restore/steps.md`
 
 Start by running `jeeves-check --data-repo "${user_config.data_repo}"` (an empty option is fine: it then
 uses `~/jeeves-data`). Its lines (tab-separated) are the facts for the steps below; run the same command
@@ -108,13 +113,13 @@ The folder on this machine is the `datarepo` path.
 - **Encrypt** (only a repo just created): now, before anything is pushed, is the best time. Ask "Encrypt your
   data with a passphrase?" (recommended first), explaining in one or two sentences: GitHub then holds only
   encrypted files; each device asks for the passphrase once; a passphrase lost on every device means the data
-  can't be read. Options: "Yes, encrypt it", "Not now (/jeeves:encryption later)". On a yes, follow
-  `/jeeves:encryption` ("First: the state", then "Turn on") with these changes: no sync first, no question again, and no
+  can't be read. Options: "Yes, encrypt it", "Not now (/jeeves:encryption later)". On a yes, follow the encryption
+  steps ("First: the state", then "Turn on") with these changes: no sync first, no question again, and no
   `jeeves-cleanup --all` (there is no history to remove yet). First run
   `jeeves-status --data-repo "<datarepo path>"`: it records the data repo, so the commands find it bare.
 - **Unlock** (after a clone): `jeeves-status --data-repo "<datarepo path>"` (it records the data repo),
   then `jeeves-encrypt status`. With `encryption locked`, the
-  repo is encrypted: follow `/jeeves:encryption` ("First: the state", then the first step of "Unlock")
+  repo is encrypted: follow the encryption steps ("First: the state", then the first step of "Unlock")
   before going on.
 
 ## Step 4 of 5: Settings from another machine
@@ -129,7 +134,7 @@ step 5 until they answer. Ask even when this machine already has settings, and e
 proceed without asking: the choice is theirs. A restore copies whatever that machine's backup holds:
 its `settings.json` and `keybindings.json` if it backed them up (`backup_settings=yes`), and its memories
 for projects that exist here (ask about those in the same question or right after), saving this machine's copies first; a backup from another OS may hold paths that need fixing. If they
-pick a host, follow `/jeeves:restore <host>` (the restore skill) before going on. With no other host (a new
+pick a host, follow the restore steps with that host before going on. With no other host (a new
 data repo), say there is nothing to restore yet and go on.
 
 ## Step 5 of 5: First sync

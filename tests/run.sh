@@ -1265,13 +1265,24 @@ t_plugin_files() {
   check "setup finds or creates the data repo through jeeves-github" bash -c 'grep -q "jeeves-github find" "$1" && grep -q "jeeves-github create" "$1"' _ "$SRC/skills/setup/SKILL.md"
   check "the data_repo option defaults to ~/jeeves-data" grep -q '"default": "~/jeeves-data"' "$SRC/.claude-plugin/plugin.json"
   check "setup offers encryption for a new repo and unlocks an encrypted clone" bash -c 'grep -q "^- \*\*Encrypt\*\*" "$1" && grep -q "^- \*\*Unlock\*\*" "$1"' _ "$SRC/skills/setup/SKILL.md"
-  for k in encryption setup; do
-    check "the $k skill keeps the passphrase out of the chat" grep -qi "passphrase never goes through" "$SRC/skills/$k/SKILL.md"
+  for f in encryption/steps.md setup/SKILL.md; do
+    check "$f keeps the passphrase out of the chat" grep -qi "passphrase never goes through" "$SRC/skills/$f"
   done
   check "the update skill sends a locked device to /jeeves:encryption" grep -q "point the user to \`/jeeves:encryption\`" "$SRC/skills/update/SKILL.md"
   check "one encryption command: encrypt, lock and unlock are gone" bash -c '[ -f "$1/skills/encryption/SKILL.md" ] && [ ! -e "$1/skills/encrypt" ] && [ ! -e "$1/skills/lock" ] && [ ! -e "$1/skills/unlock" ]' _ "$SRC"
   check "no script or skill names a removed encryption command" bash -c '! grep -rqE "/jeeves:(unlock|lock|encrypt)([^a-z]|$)" "$1/bin" "$1/lib" "$1/skills" "$1/hooks" "$1/README.md"' _ "$SRC"
-  check "the encryption skill goes by the state: turn on, unlock, plain history, passphrase, lock" bash -c 'for h in "## First: the state" "## Turn on" "## Unlock" "## Plain history still on GitHub" "## Change the passphrase" "## Lock this device"; do grep -qxF "$h" "$1" || exit 1; done' _ "$SRC/skills/encryption/SKILL.md"
+  check "the encryption skill goes by the state: turn on, unlock, plain history, passphrase, lock" bash -c 'for h in "## First: the state" "## Turn on" "## Unlock" "## Plain history still on GitHub" "## Change the passphrase" "## Lock this device"; do grep -qxF "$h" "$1" || exit 1; done' _ "$SRC/skills/encryption/steps.md"
+  # A skill only the user starts (disable-model-invocation) cannot be invoked by another skill: the Skill
+  # tool refuses it. Its steps live in steps.md beside it, which it and setup read.
+  only_user=$(grep -l '^disable-model-invocation: true$' "$SRC"/skills/*/SKILL.md | sed 's|.*/skills/\([^/]*\)/SKILL.md|\1|' | paste -sd'|' -)
+  check "no skill invokes or follows a skill only the user starts ($only_user)" bash -c '! grep -rnE "skill \`jeeves:($2)\`|[Ff]ollow \`/jeeves:($2)" "$1/skills"' _ "$SRC" "$only_user"
+  for k in encryption restore; do
+    check "the $k skill reads its steps from steps.md" bash -c 'grep -qF "\${CLAUDE_SKILL_DIR}/steps.md" "$1/skills/$2/SKILL.md" && [ -s "$1/skills/$2/steps.md" ]' _ "$SRC" "$k"
+    check "setup reads the $k steps by the plugin path" grep -qF "\${CLAUDE_PLUGIN_ROOT}/skills/$k/steps.md" "$SRC/skills/setup/SKILL.md"
+  done
+  check "no steps.md uses a variable only skill text gets filled in" bash -c '! grep -nE "[$][{]" "$1"/skills/*/steps.md' _ "$SRC"
+  check "the restore steps keep the restore" grep -qF 'jeeves-restore <host>' "$SRC/skills/restore/steps.md"
+  check "the /jeeves menu tells the user to type /jeeves:review" grep -qF 'to type `/jeeves:review`' "$SRC/skills/jeeves/SKILL.md"
   voice=$(awk '/^## Voice$/ { on = 1 } on && /^## / && !/^## Voice$/ { exit } on' "$SRC/skills/update/SKILL.md")
   for f in "$SRC"/skills/*/SKILL.md; do
     [ "$f" = "$SRC/skills/jeeves/SKILL.md" ] && continue  # hands off to update, which speaks
