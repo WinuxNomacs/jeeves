@@ -1732,12 +1732,14 @@ t_the_background_child_is_confined_and_gets_no_session_variables() {
   a=$(cat "$FAKE_LOG.args")
   check "the user's settings are not loaded (their permission rules would widen it)" grep -qx -- "--setting-sources" <<< "$a"
   check "only project settings, of which the run folder has none" grep -qx "project" <<< "$a"
-  check "the plugin is loaded by path" grep -qxF "$SRC" <<< "$a"
+  src=$SRC; command -v cygpath >/dev/null 2>&1 && src=$(cygpath -m "$SRC")
+  check "the plugin is loaded by path" grep -qxF "$src" <<< "$a"
   check "the settings' model is kept" grep -qxF "opus[1m]" <<< "$a"
   for want in -p --permission-mode dontAsk --strict-mcp-config --no-session-persistence --disallowedTools Bash WebFetch Agent; do
     check "the child gets $want" grep -qxF -- "$want" <<< "$a"
   done
-  check "edits only the copy of the rules" grep -qE '^Edit\(//.*/jeeves-auto\.[A-Za-z0-9]+/edit/\*\*\)$' <<< "$a"
+  check "edits only the copy of the rules" grep -qE '^Edit\(//[^/].*/jeeves-auto\.[A-Za-z0-9]+/edit/\*\*\)$' <<< "$a"
+  command -v cygpath >/dev/null 2>&1 && check "on Windows, rules use the /c/... form Claude Code matches" grep -qE '^Edit\(//[a-z]/' <<< "$a"
   check "reads only the run folder" grep -qE '^Read\(//.*/jeeves-auto\.[A-Za-z0-9]+/\*\*\)$' <<< "$a"
   check "no Bash permission" bash -c '! grep -q "^Bash(" <<< "$1"' _ "$a"
   e=$(cat "$FAKE_LOG.env")
@@ -1914,7 +1916,7 @@ t_another_devices_change_meanwhile_is_merged_or_the_edit_set_aside() {
 
 t_stopping_a_background_run_stops_its_child() {
   auto_env; FAKE_CLAUDE_MODE=hang
-  autobin run sess1 "$TP" "$W/proj" & sup=$!
+  "$SRC/bin/jeeves-auto" run sess1 "$TP" "$W/proj" & sup=$!   # the script itself, not a subshell around it
   wait_for 20 test -s "$FAKE_LOG.pid"
   kill -TERM $sup; wait $sup 2>/dev/null
   check "the child is stopped with it" wait_for 15 bash -c '! kill -0 "$(cat "$1")" 2>/dev/null' _ "$FAKE_LOG.pid"

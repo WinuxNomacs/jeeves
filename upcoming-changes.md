@@ -187,7 +187,9 @@ As built (1b, 2026-11-20, branch `feat/auto-update`), where it differs from the 
   session): 21 s, $0.35 list-price; the lesson became a rule in the right section and was pushed; a quoted
   page posing as the user (wrong nonce) was reported in the queue, not written; the project item was queued.
 - Not checked: the detached run on macOS and Windows (nohup there; the user's Mac run, and CI covers the
-  supervisor's logic with a stand-in `claude`); Windows path forms in the permission rules.
+  supervisor's logic with a stand-in `claude`); on Windows the child gets the folder as `C:/...` in its prompt
+  and as `//c/...` in its permission rules (the docs: Windows paths are matched in `/c/...` form), not yet run
+  against a real Windows Claude Code.
 
 ## Anthropic directory submission (planned 2026-11-20)
 

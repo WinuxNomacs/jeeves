@@ -90,6 +90,9 @@ user_settings() {
 }
 # A path as native Windows programs take it (C:/...), from Git Bash; unchanged elsewhere.
 native_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s\n' "$1"; fi; }
+# A path as Claude Code's permission rules match it: on Windows it normalizes C:\Users\... to /c/Users/...
+# (docs, "permissions"), which Git Bash's /tmp is not; a rule then puts "/" before it (//c/Users/...).
+rule_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -u "$(cygpath -m "$1")"; else printf '%s\n' "$1"; fi; }
 
 # ---- Notices (printed once by the session-start hook) and the log ----
 
@@ -371,7 +374,7 @@ push_scanned() {
 backoff() { echo $(( $(now) + $1 )) > "$AUTO_DIR/backoff"; }
 
 cmd_run() {
-  local sid=$1 tp=$2 folder=$3 nonce top proj f rc result cost ms turns err summary why hash= out end model run_n
+  local sid=$1 tp=$2 folder=$3 nonce top proj f rc result cost ms turns err summary why hash= out end model run_n run_r
   SESSION=$(printf '%s' "$sid" | cut -c1-8)
   umask 077
   { valid_session "$sid" && valid_transcript "$tp" && valid_folder "$folder"; } || { log_run "skipped" "(input refused)"; exit 0; }
@@ -448,7 +451,7 @@ EOF
   # settings are not loaded (their permission rules and hooks would widen it): this plugin is loaded by path,
   # and only the settings' model and env carried over. Deny rules win over a skill's allowed-tools (checked
   # headless), so the update skill's own grants give it no shell either.
-  run_n=$(native_path "$RUN") model=$(user_settings model)
+  run_n=$(native_path "$RUN") run_r=$(rule_path "$RUN") model=$(user_settings model)
   user_settings env > "$RUN/settings-env"
   (
     scrub_env child
@@ -458,7 +461,7 @@ EOF
     exec claude -p "/jeeves:update auto $run_n" --setting-sources project --plugin-dir "$(native_path "${BIN%/bin}")" \
       ${model:+--model "$model"} --permission-mode dontAsk --strict-mcp-config \
       --no-session-persistence --max-turns 40 --output-format json \
-      --allowedTools "Read(/$run_n/**)" "Edit(/$run_n/edit/**)" "Write(/$run_n/out/**)" "Edit(/$run_n/out/**)" \
+      --allowedTools "Read(/$run_r/**)" "Edit(/$run_r/edit/**)" "Write(/$run_r/out/**)" "Edit(/$run_r/out/**)" \
       --disallowedTools Bash WebFetch WebSearch Agent NotebookEdit \
       < /dev/null > "$RUN/result.json" 2> /dev/null
   ) &
