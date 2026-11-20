@@ -369,15 +369,48 @@ is newer than yours, with the commands above; it says nothing otherwise, on a de
 `JEEVES_UPDATE_CHECK=off` in Claude Code's environment. To stay on a release, leave auto-update off and don't
 run the update commands (set `JEEVES_UPDATE_CHECK=off` to silence the notice too).
 
-**Working on Jeeves:** load a clone over the installed copy, and edits take effect on `/reload-plugins`. Add
-this to `~/.claude/settings.json` (or start `claude --plugin-dir <clone>` for one session), and list the
-clone's folder in `~/.claude/jeeves/dev-checkouts` so the release check leaves it alone (see below):
+**Working on Jeeves:** on a machine where Jeeves is already installed and set up, there is no need to
+uninstall it. Load a clone in its place instead, and the installed release takes over again as soon as you
+stop loading the clone.
 
-```json
-"env": { "CLAUDE_CODE_PLUGIN_DIRS": "/path/to/jeeves" }
-```
+1. Clone the repo:
 
-A clone loaded this way gets no plugin options; Jeeves then uses the data repo this device last recorded.
+   ```sh
+   git clone https://github.com/WinuxNomacs/jeeves.git ~/gitrepos/config/jeeves
+   ```
+
+2. List the clone's folder in `~/.claude/jeeves/dev-checkouts`, so the release check leaves it alone (see
+   below). Without this, every session start warns, since a clone matches the signed release only right
+   after one:
+
+   ```sh
+   mkdir -p ~/.claude/jeeves && echo "$HOME/gitrepos/config/jeeves" >> ~/.claude/jeeves/dev-checkouts
+   ```
+
+3. Load the clone. For one terminal session, with no settings changed:
+
+   ```sh
+   claude --plugin-dir ~/gitrepos/config/jeeves
+   ```
+
+   For every session, the VS Code panel included, add this to that machine's `~/.claude/settings.json`
+   (per device, never synced by Jeeves) and start a new session; `/reload-plugins` alone has left the
+   panel's command menu without the Jeeves commands:
+
+   ```json
+   "env": { "CLAUDE_CODE_PLUGIN_DIRS": "/absolute/path/to/jeeves" }
+   ```
+
+4. Check that `claude plugin list` shows `jeeves@inline` with the clone's path.
+
+A clone loaded this way gets no plugin options; Jeeves then uses the data repo this device recorded at
+setup. Hook scripts run from the clone as soon as a file is saved, in every session on that machine: keep
+the loaded clone on a working `main`, and try changes in a `git worktree`. Edits to skills take effect on
+`/reload-plugins`. The tests (`bash tests/run.sh`) need age 1.3 or later for the encryption tests (on
+macOS, `brew install age`). To install or try the published plugin on that machine while the setting is on,
+run `claude` without it (`env -u CLAUDE_CODE_PLUGIN_DIRS claude ...`): an install made with it set has
+failed to load. To go back to the installed release, remove the `env` line (or stop passing
+`--plugin-dir`), start a new session, and update it with the commands above.
 
 ## Verifying the plugin
 

@@ -18,6 +18,13 @@ or says which rule already covers it, without asking the user to approve wording
 Check `new.md` and `upcoming-changes.md` (phases) as the global rules describe. The SessionStart hook has
 already snapshotted the data repo when the plugin is installed.
 
+**On macOS, before any work on the code** (the user's standing request, 2026-11-20): the Mac has the plugin
+installed as a normal user would. Check that the dev setup in the README's "Working on Jeeves" is in place:
+`claude plugin list` shows `jeeves@inline` from this checkout, and the checkout is listed in
+`~/.claude/jeeves/dev-checkouts`. If not, remind the user before anything else and set it up with them (the
+`settings.json` edit is a global setting: show it and wait for their yes); otherwise edits would not be the
+code that runs, and the release check would warn at every session start.
+
 ## Layout
 
 - `.claude-plugin/plugin.json` — manifest (`userConfig.data_repo`); `.claude-plugin/marketplace.json` — the repo
