@@ -62,7 +62,7 @@ if [ $mode = trust ]; then
 fi
 
 if [ -f "$STATE/dev-checkouts" ]; then
-  while IFS= read -r d; do
+  while IFS= read -r d || [ -n "$d" ]; do
     d=${d%$'\r'}
     case "$d" in "~") d=$HOME ;; "~/"*) d=$HOME/${d#"~/"} ;; esac
     [ -n "$d" ] && [ "$(cd "$d" 2>/dev/null && pwd -P)" = "$ROOT" ] || continue

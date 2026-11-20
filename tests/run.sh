@@ -756,6 +756,8 @@ t_development_checkouts_take_a_home_path_and_a_worktree() {
   echo "# changed" >> "$W/plugin/lib/lib.sh"; echo "gitdir: /elsewhere" > "$W/plugin/.git"
   echo "~/plugin" > "$CLAUDE_HOME/jeeves/dev-checkouts"
   check "a folder written with ~ is recognised" bash -c 'HOME=$1 "$1/plugin/bin/jeeves-verify" | grep -q "development checkout"' _ "$W"
+  printf '/elsewhere\n%s' "$W/plugin" > "$CLAUDE_HOME/jeeves/dev-checkouts"
+  check "a last line with no newline counts too" bash -c '"$1" | grep -q "development checkout"' _ "$W/plugin/bin/jeeves-verify"
   : > "$CLAUDE_HOME/jeeves/dev-checkouts"
   cp "$SRC/lib/lib.sh" "$W/plugin/lib/lib.sh"
   check "a worktree's .git file is not counted as a file of the release" bash -c '! "$1" | grep -q "not in the release: .git"' _ "$W/plugin/bin/jeeves-verify"
