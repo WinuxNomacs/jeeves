@@ -162,7 +162,8 @@ rules, removals, risky items, skills from other devices and anything that needs 
 your next `/jeeves:update`, which takes them up.
 
 How it keeps your data safe:
-- The headless session sees only a private temporary folder: an extract of the conversation (your messages
+- The headless session sees only a private temporary folder (in your private runtime folder, or a per-user
+  temp folder, never the shared `/tmp`, since Claude Code also reads any `CLAUDE.md` on the way up from it): an extract of the conversation (your messages
   and Claude's replies, without tool output, each marked with a random code so quoted text cannot pass for
   yours), a copy of the global rules, the project's rules and up to 25 memories. It may edit only that copy
   and write its notes; it has no shell, no web access and no MCP servers, and gets none of your session's
@@ -178,6 +179,9 @@ How it keeps your data safe:
   each session start removes what a crashed run left (its temp folder, and its session if still running,
   once its command line confirms it is one), even with background updates off. `jeeves-auto status` shows a
   run at work with its process. Logs hold only times, outcomes and usage figures, never conversation text.
+
+The headless session does not read your `settings.json` beyond its model and `env` block, so a sign-in set up
+there (such as `apiKeyHelper`) does not reach it: the run then fails, and the next session start says so.
 
 Settings, in `~/.claude/jeeves/auto.conf` on each device: `enabled`, `interval_minutes` (60),
 `min_new_chars` (8000), `deadline_minutes` (15). Background updates need `perl` with JSON::PP (on macOS,

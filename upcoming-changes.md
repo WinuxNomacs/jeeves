@@ -187,6 +187,18 @@ As built (1b, 2026-11-20, branch `feat/auto-update`), where it differs from the 
   ends at its turn limit) and removes a leftover temp folder, also with background updates off; never while a
   live run holds the lock. Tests: the supervisor SIGKILLed, a leftover child, a PID that is not ours, a live
   run's folder, cleanup with updates off.
+- Release review (2026-11-20, a second independent agent, of the fixes and the worker cleanup): fixed a
+  regression where a firm rule could be appended to, have a line added under it, or (outside a bullet) be
+  reworded, and an added HTML comment could hide rules; the settings' env written where the child could read
+  it (now outside the run folder, removed before the child starts); pasted images making the Stop hook slow
+  (base64 dropped before decoding; the count stops at the threshold); a planted `/tmp/CLAUDE.md` reaching the
+  child (confirmed headless: Claude Code reads CLAUDE.md files up from the child's folder; run folders now go
+  in `XDG_RUNTIME_DIR`, a per-user `TMPDIR`, or `~/.cache/jeeves`, never `/tmp`; `~/.claude` refuses edits even
+  with an allow rule, checked); a secret in an earlier commit blamed on the run's own (a scan before the run
+  decides); a dying watchdog removing a new run's records; `hold` at the Bash tool's two-minute limit (now
+  100 s); a second `/jeeves:update`'s release freeing the first's hold (holds counted); more invisible
+  ranges (bidi isolates, tag characters); multibyte-safe summary cut; a secret-looking queued item withheld;
+  a SessionStart timeout. Third live run: 18 s, $0.24, a lesson written past the stricter checks.
 - Second live run after the fixes: 17.6 s, $0.24; an injected "ignore previous instructions" in a quoted
   README was reported, not written.
 - Transcripts and hook input are read with `perl` and JSON::PP; without it the feature stays off.
