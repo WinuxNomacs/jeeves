@@ -76,10 +76,39 @@ checks stop with nothing recorded, as today); the transcript moved or unreadable
 on the PATH or signed out (log once, notice at session start); a locked encrypted device (skip, notice);
 plan usage exhausted (child fails: log, back off a day); the log grows (kept to the last N runs).
 
-1a, before building: verify from primary sources that the Stop hook's input carries `transcript_path` and
-the session id, and how `claude -p` behaves with plugin skills and `--allowedTools` unattended (some of it
-checked headless 2026-11-20); measure one auto run's usage and time on a real session, small scale first,
-and report it to the user before the interval is chosen.
+1a results (2026-11-20, Claude Code 2.1.304; checked with a scratch plugin and `claude -p`; docs:
+https://code.claude.com/docs/en/hooks, /headless):
+- The Stop hook fires in `-p` mode too. Its stdin holds `session_id`, `transcript_path`, `cwd`, `prompt_id`,
+  `permission_mode`, `effort`, `stop_hook_active`, `last_assistant_message`, `background_tasks` and
+  `session_crons`. The docs say the transcript "may lag the in-memory conversation" (a run reviews up to
+  its watermark, so a lag only delays an item to the next run). SessionEnd fires too (`reason: other`;
+  docs: a 1.5 s budget shared by all SessionEnd hooks): too short to start work, enough to record an end.
+- A child started with `nohup ... </dev/null >log 2>&1 &` survives the hook and `claude` exiting (a `setsid`
+  one too; macOS has no `setsid` command, so nohup it is, checked on the Mac in 1b). Docs: an `async: true`
+  hook is killed at `-p` teardown, and they recommend "a fully detached process" for work that must outlive
+  the session; output not redirected holds the hook up to 10 s.
+- An env variable set for the child (`JEEVES_AUTO_CHILD=1`) reaches the child's own hooks: the recursion
+  guard works.
+- A user-only plugin skill with arguments works as the `-p` prompt (`/plugin:skill auto <path>`, arguments
+  and `${CLAUDE_PLUGIN_ROOT}` filled in).
+- `--output-format json` gives `total_cost_usd`, `duration_ms`, `num_turns`, `usage`, `modelUsage` and
+  `permission_denials`: the child logs these per run.
+- Transcripts are large: this session's was 3.1 MB, of which an extract (the user's messages, Claude's text,
+  tool calls cut to 300 characters; no tool results) is 111 KB. The child must read an extract, not the raw
+  file. Open for 1b: a portable extractor (no `jq`; macOS ships no `python3` by default).
+
+Measured usage (list-price equivalent from `total_cost_usd`; on a subscription it is plan usage, not a
+bill), review steps 1-3 only, read-only, no memories pending; sync, writing and push not measured:
+
+| Session reviewed              | Model      | Usage    | Time | Turns |
+|-------------------------------|------------|----------|------|-------|
+| full long session (111 KB)    | Opus 5.5   | $0.80    | 50 s | 5     |
+| full long session (111 KB)    | Sonnet 5.5 | $0.49    | 26 s | 6     |
+| empty (one exchange)          | Opus 5.5   | $0.35    | 18 s | 4     |
+
+The floor (about $0.35 on Opus) is the skill and the two CLAUDE.md files, paid on every run whatever the
+session held: a run should start only when the session has new activity worth reviewing, not on a clock
+alone. Opus found one useful item that Sonnet left out; both left out what was already saved.
 
 
 The user asked whether Jeeves is listed on Anthropic's marketplace and chose to plan the preparation as a
