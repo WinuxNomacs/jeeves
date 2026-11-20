@@ -2,7 +2,9 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** nothing planned (1.5.0 released 2026-11-20; tag and pin on the user's word)
+- **Up next:** 1. Go spike (below, "Go rewrite: spike"): settle size, Gatekeeper, Defender and
+  reproducibility before deciding on a full port
+- **The user's word:** tag `v1.5.0` (merged and signed; the marketplace pin follows the tag)
 - **Then:** nothing planned
 - **The user's, any time:** submit 1.4.1 in the Anthropic portal (below, "Anthropic directory submission")
 - **Later:** 0. Review text gaps (below, under "Review text gaps") · 0. Injection docs: threat model in the README, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
@@ -25,6 +27,73 @@ fine (it is not user-only).
 Also seen (development loads only): with the plugin loaded inline, `${user_config.data_repo}` is not
 filled in, and inside double quotes bash rejects it before the script runs ("Parse error"); the model
 retried with single quotes. Installed copies get the real path. Not fixed.
+
+## Go rewrite: spike (requested and planned 2026-11-20)
+
+The request: the user questioned bash (hard to debug; tools that differ between systems change output) and
+asked whether another language and deployment would be better. Assessed with the user (2026-11-20):
+- Not a uv/brew/PyPI package: skills and hooks reach users only through the plugin marketplace, so a package
+  would be a second update channel that can drift from the plugin (Claude Code docs: plugins have no
+  dependency mechanism for Python; only npm from a lockfile installs itself).
+- Python inside the plugin would keep one channel and readable code, but needs a Python install on Windows
+  and on Macs without Apple's Command Line Tools.
+- Go, as precompiled binaries inside the plugin: no runtime to install, one code path on every OS, and
+  `age` could be built in (`filippo.io/age`, to vet) so users no longer install age and its plugin. The cost
+  is trust: users no longer read the code that runs. Rust was set aside (cross-building for macOS needs
+  Apple's toolchain; its memory-safety gains matter little here).
+- Evidence for the change: about 3,300 lines of bash and 2,600 of tests; commit messages mention Windows 31
+  times, macOS 21, sed 14, JSON 11, mkdir locks 7: most of the work went to tools that differ between systems.
+
+The spike answers the questions a full port depends on, on a branch, released to no one:
+1. **Scope:** the shared library (finding the data repo, the tracked paths, hashes, the three-way
+   classification, `jeeves.conf`, git with the same settings `git_repo` uses) and `jeeves-status`, ported to
+   Go, standard library only. One binary with subcommands (`jeeves status`), so a release holds one file per
+   platform, not one per command.
+2. **Layout:** `go.mod` at the root (module `github.com/WinuxNomacs/jeeves`), `cmd/jeeves/`, `internal/...`.
+   `bin/jeeves-status` becomes a few lines of bash that run `dist/jeeves-<os>-<arch>[.exe] status "$@"`. The
+   other `bin/` scripts stay bash. Binaries are built into `dist/`, which stays out of git during the spike:
+   committing them would grow the history for good, even if the port is dropped.
+3. **Parity:** the existing `jeeves-status` tests run unchanged against the Go version (they call
+   `bin/jeeves-status`), so its output must match the bash version byte for byte, as the skills rely on it.
+   Go unit tests for the classification and hashing, with failures injected (a missing repo, a locked
+   device, an unreadable file).
+4. **Builds:** five targets (macOS arm64 and amd64, Linux amd64 and arm64, Windows amd64) from Linux with
+   `CGO_ENABLED=0`, `-trimpath`, `-buildvcs=false` and an empty build ID, by a script beside the release
+   scripts. Reproducible: two builds, and CI's build, give the same hashes.
+5. **Measured and reported to the user:** each binary's size; the five together (what each release would add
+   to the repo); `jeeves-status` time, Go against bash, on Linux, macOS and Windows (it runs at every session
+   start through the snapshot).
+6. **Real platforms:**
+   - macOS: the user runs the launcher from a checkout of the branch. Does Gatekeeper question an unsigned
+     binary that arrived through git (git sets no quarantine flag, so probably not; unverified)?
+   - Windows: run from WSL through the PC's Git Bash, Defender on. Is an unsigned Go binary flagged? Plus
+     the parity tests under Windows Git Bash.
+   - CI: the workflow gains a Go setup step (not a new trigger or workflow); `actions/setup-go` is at v7.1.0,
+     published 2026-11-17, three days before this plan: vet it, and pin a release at least two weeks old by
+     commit hash.
+7. **Directory:** compiled programs and files over 256 KiB are held for a reviewer (pre-submission checklist).
+   Submitting stays the user's act; nothing is submitted in this phase.
+
+Setup: Go is not installed on this machine. The latest stable release is 1.27.4 (go.dev/dl, 2026-11-20).
+Installing it changes the system, so the exact command waits for the user's yes when the build starts; the
+version is pinned in `go.mod` (`go 1.27`, with a `toolchain` line).
+
+Not in the spike: encryption (`filippo.io/age` and a key store library are vetted in the phase that ports
+`jeeves-crypt`), the other commands, and the decision to commit binaries or download them on first use.
+
+Go/no-go, the user's call at the end, with the measurements in hand:
+- **Size:** what each release adds to the repo (all five binaries) is acceptable.
+- **Platforms:** macOS runs the binary with no Gatekeeper prompt, and Windows with no Defender block.
+- **Reproducible:** CI's build matches the local one.
+- **Parity:** the status tests pass on all three OSes, and the session-start time is no worse than bash.
+If go: the full port is planned as phases (the library and sync scripts, encryption with `age` built in,
+background updates, the rest), each released only when its tests pass on all three OSes. If no-go: the
+spike's findings are recorded here and bash stays.
+
+Failure list for the launcher (it runs at every session start through the snapshot hook): no binary for
+this OS or architecture (fall back to the bash script, and say so once); a binary that fails to start (same
+fallback); a binary that does not match the signed manifest (`jeeves-verify` covers `dist/` as it does
+`bin/`). Each gets a test that makes it happen.
 
 ## Background auto-update (requested and planned 2026-11-20)
 
