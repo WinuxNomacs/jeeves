@@ -51,7 +51,8 @@ already snapshotted the data repo when the plugin is installed.
   on, unlock, change the passphrase, lock). Every skill but `update` is one only the user starts
   (`disable-model-invocation`), and the Skill tool refuses to start such a skill from another: `encryption`'s
   and `restore`'s steps are in a `steps.md` beside them, which they read through `${CLAUDE_SKILL_DIR}` and
-  setup through `${CLAUDE_PLUGIN_ROOT}`; `/jeeves` tells the user to type `/jeeves:review`. A file read with
+  setup through `${CLAUDE_PLUGIN_ROOT}` (filled in in skill text, and Read opens files under the plugin
+  without a prompt: checked headless with a scratch plugin, 2026-11-20); `/jeeves` tells the user to type `/jeeves:review`. A file read with
   the Read tool gets no substitution, so `${user_config.data_repo}` stays in the skill itself.
   They get the data repo from `${user_config.data_repo}` (substituted into skill text; the Bash tool sees no
   plugin variables), passed once as `jeeves-status --data-repo "..."`, which records it in
@@ -79,7 +80,9 @@ already snapshotted the data repo when the plugin is installed.
   `/reload-plugins` picks up edits. Hook scripts are live as soon as a file is saved, so run `bash -n` on a
   changed script before saving it over the working copy, and keep `main` working. Loaded that way the plugin
   gets no plugin options: skills pass the literal `${user_config.data_repo}`, which the scripts ignore in
-  favour of the recorded data repo (checked headless, 2026-11-19). After first adding the env, start a new
+  favour of the recorded data repo (checked headless, 2026-11-19). Such a session, running a skill step that
+  passes it, drops the `--data-repo "${user_config.data_repo}"` argument: the unfilled literal in a Bash
+  command trips Claude Code's safety check, which denies the command (2026-11-20). After first adding the env, start a new
   session: when `/reload-plugins` swapped the installed copy for the inline one, the VS Code panel's command
   menu showed no Jeeves commands, while a fresh session listed them all (2026-11-19).
 - To run a `bin/` script by hand against scratch folders, `export CLAUDE_HOME=<scratch>/.claude
@@ -93,8 +96,13 @@ already snapshotted the data repo when the plugin is installed.
 - **Releases follow `.claude/skills/release/SKILL.md`** (`/release`): readiness, the review for bugs,
   interaction breakdowns and secret leaks, the checks, the release branch, CI, the merge, and the tag on the
   user's word.
-- After changing a manifest or `hooks.json`: `claude plugin validate .` and
-  `claude plugin validate .claude-plugin/marketplace.json`.
+- After changing a manifest or `hooks.json`: `claude plugin validate --strict .claude-plugin/plugin.json` and
+  `claude plugin validate .claude-plugin/marketplace.json`; `claude plugin validate .` checks only the
+  marketplace when the folder holds both (2026-11-20).
+- The README's "What Jeeves runs, sends and changes" is the plugin's disclosure for the Anthropic directory,
+  whose security scan rejects behaviour it does not describe: a change that adds or moves a network call, a
+  push, a write outside the data repo, an install or a permission change updates that section on the same
+  branch, checked against the code.
 - Rehearse an upgrade in a scratch `CLAUDE_CONFIG_DIR`, with `CLAUDE_CODE_PLUGIN_DIRS` unset (inherited from
   the development setup, it loads the checkout as a second `jeeves`, and the install "failed to load", its
   `--config` not applied; seen 2026-11-19): `claude plugin marketplace add WinuxNomacs/jeeves`
