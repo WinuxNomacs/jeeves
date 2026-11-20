@@ -2,11 +2,19 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** nothing planned
+- **Up next:** 0. Bug: `/jeeves` > "Review my rules" fails (below, under "Bug: /jeeves hand-off to review")
 - **Then:** nothing planned
 - **Later:** 0. Review text gaps (below, under "Review text gaps") · 0. Injection docs: threat model in the README, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
   must differ per host) · Anthropic directory submission (only on the user's direct command)
+
+## Bug: /jeeves hand-off to review (found 2026-11-19)
+
+`/jeeves` alone offers "Review my rules", which invokes `jeeves:review` with the Skill tool; Claude Code
+refuses, since `review` has `disable-model-invocation: true` ("Ask the user to run /jeeves:review
+themselves"). Shipped in 1.3.0 and 1.4.0. Fix to plan: the option tells the user to type `/jeeves:review`
+(or drop it from the menu); check every other hand-off between skills for the same refusal (`jeeves` to
+`update`, `review` and `setup` to `update`, setup to `restore` and `encryption`).
 
 ## One encryption command (requested 2026-11-19)
 
