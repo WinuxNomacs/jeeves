@@ -1656,7 +1656,8 @@ case ",$FAKE_CLAUDE_MODE," in *,memories,*)
   printf 'ffffffffffffffffffffffffffffffffffffffff\tforged\n' >> "$run/out/memories.tsv" ;; esac
 # Another device's change arriving while the child works: elsewhere in the file, or on the line it edits.
 case ",$FAKE_CLAUDE_MODE," in *,concurrent,*|*,conflict,*)
-  git clone -q "$FAKE_REMOTE" "$FAKE_LOG.other" 2>/dev/null
+  if [ -d "$FAKE_LOG.other/.git" ]; then git -C "$FAKE_LOG.other" -c core.autocrlf=false pull -q --ff-only 2>/dev/null
+  else git clone -q -c core.autocrlf=false "$FAKE_REMOTE" "$FAKE_LOG.other" 2>/dev/null; fi
   if [ "${FAKE_CLAUDE_MODE#*conflict}" != "$FAKE_CLAUDE_MODE" ]; then
     printf -- '- Run the formatter before each commit.\n' >> "$FAKE_LOG.other/home/CLAUDE.md"
   else
@@ -1708,7 +1709,7 @@ t_a_background_run_learns_pushes_installs_and_tells_the_user_once() {
   check "and says an item waits" grep -q "1 item(s) from background updates wait" <<< "$out"
   check "the change notice is shown once" bash -c '! "$1" --session-start | grep -q Undo' _ "$SRC/bin/jeeves-auto"
   q=$(autobin queue)
-  check "the queued item names the project" grep -q "project: $W/proj" <<< "$q"
+  check "the queued item names the project" grep -qxF "project: $(git -C "$W/proj" rev-parse --show-toplevel)" <<< "$q"
   check "the queued item holds the proposal" grep -q 'run make lint' <<< "$q"
   check "the memory reviewed is recorded" grep -q "promoted 1 (background)" "$R/hosts/.memory-review"
   check "a hash the run was not given is not recorded" bash -c '! grep -q "^ffffffff" "$1"' _ "$R/hosts/.memory-review"
@@ -1902,9 +1903,10 @@ t_another_devices_change_meanwhile_is_merged_or_the_edit_set_aside() {
   check "both changes are in the rules" bash -c 'grep -q "^# Rules (shared)$" "$1" && grep -q "Run the linter" "$1"' _ "$R/home/CLAUDE.md"
   check "pushed" [ "$(git -C "$R" rev-parse main)" = "$(git -C "$W/remote.git" rev-parse main)" ]
   check "installed" grep -q "Rules (shared)" "$W/claude/CLAUDE.md"
-  add_turn "again"; rm -rf "$FAKE_LOG.other"; FAKE_CLAUDE_MODE=learn,conflict
+  add_turn "again"; FAKE_CLAUDE_MODE=learn,conflict
   sed 's/Run the linter before each commit./Run the linter before each push./' "$W/fakebin/claude" > "$W/fakebin/c" && mv "$W/fakebin/c" "$W/fakebin/claude" && chmod +x "$W/fakebin/claude"
   n=$(commits); auto_run
+  check "the other device's change arrived" grep -q "Run the formatter" "$R/home/CLAUDE.md"
   check "a change to the same place sets the edit aside" grep -q "changed meanwhile in the same place" <<< "$(auto_log)"
   check "no conflict markers anywhere" bash -c '! grep -q "^<<<<<<<" "$1/home/CLAUDE.md" "$2/CLAUDE.md"' _ "$R" "$W/claude"
   check "the data repo is clean" [ -z "$(git -C "$R" status --porcelain)" ]
