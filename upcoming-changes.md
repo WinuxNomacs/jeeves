@@ -3,10 +3,11 @@
 ## Phases (current and upcoming)
 
 - **Up next:** release 1.4.1 (the hand-off fix)
-- **Then:** nothing planned
+- **Then:** Anthropic directory submission: preparation only (below); the submission itself only on the user's
+  direct command
 - **Later:** 0. Review text gaps (below, under "Review text gaps") · 0. Injection docs: threat model in the README, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
-  must differ per host) · Anthropic directory submission (only on the user's direct command)
+  must differ per host)
 
 ## Bug: /jeeves hand-off to review (found 2026-11-19)
 
@@ -24,6 +25,50 @@ fine (it is not user-only).
 Also seen (development loads only): with the plugin loaded inline, `${user_config.data_repo}` is not
 filled in, and inside double quotes bash rejects it before the script runs ("Parse error"); the model
 retried with single quotes. Installed copies get the real path. Not fixed.
+
+## Anthropic directory submission (planned 2026-11-20)
+
+The user asked whether Jeeves is listed on Anthropic's marketplace and chose to plan the preparation as a
+phase. Submitting stays the user's own act, on their direct command.
+
+Findings (2026-11-20):
+- Not listed: `anthropics/claude-plugins-official`'s `marketplace.json` has no `jeeves` (gh, 2026-11-20).
+- No "official" listing for third parties: that repo's README says `/plugins` holds plugins by Anthropic team
+  members, its `marketplace.json` "is being phased out for third-party plugins", and pull requests are not
+  monitored. Third-party plugins go through the developer portal, claude.ai/directory/manage ("Plugin
+  bundle", pointed at the GitHub repo); a web search names `claude-community` as where they land (not in the
+  docs read). Sources: https://claude.com/docs/plugins/submit,
+  https://claude.com/docs/plugins/pre-submission-checklist,
+  https://github.com/anthropics/claude-plugins-official (README).
+- Checklist outcomes: **blocks**, **held** for a reviewer, or passes. A security scan runs per commit
+  (undisclosed data transmission, hidden code, changes to Claude's permission settings); a first submission
+  that fails it is rejected. The README becomes the listing text and "must describe everything the plugin
+  runs, sends, or fetches". By default a reviewer publishes each version; the directory follows a branch or
+  tag; `version` must rise with each release. 10 submissions per organization per day.
+- Already met: MIT `LICENSE` and `license`; README well over 40 words; public repo; name `jeeves` valid and
+  not reserved; only text files and two JPEGs (largest 2.2 MB, under 5 MiB; no other file over 256 KiB);
+  documented hook events with paths from `${CLAUDE_PLUGIN_ROOT}`; no credentials; readable source.
+- Likely **held** (not blocking): hook scripts source `lib/lib.sh` and call other plugin files. The quoted
+  hook path `"${CLAUDE_PLUGIN_ROOT}"/bin/...` with an argument is probably accepted; only the portal's
+  Validate confirms it.
+- Not checked: which plans may submit (the "who can submit" page was not read).
+
+Work to build:
+1. A README section, "What Jeeves runs, sends and changes": every network call (git fetch and push of the
+   data repo, the daily curl of the marketplace pin on GitHub, `gh` in setup) and every write under
+   `~/.claude` (CLAUDE.md, agents, commands, skills; `settings.json` and keybindings on restore or with
+   `backup_settings=yes`).
+2. `claude plugin validate .` and `--strict` pass; no file trips a "held" rule (256 KiB, binaries,
+   `.DS_Store`).
+3. The directory follows release tags, not `main` (recommended: matches the signed-release pin).
+
+Open decisions (the user's):
+- Which account and plan submits.
+- The publish setting (default: a reviewer approves every version).
+- Whether `tests/`, `upcoming-changes.md` and `docs/images/jeeves-butler-full.jpg` ship in the plugin folder
+  (the plugin is the repo root, so they do now).
+
+Then, the user only: Validate and Submit in the portal.
 
 ## One encryption command (requested 2026-11-19)
 
@@ -718,8 +763,7 @@ marketplace-reference, manifest-reference, publish, anthropic-marketplaces; clau
   `jeeves--v<version>`); a tag is still useful as a release marker and the CI trigger.
 - `bin/`: claude.ai and Cowork don't install plugins with a top-level `bin/`. Jeeves is for Claude Code (local
   files, hooks), so this is accepted; noted in the README.
-- Directory submission (later): `LICENSE` or `license`, README of 40+ words, no bundled binaries, a security
-  scan per commit, a reviewer publishes each version; the repo must be public before the listing goes live.
+- Directory submission: see "Anthropic directory submission (planned 2026-11-20)".
 - `actions/checkout` (GitHub, MIT, not archived): latest release v7.0.1 on 2026-07-20, last push 2026-10-17;
   pinned by commit `3d3c42e5aac5ba805825da76410c181273ba90b1`. The alternative, a `git clone` step of our
   own, was weighed: checkout is GitHub's first-party action and the pin removes drift.
