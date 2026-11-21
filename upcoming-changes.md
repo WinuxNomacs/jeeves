@@ -6,7 +6,7 @@
   into `main` as each phase is done; nothing is cut or tagged until then, except the 1.4.2 security fix.
 - **Up next:** 1. Go port, Phase 2 (below, "Go port, Phase 2"): 2e the skill manages content, the worker
   versions (2a-2d built, merged as each passes CI)
-- **Then:** 2. Phase 3: encryption with age built in · 3. Phase 4: background updates · 4. Phase 5: the last
+- **Then:** 2. Phase 3: encryption with age built in (below, "Go port, Phase 3") · 3. Phase 4: background updates · 4. Phase 5: the last
   bash versions removed · 5. Release 2.0
 - **The user's, any time:** submit 1.4.2 in the Anthropic portal (below, "Anthropic directory submission")
 - **Later:** 0. Review text gaps (below, under "Review text gaps") · 0. Injection docs: threat model in the README, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
@@ -217,6 +217,43 @@ against scratch folders (the repo's CLAUDE.md, "Working on the plugin") before t
 
 Docs with each step: README (commands, the worker, "What Jeeves runs, sends and changes": the worker
 process, its queue folder), `.claude/CLAUDE.md` layout, CHANGELOG 2.0.0.
+
+## Go port, Phase 3: encryption with age built in (planned 2026-11-21)
+
+`jeeves-encrypt` (`status`, `on`, `unlock`, `lock`, `passphrase`) and `jeeves-crypt` (git's clean and
+smudge filter, textconv and merge driver) in Go, with age built in: users no longer install `age` or
+`age-plugin-batchpass`. Parity tests against the bash versions over each case, then the bash versions and
+the parts of `lib/crypt.sh` only they use are deleted once green on three OSes.
+- **The library, vetted 2026-11-21 from primary sources** (GitHub API): `filippo.io/age` v1.3.2
+  (2026-08-29; releases yearly, v1.3.0 2025-12, v1.2.1 2024-12); BSD-3-Clause; one main maintainer
+  (Filippo Valsorda, 333 commits; others under 10), issues answered this month; one advisory,
+  GHSA-32gq-x56h-299c (2024-12, plugin names running a program), fixed in 1.2.1 and only in the plugin
+  code, which Jeeves does not use. It pulls in `golang.org/x/crypto`, `x/sys`, `x/term` and the author's
+  `edwards25519`, `hpke` and `nistec`. Size measured: +545 KB on the linux/amd64 build (3.88 to 4.43 MB,
+  the release flags). Building our own age is not an option (cryptography); keeping the CLI keeps the
+  install step this phase removes. The README's "standard library only" becomes "the standard library and
+  age". Pinned exactly in `go.mod`; `go.sum` committed; the reproducible build check covers it.
+- **Formats unchanged:** the data repo key is an X25519 identity; `identity.age` holds it encrypted with
+  the passphrase as a standard scrypt stanza, armored (checked: `age -e -j batchpass -a` writes
+  `-> scrypt <salt> 18`), which the library reads and writes; files are age v1. A data repo encrypted by
+  1.4.x opens unchanged, and one written by 2.0 opens with the age CLI (a test does both ways with the
+  CLI when it is on the PATH; CI installs it for that).
+- **The filter:** git's long-running filter protocol (`filter.jeeves.process`, git 2.11+), so one process
+  serves a whole checkout or add instead of one per file (a process start costs tens of milliseconds on
+  Windows); `required = true`, so a failure stops git and plain text never reaches a commit. The clean
+  side keeps the cache (plain hash to ciphertext under `.git/jeeves/clean/`) so an unchanged file cleans
+  to the same bytes; an entry that does not decrypt to its plain text is dropped, never served. The
+  textconv and merge driver stay one process per call (git's interface); the merge driver writes
+  `jeeves: not merged` and fails when the key cannot be read, as now.
+- **Passphrases:** the same dialogs (osascript, zenity or kdialog, PowerShell) and `--terminal` (read
+  with no echo through `x/term`, already in the build with age); the passphrase stays in the process's
+  memory only, never in a command line, the environment or a file; the key goes to the stores on stdin as
+  now (`lib.StoreGet`'s counterpart `StorePut`).
+- **What can fail** (each with a test): the key store missing or refusing (nothing changed, said why);
+  a wrong passphrase; a dialog cancelled; `identity.age` not matching `recipient`; the filter process
+  killed mid-checkout (git stops; the next run redoes it); a cache entry corrupted or for another key;
+  a merge with the key unreadable; a disk full while writing `identity.age` (written to a temporary file
+  and checked by decrypting before it replaces the old one, as now).
 
 ## Go port, Phase 1: the small commands (planned 2026-11-21)
 
