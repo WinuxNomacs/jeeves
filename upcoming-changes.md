@@ -110,8 +110,9 @@ classification), `internal/status/`. `bin/jeeves-status` is now a launcher; the 
 - **Parity:** the suite's status tests, plus a new test that runs both versions on every state (disk, repo,
   conflict, no base, a name with a space and an accent, excluded folders, CRLF and empty files, a merge in
   progress, the refusals) and compares stdout, stderr and exit status byte for byte. Full suite, encryption
-  tests included: 145 passed, 0 failed on Linux here, and in CI on Linux and macOS (bash 3.2, the arm64
-  build). Windows Git Bash on this PC: the status tests 5 passed. The parity
+  tests included: 145 passed, 0 failed on Linux here, and in CI on all three OSes (macOS with bash 3.2 and
+  the arm64 build; Windows Git Bash, 32.6 minutes, so the job's limit went from 30 to 45 on `main`).
+  Windows Git Bash on this PC: the status tests 5 passed. The parity
   test was seen failing against a build that changes one word.
 - **Found by the parity test on Windows:** bash's `sort -u` in `all_tracked` followed the locale (Git Bash
   put `CLAUDE.md` after `agents/`), so the bash version's own order differed between machines; fixed in bash
@@ -143,7 +144,7 @@ classification), `internal/status/`. `bin/jeeves-status` is now a launcher; the 
   (`Get-MpThreatDetection`: none in the last day). A file that arrives through git carries no
   Mark-of-the-Web, as an install's clone does.
 - **macOS Gatekeeper** (the user's Mac, 2026-11-20): the arm64 build, fetched through git from the throwaway
-  branch `spike/go-dist` (as an install's files arrive), ran with no dialog. `spctl --assess --type execute`
+  branch `spike/go-dist` (as an install's files arrive; the branch is deleted), ran with no dialog. `spctl --assess --type execute`
   says "rejected": what Gatekeeper would do to the same file carrying a quarantine flag (a browser download),
   so builds offered as downloads would need an Apple Developer ID signature and notarization (paid
   program); builds that arrive through git do not.
