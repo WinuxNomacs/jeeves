@@ -76,10 +76,17 @@ Checklist:
 for f in bin/* lib/*.sh tests/run.sh; do bash -n "$f" || echo "FAIL $f"; done
 claude plugin validate --strict .claude-plugin/plugin.json   # '.' would check only the marketplace
 claude plugin validate .claude-plugin/marketplace.json
+export GOTOOLCHAIN=local
+test -z "$(gofmt -l cmd internal)" && go vet ./... && go test ./...
+bash .claude/skills/release/build-go.sh --check   # dist/ must be a build of this source, byte for byte
 bash tests/run.sh
 ```
 
-Report the suite's count ("N passed, 0 failed") and confirm it did not print "skip encryption tests".
+Report the suite's count ("N passed, 0 failed") and confirm it did not print "skip encryption tests" and that
+the parity tests ran (no "skip: no Go build in dist/"). If `--check` fails, a Go change was committed without
+rebuilding `dist/`: rebuild (`build-go.sh`), commit on its own branch, merge, and start this step again. The
+builds in `dist/` are Claude's, made on this PC (the user's decision, 2026-11-21); CI reproduces them on
+three OSes in step 7.
 
 ## 5. Checks by what changed
 
@@ -92,7 +99,10 @@ Run each that applies; say which were skipped and why.
   merge) against a scratch data repo, then the new `bin/` on the state it wrote
   (`bash .claude/skills/release/rehearse.sh <scratch> v<last>`: plain and encrypted, two devices, one left on
   the old release; add checks there for what the release changes); and the published plugin
-  in a scratch `CLAUDE_CONFIG_DIR` (see `.claude/CLAUDE.md`).
+  in a scratch `CLAUDE_CONFIG_DIR` (see `.claude/CLAUDE.md`). After step 9's pin, that copy's `dist/`
+  builds keep their executable bit, its `bin/jeeves-status` runs the Go build (no "running the bash
+  version" note), and its `jeeves-verify` passes.
+- **Go code:** the parity tests and `go test` under Windows Git Bash too (in the copy on `C:`).
 - **Skill text only:** run each changed skill once against scratch folders.
 - **Docs only:** no rehearsal; say so.
 
@@ -105,7 +115,8 @@ Run each that applies; say which were skipped and why.
 
 Commit ("Release X.Y.Z: <summary>").
 
-Then the signed manifest, last on the branch (any later change on it means writing and signing it again):
+Then the signed manifest, last on the branch (any later change on it means writing and signing it again). It
+holds the hashes of the Go builds in `dist/` too, so the signature covers them:
 
 ```bash
 bash .claude/skills/release/manifest.sh

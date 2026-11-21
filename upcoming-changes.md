@@ -2,12 +2,15 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** 1. Go port, Phase 0: distribution (below, "Go port"): the shared launcher, committed builds
-  in the signed release, the release steps; released as 1.5.0 with background updates
-- **Then:** 2. Go port, Phase 1: the small commands · 3. Phase 2: the sync core around one worker per machine,
-  knowledge files only (settings no longer backed up) · 4. Phase 3: encryption with age built in · 5. Phase 4: background updates · 6. Phase
-  5: the last bash versions removed
-- **The user's, any time:** submit 1.4.1 in the Anthropic portal (below, "Anthropic directory submission")
+- **No release before 2.0** (the user's decision, 2026-11-21): 2.0 is the completed Go rewrite. Work merges
+  into `main` as each phase is done; nothing is cut or tagged until then, except the 1.4.2 security fix.
+- **Up next:** 1. Release 1.4.2: the path fix only, from the 1.4.1 tag (below, "Release 1.4.2") · 2. Go
+  port, Phase 0 (built; merged once CI is green) · 3. Security: links in the data repo (below, "Bug: a
+  link committed to the data repo"), fixed on `main` for 2.0 (the user chose not to hold 1.4.2 for it)
+- **Then:** 3. Go port, Phase 1: the small commands · 4. Phase 2: the sync core around one worker per machine,
+  knowledge files only (settings no longer backed up) · 5. Phase 3: encryption with age built in · 6. Phase 4:
+  background updates · 7. Phase 5: the last bash versions removed · 8. Release 2.0
+- **The user's, any time:** submit 1.4.2 (once tagged) in the Anthropic portal (below, "Anthropic directory submission")
 - **Later:** 0. Review text gaps (below, under "Review text gaps") · 0. Injection docs: threat model in the README, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
   must differ per host)
@@ -35,10 +38,12 @@ The spike (below) met every go/no-go criterion; the user chose "go". Decided wit
 - **Builds are committed:** `dist/` holds the five builds in each release, covered by the signed `MANIFEST`,
   so `jeeves-verify` checks them as it checks every file. About 10 MB more history per release that changes
   Go code. Not checked: whether Claude Code's install clones only the release (shallow).
-- **Bash goes:** a command's bash version stays as the fallback for one release after its Go version
-  ships, then is deleted. Machines with no build (other OSes or processors) then cannot run Jeeves.
-- **1.5.0 is folded into the first Go release:** installs stay on 1.4.1 until Phase 0 ships; that release
-  (still numbered 1.5.0, never published) carries background updates and the Go `status`, re-signed.
+- **Bash goes, and 2.0 is Go only** (the user's decisions, 2026-11-21, replacing "one release after"): no
+  release comes before 2.0, the completed rewrite; each command's bash version is deleted on `main` once its
+  Go version passes the parity tests on all three OSes. 2.0 holds the builds, the wrappers and
+  `jeeves-verify`, and runs only where a build fits (macOS, Linux and Windows on amd64 or arm64; Windows
+  arm64 has none yet). The launcher's fallback stays until the last bash version is gone.
+- **Background updates (built as 1.5.0, never published) ship in 2.0.**
 - **Knowledge files only** (the user's decision, 2026-11-20): Jeeves syncs CLAUDE.md, `skills/`, `agents/`
   and `commands/`, and backs up each device's memories. `settings.json` and `keybindings.json` are no
   longer backed up or restored; `backup_settings` goes. Copies already in data repos
@@ -69,9 +74,9 @@ merges, pulls and pushes: the skill manages the content, the worker manages the 
 
 Phases (each ships only when the suite passes on all three OSes, with the parity test covering every ported
 command against its bash version until that version is deleted):
-- **Phase 0, distribution:** planned below ("Go port, Phase 0"). Released as 1.5.0.
+- **Phase 0, distribution:** planned below ("Go port, Phase 0"). Not released (2.0 is).
 - **Phase 1, the small commands:** `git`, `risk`, `scan`, `check`, `memories`, `update-check`, `github`,
-  `init`; `status`'s bash version removed (one release after 1.5.0).
+  `init`; `status`'s bash version removed once these pass parity on all three OSes.
 - **Phase 2, the sync core:** `snapshot`, `apply`, `hook-edit`, `restore`, `cleanup`, and the settings
   backup removed (above). The data integrity rules hold unchanged (checked copies, the sync record, a
   clean `main`); the full upgrade rehearsal, plain and encrypted, two devices, one on the old release.
@@ -85,10 +90,36 @@ command against its bash version until that version is deleted):
 - **Phase 5:** the last bash versions and the launcher's fallback removed; `bin/` holds only the wrappers
   and `jeeves-verify`.
 
+## Bug: a link committed to the data repo (found by the 1.4.2 review, 2026-11-21)
+
+Reproduced on 1.4.1 and 1.4.2 (Linux; Windows Git does not make links by default): someone who can push
+to the data repo commits `home/CLAUDE.md` as a symbolic link (say `../../.ssh/id_ed25519` from
+`~/jeeves-data/home`). `jeeves-apply` follows it (`[ -f ]`, `hash_of` and the copy all follow links) and
+installs that file's content as `~/.claude/CLAUDE.md` with no prompt (CLAUDE.md is not held); the next
+snapshot commits it and `/jeeves:update` pushes it (`jeeves-scan` catches only secret patterns). A
+committed folder link (`home/commands -> /elsewhere`) makes the snapshot write through it. Fix to build on
+`main`: Jeeves never follows a link from the data repo: every command that syncs (and `status`, in bash and
+Go alike) refuses while `home/` or `hosts/` holds one (`git ls-files -s` mode 120000, or a link on disk
+under them), naming the path to remove; Jeeves itself never commits links (its copies follow the disk side's
+links). Tests: a committed file link and a folder link, seen failing first. Also: `jeeves-restore`'s
+`find` under a memory folder has the line-break pattern (one folder up at most, only when the user
+restores): read its paths through `inside`. The user chose (2026-11-21) to ship 1.4.2 without these; 2.0
+carries them.
+
+## Release 1.4.2 (the user's decision, 2026-11-21)
+
+The release review of the Go work found that 1.4.1, the published version, lets a folder whose name holds a
+line break, planted in the data repo, make a sync write outside `~/.claude` (fixed on `main`, 3582644). The
+user chose a security release before 2.0: a branch from the `v1.4.1` tag with only that fix and its test,
+version 1.4.2, the CHANGELOG, the signed manifest, the upgrade rehearsal from 1.4.1, CI, and the tag on the
+user's word; then the marketplace pin. `main` already holds the fix: the release branch is merged into
+`main` keeping `main`'s files (its CHANGELOG gains the 1.4.2 entry).
+
 ## Go port, Phase 0: distribution (planned with the user, 2026-11-21)
 
-Goal: the Go build ships in a signed release and runs on real installs, with `status` as its only command,
-so later phases only add commands. Released as 1.5.0, with background updates (folded in).
+Goal: the Go build is committed, signed with each release and checked by CI, with `status` as its only
+command, so later phases only add commands. Not released on its own: 2.0 is (the user's decision,
+2026-11-21).
 
 Decided with the user (2026-11-21): **Claude builds the release's five builds on this PC** (as it signs the
 manifest), commits them on the release branch, and CI on Linux, macOS and Windows rebuilds from source and
@@ -116,9 +147,9 @@ Build:
 5. **Docs:** README's "What Jeeves runs, sends and changes" (compiled programs in `dist/`, built from
    `cmd/` and `internal/`, the same bytes from any machine, and how to check that:
    `build-go.sh --check` with the Go version `go.mod` names), "Working on Jeeves" (Go needed only to change
-   Go code; rebuild `dist/` before committing a Go change), "Tests" (`go test ./...`). CHANGELOG's 1.5.0
-   entry gains the Go `status`, the sort fix and the uninstall section. The directory note: compiled files
-   over 256 KiB are held for a reviewer from 1.5.0 on.
+   Go code; rebuild `dist/` before committing a Go change), "Tests" (`go test ./...`). CHANGELOG's
+   unreleased entry gains the Go `status`, the sort fix and the uninstall section. The directory note: compiled files
+   over 256 KiB are held for a reviewer from 2.0 on.
 
 Failure list (the launcher runs wherever a ported command runs; once hooks are ported, at every session
 start), each with a test that makes it happen where one can:
@@ -135,6 +166,42 @@ start), each with a test that makes it happen where one can:
   rebuild.
 
 Not in Phase 0: porting more commands (Phase 1), and the per-machine worker (Phase 2).
+
+As built (2026-11-21, branch `feat/go-dist`):
+- `lib/launch.sh` finds the plugin folder by name (the same string as `cd .. && pwd`, checked for relative,
+  absolute, symlinked and doubled-slash calls and a bare name) and the platform from `$OSTYPE` and
+  `$HOSTTYPE`; it checks the executable bit with a builtin and runs the build directly rather than
+  capturing its messages (a subshell cost about 100 ms on Windows), so a build in a wrong format falls back
+  after bash's own error line. The program converts the plugin folder with `cygpath` only when a command
+  needs it (an encrypted repo's filter settings). Windows, 50 files, Go `status`: 662 ms (spike) to
+  391 ms; the program alone 318 ms to 172 ms. The rest is bash starting the wrapper and the program's git
+  calls (about 110 ms each there).
+- `dist/` is kept current on `main` with each Go change rather than rebuilt at release (the builds hold no
+  version), and release step 4 checks it with `build-go.sh --check`; `go-builds.sha256` and `--record`
+  are gone.
+- Tests: a Go crash (`JEEVES_TEST_PANIC=1`) exits 2 with its message and no fallback; the launcher finds the
+  plugin folder however it is called; a build that is not executable falls back with only the note. The
+  rehearsal from 1.4.1 checks that the Go build runs on the old state, agrees with the bash version, and
+  leaves git's filter settings as the bash version writes them (plain and encrypted): REHEARSAL OK.
+- Release review (an independent agent, 2026-11-21), each finding checked before fixing:
+  - Fixed on `main` (`fix/bash-path-handling`, older bash bugs): a name with a line break made `find` give a
+    second "path" such as `../x`, and apply wrote outside `~/.claude` (reproduced by the new test on the old
+    code); `base_of` and `set_base` read paths through `ENVIRON` (awk `-v` ate backslashes); `git
+    hash-object` runs outside any repository (a SHA-256 repo around the current folder changed the hashes).
+  - Fixed here: a bare `--data-repo` (given and empty, as bash reads it); `build-go.sh` pins `GOAMD64`,
+    `GOARM64`, `GOEXPERIMENT`, `GOENV` and `GOWORK` (an inherited `GOAMD64=v3` changed the amd64 builds);
+    a broken `~/jeeves-data/.git` link reads as none, as bash's `-e`; paths that reach the program
+    unconverted on Windows are converted; the wrapper never sources a launcher relative to the caller's
+    folder (a bare name found on the PATH did); README discloses `~/.claude/jeeves/go-fallback`.
+  - Left as they are: stderr differs from bash's in error cases (an unreadable file, folder or record; the
+    parity test covers stdout, exit status, and stderr in normal runs); `//` at the start of a path is
+    collapsed by Go; Go refuses an empty host name on Windows where bash used "-win"; a build in a wrong
+    format shows bash's own error at each run (no release ships one); `JEEVES_TEST_PANIC` stays (it only
+    makes the program crash). With Git Bash's path conversion off (`MSYS_NO_PATHCONV` set, even empty),
+    the bash version cannot sync either (Git for Windows cannot open `/tmp/...` paths), so that setting is
+    unsupported, as before.
+  - Also found in testing the fixes: the wrapper refused a relative call (`bin/jeeves-status`); fixed, with
+    a test.
 
 ## Go rewrite: spike (requested and planned 2026-11-20)
 
@@ -929,8 +996,8 @@ Suite 105 passed (2026-11-19).
   from GitHub gets 1.4.1 and `jeeves-verify` passes.
 - Release 1.5.0 (2026-11-20): background updates (below), the worker cleanup, both independent reviews'
   fixes, the friendlier splash image. Rehearsed from 1.4.1 (plain and encrypted, two devices; background
-  updates off and undecided after the upgrade). Merged on `main` (8050958) but not tagged: installs keep
-  1.4.1 until the user decides, after the Go spike, what is released next.
+  updates off and undecided after the upgrade). Merged on `main` (8050958), never tagged: by the user's
+  decision (2026-11-21) nothing is released before 2.0, which carries it.
 - Background updates (2026-11-20; planned and measured with the user, "Background auto-update" above):
   `bin/jeeves-auto` (Stop hook, session-start notices, the run, the run lock, queue, hold and release),
   `skills/autoupdate/`, the "Auto mode" section and the hold and queue steps in `skills/update/SKILL.md`,

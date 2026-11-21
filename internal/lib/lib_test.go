@@ -117,7 +117,7 @@ func scratch(t *testing.T) (Env, string) {
 	t.Setenv("JEEVES_DATA", "")
 	t.Setenv("CLAUDE_PLUGIN_OPTION_DATA_REPO", "")
 	t.Setenv("ALLOW_LOCKED", "")
-	return Env{Home: home, ClaudeHome: filepath.Join(home, ".claude"), Host: "testhost", Root: "/plugin"}, repo
+	return Env{Home: home, ClaudeHome: filepath.Join(home, ".claude"), Host: "testhost", Root: func() string { return "/plugin" }}, repo
 }
 
 func TestFindDataRepoWithNothingSetPointsToSetup(t *testing.T) {
@@ -210,7 +210,7 @@ func TestAnUnlockedDeviceNeedsTheMarkerToNameTheRecipient(t *testing.T) {
 func TestParseDataRepoArg(t *testing.T) {
 	t.Setenv("JEEVES_DATA", "")
 	a, rest := ParseDataRepoArg([]string{"--data-repo", "/x", "more"})
-	if a.JeevesData != "/x" || !a.Given || len(rest) != 1 {
+	if a.JeevesData != NativePath("/x") || !a.Given || len(rest) != 1 { // on Windows, X:\ (Git Bash's drive form)
 		t.Errorf("got %+v %v", a, rest)
 	}
 	a, rest = ParseDataRepoArg([]string{"--data-repo", "${user_config.data_repo}"})
@@ -220,5 +220,9 @@ func TestParseDataRepoArg(t *testing.T) {
 	a, _ = ParseDataRepoArg([]string{"--data-repo", ""})
 	if !a.Given || a.JeevesData != "" {
 		t.Errorf("empty: %+v", a)
+	}
+	a, rest = ParseDataRepoArg([]string{"--data-repo"})
+	if !a.Given || a.JeevesData != "" || len(rest) != 0 {
+		t.Errorf("the option alone: %+v %v", a, rest)
 	}
 }

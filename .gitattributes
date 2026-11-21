@@ -1,3 +1,5 @@
 # LF everywhere, also in a Windows checkout (Git for Windows sets core.autocrlf=true): bash cannot run
 # scripts with CRLF line endings.
 * text=auto eol=lf
+# The Go builds: never converted, never diffed as text.
+dist/** binary

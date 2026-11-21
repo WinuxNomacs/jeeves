@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/WinuxNomacs/jeeves/internal/lib"
 	"github.com/WinuxNomacs/jeeves/internal/status"
@@ -17,7 +18,10 @@ func main() {
 		fmt.Fprintln(os.Stderr, "usage: jeeves <command> [arguments]   (commands: status)")
 		os.Exit(2)
 	}
-	e := lib.LoadEnv(pluginRoot())
+	if os.Getenv("JEEVES_TEST_PANIC") == "1" { // the tests' way to make the program crash
+		panic("JEEVES_TEST_PANIC")
+	}
+	e := lib.LoadEnv(pluginRoot)
 	switch os.Args[1] {
 	case "status":
 		os.Exit(status.Run(e, os.Args[2:], os.Stdout, os.Stderr))
@@ -27,10 +31,10 @@ func main() {
 	}
 }
 
-// pluginRoot is the plugin folder in the scripts' form: JEEVES_ROOT from the launcher (bash's own
+// pluginRoot is the plugin folder in the scripts' form (worked out once, on first use): JEEVES_ROOT from the launcher (bash's own
 // `cd .. && pwd`, so a git setting naming bin/ reads the same whichever version wrote it), else the
 // folder above this program's own.
-func pluginRoot() string {
+var pluginRoot = sync.OnceValue(func() string {
 	if r := os.Getenv("JEEVES_ROOT"); r != "" {
 		return lib.ShellPath(r)
 	}
@@ -39,4 +43,4 @@ func pluginRoot() string {
 		return ""
 	}
 	return lib.ShellPath(filepath.ToSlash(filepath.Dir(filepath.Dir(exe))))
-}
+})
