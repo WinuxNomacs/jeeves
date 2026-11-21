@@ -6,7 +6,7 @@ description: >-
 argument-hint: "<days> | auto <every days> [<keep days>] | off"
 disable-model-invocation: true
 allowed-tools:
-  - Bash(jeeves-cleanup)
+  - Bash(jeeves-cleanup --dry-run *)
   - Bash(jeeves-status *)
   - Bash(jeeves-snapshot)
   - Bash(jeeves-scan)
@@ -46,7 +46,7 @@ AskUserQuestion: the obvious options, the recommended one first; they can still 
 ## Steps
 
 1. Run `jeeves-status --data-repo "${user_config.data_repo}"` and note its `datarepo` line; if it says
-   no data repo is set, stop and point the user to `/jeeves:setup`. Later commands find the data repo on
+   Jeeves is not set up on this machine yet, stop and point the user to `/jeeves:setup`. Later commands find the data repo on
    their own (that command records it for this device): run the `jeeves-` scripts bare, and git in the data
    repo as `jeeves-git <arguments>`, never with a `cd` into it.
 2. **No request:** show `jeeves.conf` (or say there is none, so no automatic cleanup) and ask what to do.

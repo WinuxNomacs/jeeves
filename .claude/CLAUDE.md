@@ -169,6 +169,10 @@ code that runs, and the release check would warn at every session start.
   it checked with `jeeves-scan` and `jeeves-risk` (`<sha>:refs/heads/main`, never forced). Otherwise they contact the remote only for `fetch` + fast-forward in `snapshot`,
   and only the skills (through `jeeves-push`, or the cleanup's lease push) and a background run push.
 - Never copy secrets: `.credentials.json`, `~/.claude.json`, transcripts, history.
+- Every git command in the data repo runs with no hooks and no fsmonitor (`core.hooksPath=` `Repo.NoHooksDir`,
+  a folder that never exists): a hook would see the loaded key. Tests that need a hook (a failing commit or
+  push) point `JEEVES_TEST_HOOKS` at it. A check that reads git's output pins what the user's config could
+  change (`--no-renames`, `--text`, the diff prefixes; `-z` for names) and fails closed when git fails.
 - Encryption: a passphrase never goes through the chat or a command line (a dialog, or `--terminal` in the
   user's own terminal; to age only as `AGE_PASSPHRASE` of that one process); the key goes to stores on
   stdin. Plain text must never reach a commit: the filter is required, a failure stops git, and

@@ -903,8 +903,9 @@ risk() { "$SRC/bin/jeeves-risk" "$@"; }
 
 # A file committed straight into the index (a name this OS's file system may not hold).
 commit_blob() { # commit_blob <path> <content>
-  git -C "$R" update-index --add --cacheinfo "100644,$(printf '%s' "$2" | git -C "$R" hash-object -w --stdin),$1"
-  git -C "$R" commit -qm "add $1"
+  # Git for Windows refuses such a name in its index unless told not to (core.protectNTFS).
+  git -C "$R" -c core.protectNTFS=false update-index --add --cacheinfo "100644,$(printf '%s' "$2" | git -C "$R" hash-object -w --stdin),$1"
+  git -C "$R" -c core.protectNTFS=false commit -qm "add $1"
 }
 utf16le() { local s=$1 i; for ((i = 0; i < ${#s}; i++)); do printf '%s\0' "${s:i:1}"; done; }
 
@@ -2869,6 +2870,20 @@ t_a_merge_that_cannot_decrypt_stops_with_markers_and_never_one_side() {
   mv "$W/keys.away"/* "$W/keys"/
 }
 
+t_continue_names_a_file_the_key_could_not_merge() {
+  snap >/dev/null
+  printf 'one\n' > "$R/home/agents/m.md"; git -C "$R" add home/agents/m.md; git -C "$R" commit -qm base
+  git -C "$R" -c core.autocrlf=false switch -qc side; printf 'side\n' > "$R/home/agents/m.md"; git -C "$R" commit -qam side
+  git -C "$R" -c core.autocrlf=false switch -q main; printf 'main\n' > "$R/home/agents/m.md"; git -C "$R" commit -qam main
+  git -C "$R" -c core.autocrlf=false merge -q --no-ff side -m merged >/dev/null 2>&1
+  # What the encrypted-merge driver writes when the key cannot be read.
+  printf '<<<<<<< jeeves: not merged\nThe key could not be read.\nAbort the merge (jeeves-merge --abort), run /jeeves:encryption, then merge again.\n=======\n>>>>>>> jeeves\n' > "$R/home/agents/m.md"
+  out=$("$SRC/bin/jeeves-merge" --continue); rc=$?
+  check "names the file and what to do" bash -c '[ $1 = 1 ] && grep -q "home/agents/m.md was not merged (the key could not be read); run jeeves-merge --abort, then /jeeves:encryption" <<< "$2"' _ $rc "$out"
+  check "the driver's note names jeeves-merge --abort" grep -q 'Abort the merge (jeeves-merge --abort)' "$SRC/internal/crypt/crypt.go"
+  git -C "$R" merge --abort
+}
+
 mem() { "$SRC/bin/jeeves-memories" "$@"; }
 
 t_memories_lists_what_is_not_reviewed_yet_from_this_machine_and_other_devices() {
@@ -3383,6 +3398,7 @@ if true; then
   run_test "the base of an encrypted file stays readable" t_the_base_of_an_encrypted_file_stays_readable
   run_test "a new data repo encrypted before its first snapshot never holds plain text" t_a_new_data_repo_encrypted_before_its_first_snapshot_never_holds_plain_text
   run_test "a merge that cannot decrypt stops with markers, never one side" t_a_merge_that_cannot_decrypt_stops_with_markers_and_never_one_side
+  run_test "jeeves-merge --continue names a file the key could not merge" t_continue_names_a_file_the_key_could_not_merge
   run_test "the memory review record is stored encrypted" t_the_memory_review_record_is_stored_encrypted
   run_test "a background run on an encrypted data repo" t_a_background_run_on_an_encrypted_data_repo
 else

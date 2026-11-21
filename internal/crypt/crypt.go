@@ -218,7 +218,7 @@ func Run(e lib.Env, args []string, stdout, stderr io.Writer) int {
 // refuses to install or record it.
 const notMerged = "<<<<<<< jeeves: not merged\n" +
 	"The data repo's key could not be read, so this file could not be decrypted to merge it.\n" +
-	"Abort the merge (git merge --abort), run /jeeves:encryption, then merge again.\n" +
+	"Abort the merge (jeeves-merge --abort), run /jeeves:encryption, then merge again.\n" +
 	"=======\n>>>>>>> jeeves\n"
 
 // merge decrypts the three sides to private temporary files, merges them with git merge-file, and writes

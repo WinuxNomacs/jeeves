@@ -3,7 +3,7 @@ name: setup
 description: >-
   Set up Jeeves on this machine, step by step: check git and GitHub access, find the user's data repo on
   GitHub or create a private one (offering to encrypt it with a passphrase), unlock an encrypted one, offer
-  to restore another machine's settings, then run the first sync and backup. Use after installing the plugin.
+  to restore another machine's memories, then run the first sync and backup. Use after installing the plugin.
 argument-hint: "[git URL of an existing data repo]"
 disable-model-invocation: true
 allowed-tools:
@@ -126,7 +126,7 @@ The folder on this machine is the `datarepo` path.
   `/jeeves:encryption` unlocks this device and `/jeeves:setup` run again then finishes (it finds the data
   repo already cloned and goes on from step 4); stop.
 
-## Step 4 of 5: Settings from another machine
+## Step 4 of 5: Memories from another machine
 
 **Always ask; never skip this step.** If `jeeves-status --data-repo "<datarepo path>"` has not
 run since step 3, run it now: it records the data repo for this device, so later commands find it bare (run

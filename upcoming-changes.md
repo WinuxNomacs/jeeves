@@ -4,9 +4,8 @@
 
 - **No release before 2.0** (the user's decision, 2026-11-21): 2.0 is the completed Go rewrite. Work merges
   into `main` as each phase is done; nothing is cut or tagged until then, except the 1.4.2 security fix.
-- **Up next:** 1. 2.0 review fixes (below, "2.0 review (2026-11-21)"): R1 to R8, each on its own `fix/`
-  branch with tests that fail before the fix · 2. Release 2.0: the release steps
-  (`.claude/skills/release/SKILL.md`) from step 4; the tag is the user's
+- **Up next:** 1. Release 2.0: the release steps (`.claude/skills/release/SKILL.md`) from step 4 (the
+  review, step 3, is done: below, "2.0 review (2026-11-21)"); the tag is the user's
 - **The user's, any time:** submit 1.4.2 in the Anthropic portal (below, "Anthropic directory submission")
 - **Later:** 0. Review text gaps (below, under "Review text gaps") · 0. Injection docs: threat model in the README, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
@@ -70,6 +69,18 @@ reach it). Grouped into fix branches, most severe first:
   (past commits keep the old text; no history rewrite).
 
 Left as planned: new files in a symlinked shared folder (Later 2, "Follow symlinked folders").
+
+**Done** (2026-11-21): R1 to R8, each on its own `fix/` branch (stacked, since each rebuilds `dist/`),
+merged into `main`; every fix has a test seen failing on the code before it (`tests/run.sh`, and Go tests
+in `internal/lib`, `internal/auto`, `internal/gitcmd`). Left as they are, with why:
+- A data repo's own `CLAUDE.md` and `.claude/CLAUDE.md` are not risk-checked: no device installs them.
+- SIGTERM to a background run releases the data repo lock while a git command of its may still run: git's
+  own `index.lock` stops a colliding snapshot, which tries again next time.
+- On Windows a background run's child and the worker's children are stopped forcibly only (no Ctrl+C event
+  first): the child's run folder is discarded either way, and a console event cannot reach a process with
+  no console.
+- A hook's request gives up after 20 s and its output is lost (notices then come at the next session
+  start; the daily update notice the next day).
 
 ## Bug: /jeeves hand-off to review (found 2026-11-19)
 
@@ -1074,23 +1085,23 @@ Suite 105 passed (2026-11-19).
   (2026-11-16, commit `82dd02f`).
 - Sync scripts, tests and docs: `bin/snapshot`, `bin/apply`, `bin/lib.sh`; tests in `tests/run.sh`
   (15 tests, scratch `~/.claude` + clone + bare remote); README, repo CLAUDE.md (2026-11-16).
-- 1. Split into plugin repo `jeeves` (this repo, fresh history) + data repo `jeeves-cmd` (2026-11-16).
+- 1. Split into plugin repo `jeeves` (this repo, fresh history) + the data repo (2026-11-16).
   Scripts `bin/jeeves-snapshot`, `bin/jeeves-apply`, `bin/jeeves-hook-edit`, shared `lib/lib.sh`; hooks in
-  `hooks/hooks.json`; manifests in `.claude-plugin/`; 22 tests in `tests/run.sh`. Installed on RAIVEN from
-  the local clone. Checked live: a new session's SessionStart hook committed `snapshot(RAIVEN): settings.json`
-  in `jeeves-cmd`; a session's Edit of a (scratch) global CLAUDE.md was committed by the PostToolUse hook and
+  `hooks/hooks.json`; manifests in `.claude-plugin/`; 22 tests in `tests/run.sh`. Installed on the Linux machine from
+  the local clone. Checked live: a new session's SessionStart hook committed `snapshot(the Linux machine): settings.json`
+  in the data repo; a session's Edit of a (scratch) global CLAUDE.md was committed by the PostToolUse hook and
   shown as a notice; the real one checked live too (2026-11-16, see "Live check of the edit hook" under 1. Split).
   Details below under "1. Split".
 - 2. `update` skill (2026-11-16): `skills/update/SKILL.md` (`/jeeves:update`, sync and change modes),
   `bin/jeeves-status`, `bin/jeeves-scan`; snapshot messages point to it; 28 tests in `tests/run.sh`. Checked
-  live on RAIVEN: a real sync (nothing to merge, pushed jeeves-cmd `bfa6379..445a809`) and a real change (the
+  live on the Linux machine: a real sync (nothing to merge, pushed the data repo (a commit)) and a real change (the
   global "never push" rule's exception for `/jeeves:update`, pushed `445a809..09be4a3`). Details below under
   "2. `update` skill".
 - 3. Generic (2026-11-16): shared files (`CLAUDE.md`, `agents/`, `commands/`, `skills/`) synced through
   `home/`; `settings.json`, `keybindings.json` and memories backed up per device to `hosts/<host>/`;
   `jeeves-restore`, `jeeves-init`, skills `setup` and `restore`; Windows (Git Bash, `-win` host, `C:\` paths
   in the edit hook, `.gitattributes`, no autocrlf). 35 tests in `tests/run.sh`, passing on Linux and under
-  Windows Git Bash. Checked live: jeeves-cmd moved to the new layout on RAIVEN (`2e54988`); RAIVEN-win set up
+  Windows Git Bash. Checked live: the data repo moved to the new layout on the Linux machine ((a commit)); the Windows machine set up
   through `/jeeves:setup` (first sync, backup `3466803`); edit hook on Windows (`d44f91b`, `a5f3c08`).
   Details below under "3. Generic".
 - 4. Publish (2026-11-16): the repo is public; MIT `LICENSE`; manifests pass `claude plugin validate
@@ -1102,8 +1113,8 @@ Suite 105 passed (2026-11-19).
   `skills/cleanup/SKILL.md` (`/jeeves:cleanup`), `jeeves.conf` in the data repo, the automatic cleanup run by
   the session-start snapshot, and the snapshot's switch to a cleaned-up history; 43 tests in `tests/run.sh`
   (8 new, each failure injected), passing on Linux and under Windows Git Bash. Rules: the global CLAUDE.md
-  allows a force-push only where a repo's CLAUDE.md names the task; `jeeves-cmd`'s CLAUDE.md names the
-  cleanup. A dry run on `jeeves-cmd` found nothing to remove yet (its first commit was under a day old).
+  allows a force-push only where a repo's CLAUDE.md names the task; the data repo's CLAUDE.md names the
+  cleanup. A dry run on the data repo found nothing to remove yet (its first commit was under a day old).
   Release 0.3.0. Details below under "5. History cleanup".
 - 6. Session review in `/jeeves:update` (2026-11-17, the user's request): `skills/update/SKILL.md`,
   "Session review"; checks in `tests/run.sh` (the manifests test). Release 0.4.0. Details below under
@@ -1119,7 +1130,7 @@ Suite 105 passed (2026-11-19).
   `jeeves-check`'s age and key store lines; skills `encrypt`, `unlock`, `lock`; setup offers encryption for a
   new repo and unlocks an encrypted clone. 63 tests in `tests/run.sh` (13 for encryption with real age and a
   stand-in key store and dialog, failures injected; skipped without age 1.3+), passing on Linux and under
-  Windows Git Bash with the Windows `age.exe`. Checked live on RAIVEN (Windows 11, from WSL): the Windows
+  Windows Git Bash with the Windows `age.exe`. Checked live on the Linux machine (Windows 11, from WSL): the Windows
   Credential Manager round trip and the Windows password prompt (found and fixed: PowerShell's exit status
   lost in a pipe, a progress record on stderr, Cancel returned as an empty answer). Not run live yet: a real
   `/jeeves:encrypt` (the user's call), `secret-tool` and zenity.
@@ -1134,7 +1145,7 @@ Suite 105 passed (2026-11-19).
   cleanup dry run, encryption with the Keychain and the macOS dialog (Cancel too), and the `/jeeves:setup`
   walk-through (fresh-machine paths, scratch). Found and fixed over the phase: the marketplace's plugin
   source `"."` refused by older Claude Code (0.2.1), older Claude Code refusing `userConfig` (README),
-  setup's restore question never asked (0.2.2), and `jeeves-cmd` lacking the `jeeves-data` topic (added).
+  setup's restore question never asked (0.2.2), and the data repo lacking the `jeeves-data` topic (added).
   No code change in the Mac session. Details below under "5. macOS device".
 - Release 1.0.0 (2026-11-17): version and `CHANGELOG.md` only (no code change since 0.7.0, so no upgrade
   rehearsal); full suite and the test workflow run by hand on the release branch (Linux, Windows, macOS).
@@ -1145,7 +1156,7 @@ Suite 105 passed (2026-11-19).
   untagged release merges. Details below under "Release procedure (done)".
 - 7. Encryption tests everywhere (2026-11-17): the workflow installs age 1.3.2 pinned by SHA-256 and fails
   if the encryption tests skip (run by hand on `ci/age`: 63 passed on Linux, Windows and macOS); age 1.3.2
-  in `~/.local/bin` on RAIVEN (63 passed). Details below under "Encryption tests everywhere (done)".
+  in `~/.local/bin` on the Linux machine (63 passed). Details below under "Encryption tests everywhere (done)".
 - 8. Pre-release review and release 1.0.1 (2026-11-17): the whole plugin reviewed by an independent agent
   and in my own pass; all but three findings fixed on `fix/` branches, each with a test seen failing
   first where one could be written (78 tests).
@@ -1425,9 +1436,9 @@ Suite 105 passed (2026-11-19).
   against the 3,731 plugins in the marketplace directory (none named jeeves) and GitHub (a few small,
   unrelated repos).
 - GitHub: the original repo `WinuxNomacs/claude` was renamed `WinuxNomacs/jeeves` (the 2016 private repo that
-  held the name became `WinuxNomacs/jeeves-discord`), then `WinuxNomacs/jeeves-cmd` (the data repo) at the
+  held the name was renamed too), then renamed again to become the data repo at the
   split; `WinuxNomacs/jeeves` is now this plugin repo, with fresh history. This file moved here from
-  `jeeves-cmd` at the split; its earlier history is in that repo.
+  the data repo at the split; its earlier history is in that repo.
 
 ## Existing plugins checked (2026-11-16)
 
@@ -1457,11 +1468,11 @@ None covers snapshot-before-change plus a Claude-reviewed merge of diverging CLA
 
 - **Split now**, not in phase 3. This repo's history holds preferences and memory backups, so it cannot become
   the plugin repo without rewriting pushed history. So: this repo is renamed on GitHub to
-  **`WinuxNomacs/jeeves-cmd`** ("Jeeves Command Center": the data); a **new private `WinuxNomacs/jeeves`**
+  the data repo; a **new private `WinuxNomacs/jeeves`**
   with fresh history holds the plugin code (made public in the Publish phase).
 - **Hooks:** SessionStart snapshot, plus a PostToolUse snapshot after edits to `~/.claude/CLAUDE.md`.
 
-## 1. Split: plugin repo `jeeves`, data repo `jeeves-cmd` (done)
+## 1. Split: plugin repo `jeeves`, the data repo (done)
 
 Facts checked in the Claude Code plugin docs (2026-11-16: manifest-reference, components, hooks, loading,
 marketplace-reference, install):
@@ -1484,11 +1495,11 @@ Design:
 - **Hooks:** SessionStart → `snapshot --hook`. PostToolUse on `Write|Edit` → a small script that reads the path
   from stdin and runs `snapshot --hook --no-pull` only when it is `~/.claude/CLAUDE.md`, reporting through
   `systemMessage`.
-- **Data repo** (this one, renamed `jeeves-cmd`): keeps `home/`, `memory/`, `.sync-state/`; loses `bin/` and
+- **Data repo** (this one, renamed the data repo): keeps `home/`, `memory/`, `.sync-state/`; loses `bin/` and
   `tests/` once the plugin works; its README and CLAUDE.md point at the plugin.
-- **Steps:** set this repo's remote to `jeeves-cmd`, rename on GitHub; create private `WinuxNomacs/jeeves`;
+- **Steps:** set this repo's remote to the data repo, rename on GitHub; create private `WinuxNomacs/jeeves`;
   build the plugin there (tests first, with `JEEVES_DATA`); install it from the local folder; remove the
-  scripts here. After the session the user renames this folder to `~/gitrepos/config/jeeves-cmd`; the plugin
+  scripts here. After the session the user renames this folder to `~/gitrepos/config/the data repo`; the plugin
   lives in `~/gitrepos/config/jeeves`.
 - **Built (2026-11-16, with the user):** scripts renamed `jeeves-snapshot` / `jeeves-apply` because the
   plugin's `bin/` is on every Bash tool PATH; `lib.sh` moved to `lib/` to stay off it. The data repo is also
@@ -1502,7 +1513,7 @@ Design:
   (`extraKnownMarketplaces.jeeves.source.path`, `pluginConfigs."jeeves@jeeves".options.data_repo`), which
   the data repo shares with every device: to settle in phase 2.
 - **Live check of the edit hook (2026-11-16, interactive session):** an Edit adding a marker line to the
-  real `~/.claude/CLAUDE.md` was committed at once (`b4b60b6` in jeeves-cmd); the revert too (`bfa6379`),
+  real `~/.claude/CLAUDE.md` was committed at once ((a commit) in the data repo); the revert too ((a commit)),
   leaving `home/` identical to before. Pushed.
 - **Gap found:** a session started before the plugin was installed loads no hooks. One such session (in
   another project) edited `~/.claude/CLAUDE.md` with nothing recorded; the next manual `jeeves-snapshot`
@@ -1538,7 +1549,7 @@ Design:
 - **Change mode:** branch in the data repo → edit `home/…` → commit → merge `--no-ff` → `jeeves-apply` →
   `jeeves-snapshot` (silent) → `jeeves-scan` → push. Avoids the sensitive-file prompt of a direct edit.
 - After building: use change mode to add to the global "never push" rule that `/jeeves:update` pushes the
-  Jeeves data repo. Docs: README, plugin `CLAUDE.md`, jeeves-cmd `CLAUDE.md` ("Changing a preference").
+  Jeeves data repo. Docs: README, plugin `CLAUDE.md`, the data repo `CLAUDE.md` ("Changing a preference").
 - **Verify:** tests (status lists disk/repo/conflict paths with their hashes; status reports a diverged
   main; scan flags a planted token and passes a clean diff); `claude plugin validate`; live in a scratch data
   repo and `CLAUDE_HOME` (change mode, then a forced conflict that must stop and ask); one real sync.
@@ -1552,7 +1563,7 @@ Built and checked (2026-11-16):
   three-way; then apply, a silent snapshot, scan, push; a planted GitHub token blocked the push and was not
   printed. **Not checked live:** the skill stopping to ask on overlapping changes (only its text says so);
   a headless `claude -p` run was not used because it would read the real `data_repo` option.
-- Live on RAIVEN, both through `/jeeves:update` after `/reload-plugins`: sync mode, then change mode (above).
+- Live on the Linux machine, both through `/jeeves:update` after `/reload-plugins`: sync mode, then change mode (above).
 - Found on the way: `jeeves-apply` reported "previous disk copies saved" on a plain run in the same second as
   a `--force` run; fixed on its own branch with a test (`088b676`).
 
@@ -1565,10 +1576,10 @@ Facts checked (2026-11-16):
   reaches hooks and skill text but not Bash-tool commands, and is deleted when the plugin is uninstalled.
   On native Windows, hooks and the Bash tool run in Git Bash; a hook's `tool_input.file_path` arrives as
   `C:\...` with backslashes; `~/.claude` is `C:\Users\<u>\.claude`.
-- This PC (RAIVEN) has a native Windows Claude Code too: `C:\Users\winux\.claude`, with a global
+- This PC (the Linux machine) has a native Windows Claude Code too: `C:\Users\<user>\.claude`, with a global
   `CLAUDE.md` from 2026-11-04 that is a subset of the shared one (it lacks the 4 rules added since), a
   2-key `settings.json`, only `skills/synced/`. Git for Windows 2.55.0 (bash 5.3) is installed; its system
-  gitconfig sets `core.autocrlf=true`, and its `hostname` also says `RAIVEN`.
+  gitconfig sets `core.autocrlf=true`, and its `hostname` also says `the Linux machine`.
 - `tests/run.sh` under Windows Git Bash (run from WSL on a scratch copy in `C:`): 25 of 28 pass. Failing: the
   three JSON checks (no Python on Windows) and the edit hook's notice, which picks up git's "LF will be
   replaced by CRLF" warnings.
@@ -1590,8 +1601,8 @@ Decisions (2026-11-16, with the user):
 Design:
 - **Data repo layout:** `home/` holds only the shared files. `hosts/<host>/` mirrors `~/.claude` for the
   per-host files, so a restore is a plain copy: `hosts/<host>/settings.json`, `keybindings.json`,
-  `projects/<key>/memory/*.md` (replaces `memory/<host>/<key>/`). Migration in jeeves-cmd: `git mv
-  home/settings.json hosts/RAIVEN/settings.json`, `git mv memory/RAIVEN hosts/RAIVEN/projects/...`.
+  `projects/<key>/memory/*.md` (replaces `memory/<host>/<key>/`). Migration in the data repo: `git mv
+  home/settings.json hosts/the Linux machine/settings.json`, `git mv memory/the Linux machine hosts/the Linux machine/projects/...`.
 - **`lib/lib.sh`:** `SHARED_FILES`/`SHARED_DIRS` (synced) and `HOST_FILES` + memories (backed up); host
   suffix on Windows. `jeeves-snapshot` syncs the shared set as now and copies the host set one way into
   `hosts/<host>/` (deleting there what was deleted on disk). `jeeves-apply` and `jeeves-status` cover only
@@ -1609,7 +1620,7 @@ Design:
 - **Windows:** `.gitattributes` (`* text=auto eol=lf`) in both repos; the edit hook converts the path with
   `cygpath -u` when present; the tests' JSON checks fall back when Python is missing; skills run their
   scripts as `bash script.sh` (Windows keeps no executable bit), stated in the update skill.
-- **Docs:** README (shared vs per host, setup, restore, Windows), plugin `CLAUDE.md` layout, jeeves-cmd
+- **Docs:** README (shared vs per host, setup, restore, Windows), plugin `CLAUDE.md` layout, the data repo
   README and `CLAUDE.md`.
 
 Verify:
@@ -1617,9 +1628,9 @@ Verify:
   on disk is removed from the host backup; a Windows-invalid or case-colliding name is refused; the host
   name gets `-win` under a fake MINGW `uname`; the edit hook matches a `C:\...` path; restore saves the files
   it replaces. Full suite on Linux and under Windows Git Bash.
-- Live: the jeeves-cmd migration on RAIVEN (WSL) through a real snapshot; then the Windows side: the user
-  installs the plugin there, clones jeeves-cmd to `C:\Users\winux\gitrepos\config\jeeves-cmd`, runs
-  `/jeeves:setup` (first sync, backup to `hosts/RAIVEN-win/`); the edit hook on Windows.
+- Live: the data repo migration on the Linux machine (WSL) through a real snapshot; then the Windows side: the user
+  installs the plugin there, clones the data repo to `C:\Users\<user>\gitrepos\config\the data repo`, runs
+  `/jeeves:setup` (first sync, backup to `hosts/the Windows machine/`); the edit hook on Windows.
 
 Built (2026-11-16, branch `feat/generic`):
 - Scripts: `lib/lib.sh` (shared vs `HOST_FILES` lists, `-win` suffix, `bad_name`, `case_collisions`, hashes
@@ -1631,15 +1642,15 @@ Built (2026-11-16, branch `feat/generic`):
 - Found while building: Git for Windows' `core.autocrlf=true` made `git add` print CRLF warnings into the edit
   hook's message even with the new layout (the test repo has no `.gitattributes`, and a user's data repo may
   not either), hence `core.autocrlf=false` on the data repo's git calls. A Windows clone of the plugin keeps LF
-  scripts thanks to `.gitattributes` (checked: `C:\Users\winux\gitrepos\config\jeeves`, cloned with
+  scripts thanks to `.gitattributes` (checked: `C:\Users\<user>\gitrepos\config\jeeves`, cloned with
   Windows git over SSH).
-- Live on RAIVEN (WSL): the real snapshot moved jeeves-cmd to the new layout in one commit (`2e54988`,
-  settings and memories renamed unchanged into `hosts/RAIVEN/`); a second snapshot was silent; scan clean;
+- Live on the Linux machine (WSL): the real snapshot moved the data repo to the new layout in one commit ((a commit),
+  settings and memories renamed unchanged into `hosts/the Linux machine/`); a second snapshot was silent; scan clean;
   pushed `09be4a3..2e54988`.
-- Live on RAIVEN-win (Windows VS Code extension 2.1.325): the extension has no `/plugin`, so the plugin was
+- Live on the Windows machine (Windows VS Code extension 2.1.325): the extension has no `/plugin`, so the plugin was
   installed with the `claude.exe` it ships (`resources\native-binary\`, now in the README). `/jeeves:setup`
   found the clone, merged the older Windows `CLAUDE.md` (a subset) into the shared version, saved the old
-  copy, pushed the backup `hosts/RAIVEN-win/` (`3466803`). An Edit adding and removing a line in the Windows
+  copy, pushed the backup `hosts/the Windows machine/` (`3466803`). An Edit adding and removing a line in the Windows
   `~/.claude/CLAUDE.md` was committed by the edit hook each time (`d44f91b`, `a5f3c08`; net change none; not
   pushed yet, the next sync there pushes them). That session edited the global CLAUDE.md without asking
   (its permission mode), unlike Linux.
@@ -1671,8 +1682,9 @@ marketplace-reference, manifest-reference, publish, anthropic-marketplaces; clau
 
 Decisions (2026-11-16, with the user):
 - **Licence MIT.**
-- **The planning file and history stay public as they are** (host name RAIVEN, user name winux, paths, the
-  private data repo's name and hashes; no secrets, commits use the GitHub noreply address).
+- **The history stays public as it is** (no secrets; commits use the GitHub noreply address). Revised
+  2026-11-21 (the user's decision): this file holds no host names, personal paths or details of the
+  private data repo from then on; past commits keep the old text.
 - **Test workflow on a version tag and by hand** (`workflow_dispatch`), on Linux, Windows (Git Bash) and macOS
   (bash 3.2): no push or pull-request trigger.
 - **Anthropic directory: later, after the macOS phase, and only on the user's direct command** (the user,
@@ -1698,7 +1710,7 @@ Design:
 - **Going public is the user's step** (GitHub settings, or `gh repo edit WinuxNomacs/jeeves --visibility
   public --accept-visibility-change-consequences`); before it, a last check of tracked files and history
   for secrets (`jeeves-scan` covers the data repo only; a grep over `git log -p` here).
-- This machine (RAIVEN) and RAIVEN-win keep their `directory` marketplaces (local clones), so plugin edits
+- This machine (the Linux machine) and the Windows machine keep their `directory` marketplaces (local clones), so plugin edits
   load in place; only other users install from GitHub.
 
 Built (2026-11-16, branch `feat/publish`): `LICENSE`, `plugin.json` (`homepage`, `license`, descriptions
@@ -1726,8 +1738,7 @@ history older than a number of days the user gives, minimum 1; with 1, take a fr
 every commit older than 24 hours. (2) The same cleanup automatically, every so many days, the minimum being
 the cleanup's own number of days.
 
-**Measured** (2026-11-17): `jeeves-cmd` has 45 commits after one day, `.git` is 2.5 MB (mostly loose
-objects; the packed part is 4 KiB). Growth is slow (small text files), so this is housekeeping, not urgent.
+**Measured** (2026-11-17): a data repo has dozens of commits after one day, its `.git` a few MB (mostly loose objects). Growth is slow (small text files), so this is housekeeping, not urgent.
 
 **Builds on:** `jeeves-snapshot` (the fresh backup, fetch and fast-forward), `jeeves-scan`, the update skill's
 push, `.sync-state/` (per-device sync record: blob hashes, which a rewrite does not change).
@@ -1890,7 +1901,7 @@ values go to `settings.json` under `pluginConfigs`. `gh` is the GitHub CLI (vers
   GitHub's "Hi <login>! You've successfully authenticated" comes with exit status 1, so the text is matched.
 - **Arguments are checked before `gh` runs** (a test caught `gh config get` running before a bad name was
   refused).
-- **Existing data repos need the topic** to be found: `WinuxNomacs/jeeves-cmd` had none; added on
+- **Existing data repos need the topic** to be found: the data repo had none; added on
   2026-11-17 in the macOS phase (`gh repo edit --add-topic jeeves-data`), and `jeeves-github find` lists it.
 
 ### What can fail
@@ -1956,7 +1967,7 @@ openssl build would need its own HMAC. No GitHub-native client-side encryption w
   How they keep it is up to them.
 - **Key once per script run (measured 2026-11-17):** a read from the Windows store costs about 1-1.5 s
   (PowerShell start from WSL 620-750 ms; `Add-Type` CredRead 1.5 s; DPAPI 0.9 s), and git starts the filter
-  once per file (133 files in jeeves-cmd today). So each Jeeves script reads the key once and passes it to
+  once per file (133 files in the data repo today). So each Jeeves script reads the key once and passes it to
   the git it runs in an environment variable of that process only; the filter, `textconv` and merge driver
   read the store only when it is missing (git run by hand).
 - **Git integration:** a clean/smudge filter (`filter.jeeves.required=true`, so a missing key fails rather
@@ -1984,7 +1995,7 @@ openssl build would need its own HMAC. No GitHub-native client-side encryption w
   Measured live: 1.4-1.6 s per call.
 - **Speed:** git compares only size and whole-second mtime in an encrypted data repo (`core.checkStat=minimal`,
   `core.trustctime=false`), since the snapshot rewrites `hosts/` with the same times every run. On a copy of
-  jeeves-cmd (133 files): a snapshot 0.5 s encrypted vs 0.8-0.9 s plain; `encrypt on` 11 s, mostly the filter
+  the data repo (133 files): a snapshot 0.5 s encrypted vs 0.8-0.9 s plain; `encrypt on` 11 s, mostly the filter
   started once per file (48 ms each, age itself 15 ms). On Windows that one-time cost (also an unlock of a
   new device, which decrypts every file) is several times higher; not measured. If it matters, git's
   long-running filter protocol (`filter.<driver>.process`) is the fix.
@@ -2001,7 +2012,7 @@ openssl build would need its own HMAC. No GitHub-native client-side encryption w
 - **Turning it on:** `jeeves-encrypt on` commits; `/jeeves:encrypt` then runs `jeeves-cleanup --all`. During
   setup, a new repo is encrypted before its first push, so there is no history to fold.
 - **Cache:** `.git/jeeves/clean/` (plain hash -> ciphertext) grows by one small file per version; not pruned
-  yet (about 5 KB per version on jeeves-cmd).
+  yet (about 5 KB per version on the data repo).
 
 ### What can fail
 
@@ -2025,28 +2036,28 @@ credential store each time may be slow (measure; cache the key per process if ne
 
 The scripts' half is covered: the test workflow runs the suite on macOS with its own bash 3.2 (green since
 run 43981931017, and on tag `v0.2.2`). Done by hand on the Mac (2026-11-17): installed 0.2.1 then 0.2.2 from
-GitHub, data repo cloned, first sync (its CLAUDE.md rules merged into the shared one), restore of RAIVEN's
+GitHub, data repo cloned, first sync (its CLAUDE.md rules merged into the shared one), restore of the Linux machine's
 backup run.
 
 **The work moves to a Claude Code session on the Mac** (the user's decision, 2026-11-17). Only one session
-works on this repo at a time: the one on RAIVEN is closed first. Session transcripts and memory don't move
-between machines (memories are keyed by the project's path, `/home/winux/...` vs `/Users/winux/...`), so the
+works on this repo at a time: the one on the Linux machine is closed first. Session transcripts and memory don't move
+between machines (memories are keyed by the project's path, `/home/<user>/...` vs `/Users/<user>/...`), so the
 handoff is this file and `.claude/CLAUDE.md`; everything the Mac session needs is written here before it
 starts.
 
 Handoff steps:
-1. On RAIVEN: everything committed, merged and pushed; this section current; close the session.
+1. On the Linux machine: everything committed, merged and pushed; this section current; close the session.
 2. On the Mac, in a terminal (the user uninstalled the Mac's 0.2.2 on 2026-11-17, so no old Jeeves runs
    there; if a `marketplace remove` below says it is not found, that is fine): `git clone https://github.com/WinuxNomacs/jeeves.git
    ~/gitrepos/config/jeeves`; switch the plugin from the GitHub marketplace to that clone so edits load with `/reload-plugins`
    (`claude plugin marketplace remove jeeves`, `claude plugin marketplace add ~/gitrepos/config/jeeves`,
-   `claude plugin install jeeves@jeeves --config data_repo="$HOME/gitrepos/config/jeeves-cmd"`).
+   `claude plugin install jeeves@jeeves --config data_repo="$HOME/gitrepos/config/the data repo"`).
 3. Open Claude Code in `~/gitrepos/config/jeeves` and say "continue the macOS phase in upcoming-changes.md".
 
 The Mac session then:
 - runs `tests/run.sh` on the Mac's own bash and git;
 - checks the edit hook: a direct edit to `~/.claude/CLAUDE.md` (not through `/jeeves:update`) must commit
-  `snapshot(Winuxs-MacBook-Pro): CLAUDE.md` and show the notice;
+  `snapshot(Winuxs-the Mac): CLAUDE.md` and show the notice;
 - checks the restored `settings.json`: `data_repo` and the marketplace path point at Mac folders;
 - runs the history cleanup on the Mac (built in 0.3.0): `tests/run.sh cleanup`, then
   `jeeves-cleanup --dry-run 1` on the real data repo; a real cleanup only if the user asks;
@@ -2054,8 +2065,8 @@ The Mac session then:
   age on the PATH), then the Keychain and the macOS dialog live on a scratch data repo
   (`JEEVES_DATA=<scratch> jeeves-encrypt on`, then `lock` and `unlock`); a Keychain entry is
   `security find-generic-password -s jeeves`; delete the scratch entry afterwards;
-- then, if the user wants it, encrypts the real data repo (`/jeeves:encrypt`, from the Mac or RAIVEN) and
-  unlocks the other device. RAIVEN (WSL) needs age 1.3+ first: apt has only 1.2.1, so the official release
+- then, if the user wants it, encrypts the real data repo (`/jeeves:encrypt`, from the Mac or the Linux machine) and
+  unlocks the other device. the Linux machine (WSL) needs age 1.3+ first: apt has only 1.2.1, so the official release
   download into `~/.local/bin`. Every device that still syncs must run 0.6.0 or later before encrypting;
 - fixes what it finds on a branch, merges, pushes `main` (allowed by `.claude/CLAUDE.md`), and moves this
   phase to Done.
@@ -2065,8 +2076,8 @@ Checked in the Mac session (2026-11-17; macOS 26.6 arm64, `/bin/bash` 3.2.57, gi
 - `tests/run.sh`: 50 passed without age; after `brew install age` (1.3.2, the bottle includes
   `age-plugin-batchpass`) 63 passed, 0 failed.
 - Restored settings: the Mac's only backup (`4c9680b`) predates the earlier restore, and the uninstall
-  rewrote `settings.json`, so it was rehearsed on a scratch `~/.claude`: `jeeves-restore RAIVEN` wrote
-  RAIVEN's `/home/winux/...` marketplace path and `data_repo`; the restore skill's step 4 pointed both at
+  rewrote `settings.json`, so it was rehearsed on a scratch `~/.claude`: `jeeves-restore the Linux machine` wrote
+  the Linux machine's `/home/<user>/...` marketplace path and `data_repo`; the restore skill's step 4 pointed both at
   existing Mac folders, valid JSON, nothing else machine-specific.
 - History cleanup: `jeeves-cleanup --dry-run 1` first refused (the clone was 15 commits behind
   `origin/main`: correct); after a fast-forward, "would fold the 30 commits up to 2026-11-16 15:23 into
@@ -2075,16 +2086,16 @@ Checked in the Mac session (2026-11-17; macOS 26.6 arm64, `/bin/bash` 3.2.57, gi
   account the public key; the commit holds age ciphertext), `lock` (entry gone; status refuses with "run
   /jeeves:unlock"), `unlock` (dialog once, entry back), and Cancel in the dialog ("cancelled; nothing
   changed", exit 1, still locked). No scratch Keychain entry left.
-- The Mac's `~/.claude/CLAUDE.md` was behind the shared one (RAIVEN's later rules); `jeeves-apply`
+- The Mac's `~/.claude/CLAUDE.md` was behind the shared one (the Linux machine's later rules); `jeeves-apply`
   installed it.
 - Edit hook, after `/reload-plugins`: a direct Edit of the real `~/.claude/CLAUDE.md` (one word) was
-  committed within seconds as `726b2d2 snapshot(Winuxs-MacBook-Pro): backup settings.json CLAUDE.md` (the
+  committed within seconds as `726b2d2 snapshot(Winuxs-the Mac): backup settings.json CLAUDE.md` (the
   settings backup rode along: the install had changed it). Local only until `/jeeves:update` pushes it.
 - `/jeeves:setup` walk-through, fresh-machine paths, in this session on a scratch `~/.claude` and an empty
   scratch data repo folder (`JEEVES_HOST=NewMac`): `jeeves-check` all ok (gh signed in, keychain, age);
   `jeeves-github find` listed nothing (the missing topic, above; after adding it, the first call right
-  after the edit was still empty, the next one listed `jeeves-cmd`: GitHub's lag); HTTPS clone with gh's
-  sign-in; not encrypted, so no unlock; `jeeves-restore` offered RAIVEN-win, RAIVEN, Winuxs-MacBook-Pro and
+  after the edit was still empty, the next one listed the data repo: GitHub's lag); HTTPS clone with gh's
+  sign-in; not encrypted, so no unlock; `jeeves-restore` offered the Windows machine, the Linux machine, Winuxs-the Mac and
   saved the scratch `settings.json` first; the first snapshot committed the backup and reported
   `CLAUDE.md` as a conflict with base `none`; merged keeping both sides, `jeeves-apply --force`, the second
   snapshot printed nothing, status listed no paths, `jeeves-scan` clean. Not pushed (scratch).
@@ -2094,10 +2105,10 @@ Checked in the Mac session (2026-11-17; macOS 26.6 arm64, `/bin/bash` 3.2.57, gi
   stayed out of the cache after that reload. So `.claude/CLAUDE.md`'s "loads in place" holds; the cache
   folders (`0.2.1`, `0.2.2`, `0.7.0`) are leftovers.
 
-Facts the Mac session needs (from RAIVEN's memory, which does not travel): the data repo is
-`WinuxNomacs/jeeves-cmd` (private), hosts so far `RAIVEN` (Linux, WSL), `RAIVEN-win` (Windows, same PC),
-`Winuxs-MacBook-Pro`. RAIVEN-win is retired (2026-11-17): its plugin is uninstalled and its plugin clone deleted; it comes back only for Windows testing, installed fresh from the GitHub marketplace,
-and its last backup stays in `hosts/RAIVEN-win/`. WSL and native Windows on one PC share one Windows
+Facts the Mac session needs (from the Linux machine's memory, which does not travel): the data repo is
+the data repo (private), hosts so far `the Linux machine` (Linux, WSL), `the Windows machine` (Windows, same PC),
+`Winuxs-the Mac`. the Windows machine is retired (2026-11-17): its plugin is uninstalled and its plugin clone deleted; it comes back only for Windows testing, installed fresh from the GitHub marketplace,
+and its last backup stays in `hosts/the Windows machine/`. WSL and native Windows on one PC share one Windows
 Credential Manager entry for the key, so `/jeeves:lock` on one locks both. The user tags releases (or asks Claude to, for one tag at a time; this repo's tags are
 annotated: `git tag -a`); nothing goes to Anthropic's directory without the user's direct command.
 
@@ -2207,13 +2218,13 @@ Layout). The user tags when they say so; then Claude runs the tag command for th
 
 ### Encryption tests everywhere (done)
 
-The 13 encryption tests skip without age 1.3+: RAIVEN's apt has 1.2.1 and the workflow installs none, so
+The 13 encryption tests skip without age 1.3+: the Linux machine's apt has 1.2.1 and the workflow installs none, so
 for 1.0.0 they ran only by hand on the Mac.
 
 - CI: a step that downloads a pinned age release and checks its checksum on all three OSes. Minutes are free
   here: the repo is public, and GitHub's Actions billing page says standard runners in public repositories
   are free and "do not reduce the included compute usage" (fetched 2026-11-17).
-- RAIVEN: age 1.3+ from the release download into `~/.local/bin` (user-level; the command shown first).
+- the Linux machine: age 1.3+ from the release download into `~/.local/bin` (user-level; the command shown first).
 - Vet age's current state from its repo and releases first, and record the evidence here.
 
 **age checked 2026-11-17** (GitHub API on `FiloSottile/age`): BSD-3-Clause, not archived; latest release
@@ -2227,7 +2238,7 @@ is not an option (the plugin already depends on age for encryption).
 
 **As built:** the workflow's "Install age" step downloads v1.3.2 for the runner's OS, checks the SHA-256,
 and puts it on the PATH; the "Tests" step fails if the encryption tests were skipped. To upgrade age, change
-the version and the three hashes (from the release's asset digests). RAIVEN: age 1.3.2 (`age`,
+the version and the three hashes (from the release's asset digests). the Linux machine: age 1.3.2 (`age`,
 `age-keygen`, `age-plugin-batchpass`) in `~/.local/bin` from the same verified archive; 63 passed there.
 
 ### Pre-release review and release (done)
@@ -2257,7 +2268,7 @@ Fixed (branch, test):
 Left for later (in "Later"): key rotation; symlinked folders (files under them are not synced, nothing is
 reported); a cleanup killed with SIGKILL between moving `main` and the push (the next snapshot says
 "diverged" and a merge refuses unrelated histories). Dropped: macOS host names following DHCP (the Mac's
-name stayed `Winuxs-MacBook-Pro`).
+name stayed `Winuxs-the Mac`).
 
 Checks: 78 passed, 0 failed (no encryption skip); both validates; upgrade rehearsal (1.0.0's `bin/` wrote a
 plain then encrypted, cleaned-up data repo; the new `bin/` snapshotted, applied, scanned and pushed it, and
@@ -2268,7 +2279,7 @@ branch.
 
 - The procedure is a repo skill.
 - A review for bugs, interaction breakdowns and security is part of every release.
-- Encryption tests: in CI and on RAIVEN.
+- Encryption tests: in CI and on the Linux machine.
 - The `v1.0.0` tag waits for the review.
 - The procedure lists untagged releases and gives the commands; tagging stays the user's.
 - Releases before 1.0.1 stay untagged (2026-11-17, the user: "still very early on"); the procedure checks
@@ -2302,7 +2313,7 @@ git" holds only until the next history cleanup folds it away, so none of these c
 9. Encrypted repos: `core.checkstat minimal` plus `cp -p` hide a same-size change within the same second;
    a later pull overwrites it without a conflict.
 10. `jeeves-init` writes `* text=auto eol=lf`: CRLF files are committed as LF, against the byte-for-byte rule
-    (`jeeves-cmd` holds no CRLF file today).
+    (the data repo holds no CRLF file today).
 11. `take_lock`'s takeover of a stale lock is not atomic (two holders in 12 of 15 trials with 6 takers); the
     EXIT trap removes a lock it may not own; cleanup (by hand), encrypt, restore and the skills' git commands
     take no lock.

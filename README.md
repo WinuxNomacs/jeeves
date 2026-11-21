@@ -257,7 +257,7 @@ The plugin's `bin/` is on the PATH of Claude's Bash tool, so Claude (or you, by 
 | `jeeves-status` | (read-only) | Lists each path out of sync (`disk`, `repo` or `conflict`) with its disk, repo and last-synced hashes, and how `main` stands against `origin/main`. |
 | `jeeves-memories list` / `record <hash> <outcome>...` | data repo | The memory files the session review has not reviewed yet (this machine's and other devices' backups), and the shared record of those it has, committed on `main`. |
 | `jeeves-auto status` / `on` / `off` / `queue` | `~/.claude` → data repo → origin | Background updates: the setting, the last runs and what waits; `queue` lists the items and set-aside changes left for `/jeeves:update` (`queue clear <id>...` once taken). The hooks run `--hook-stop` and `--session-start`; `hold` and `release` are for `/jeeves:update`. |
-| `jeeves-git <git arguments>` | (read-only) | Runs a git command that only reads (`log`, `show`, `diff`, `status`, `cat-file`, `ls-files` and the like) in the data repo, so the skills never `cd` into it. Anything that would change the data repo is refused: those changes go through the four commands below. |
+| `jeeves-git <git arguments>` | (read-only) | Runs a git command that only reads (`log`, `show`, `diff`, `status`, `cat-file`, `ls-files` and the like) in the data repo, so the skills never `cd` into it. Anything that would change the data repo, write a file, run another program or read a file outside the data repo is refused: changes go through the four commands below. |
 | `jeeves-commit [--branch <pref\|conf\|review>/<name>] -m <message> -- <path>...` | data repo | Commits exactly the paths named, as they are on disk (a deletion included): only files under `home/`, `jeeves.conf` or the data repo's own `CLAUDE.md`, never a link; with `--branch`, on a new branch from `main`. `--fold -m <message>` folds the commits not yet pushed into one (to take a secret out of the history before a push). |
 | `jeeves-merge <branch> -m <summary>` / `origin -m <what>` / `--continue` / `--abort` | data repo | Merges a skill's branch into `main` and removes it, or merges `origin/main`: conflicts under `hosts/` are settled by rule (each device's folder is its own), and any under `home/` stop it, listing the files to settle; `--continue` checks no conflict markers are left and commits. |
 | `jeeves-revert [-m 1] <commit>` | data repo | Undoes a commit with a new one; one that conflicts is backed out, its files listed. |
@@ -281,10 +281,12 @@ How the data stays whole:
   `jeeves-apply`, which also checks a file again just before replacing it.
 - A file holding git conflict markers (an unfinished merge) is never installed or recorded unless you name
   it after `--force`, and `jeeves-scan` flags markers in what a push would send.
-- Jeeves never follows a link (symbolic link) in the data repo, and never commits one: while `home/` or
-  `hosts/` holds one, committed or made on disk, every command that reads the data repo's files stops and
-  names it, so a link pushed by someone else cannot make a sync install a file from elsewhere on your
-  machine (an SSH key, say) or write through a linked folder. Delete it in the data repo, then `jeeves-commit -m "<message>" -- <its path>`.
+- Jeeves never follows a link (symbolic link) in the data repo, and never commits one: while the data repo
+  holds one (committed anywhere, or made on disk under `home/` or `hosts/` or in place of its own files at
+  the top, such as `.sync-state`), or tracks files in `.sync-state/` (each device's own record), every
+  command that reads the data repo's files stops and names it, and a commit from origin holding one is not
+  taken; so a link pushed by someone else cannot make a sync install a file from elsewhere on your machine
+  (an SSH key, say) or write through a linked folder. Delete it in the data repo, then `jeeves-commit -m "<message>" -- <its path>`.
 - A shared folder that disappears from `~/.claude` (moved, deleted, or a link to a drive that is not
   there) is not recorded as deleting its files on every device: the snapshot says so, and `/jeeves:update`
   asks you whether to delete them everywhere or put them back.
@@ -293,8 +295,12 @@ How the data stays whole:
   `JEEVES_HOST` to give it a name of its own).
 - One Jeeves run at a time per data repo (a lock in `.git/jeeves/`), and one background update or
   `/jeeves:update` at a time per device (`~/.claude/jeeves/auto/run.lock`).
+- Jeeves runs its git commands in the data repo with no hooks (neither the repo's nor a global
+  `core.hooksPath`): a hook would run with the data repo's key in reach, and Jeeves's commits are no
+  project's to check.
 - The commands that change the data repo or `~/.claude` (`jeeves-snapshot`, `jeeves-apply`,
-  `jeeves-restore`, `jeeves-cleanup`, `jeeves-memories record`) run one at a time on each machine, through
+  `jeeves-restore`, `jeeves-cleanup`, `jeeves-memories record`, and `jeeves-commit`, `jeeves-merge`,
+  `jeeves-revert` and `jeeves-push`) run one at a time on each machine, through
   its worker: the command writes a request into `~/.claude/jeeves/queue/` and waits; the worker, a
   background copy of the same program started by the first command that finds none, runs each request in
   order as a process of its own and hands back its output and exit status, then exits after 10 idle
@@ -349,11 +355,10 @@ project or a `JEEVES_DATA=` prefix, so commands written that way would each ask 
 ## What Jeeves runs, sends and changes
 
 Everything Jeeves does runs from the commands in `bin/` and from the skills' instructions to Claude. The
-commands are bash scripts, except those already ported to Go (so far `jeeves-status`, `jeeves-git`,
-`jeeves-scan`, `jeeves-risk`, `jeeves-check`, `jeeves-memories`, `jeeves-update-check`, `jeeves-github`,
-`jeeves-init`, `jeeves-snapshot`, `jeeves-apply`, `jeeves-hook-edit`, `jeeves-restore` and
-`jeeves-cleanup`), whose `bin/` script runs the compiled program for your system from `dist/`: macOS and
-Linux on Intel/AMD or ARM, and Windows on Intel/AMD (elsewhere they stop and say so).
+commands are one compiled Go program, except `jeeves-verify` (a bash script that checks the plugin's files
+against its signed release); each `bin/` script runs the build for your system from `dist/`: macOS and
+Linux on Intel/AMD or ARM, and Windows on Intel/AMD. Elsewhere a command stops and says so, and the hooks
+do nothing (the session-start one says once why).
 The programs are built from `cmd/` and `internal/` in this repo with the Go standard library, [age](https://github.com/FiloSottile/age) (`filippo.io/age`, for
 encryption) and the Go team's `golang.org/x/sys` and `x/term` (Windows' file lock, a passphrase typed with no
 echo), pinned in `go.mod` and checked against `go.sum`, and the
@@ -402,6 +407,7 @@ config, again only on a yes.
     file deleted from the data repo for every device is deleted here too. New or changed skills, agents and
     commands from another device are held until you accept them.
   - Project memories: `/jeeves:update` may save new ones, as Claude Code saves memories.
+  - `.jeeves-machine-id`: this machine's ID, written once (see "How the data stays whole").
   - `jeeves/`: Jeeves's own state on this device (the data repo's path, the trusted release key, the last
     verified manifest, the daily check's time, development checkouts), the worker's queue (`queue/`: each
     request until it is answered, an answer nobody collected for up to a day, requests it could not run in
@@ -416,6 +422,9 @@ config, again only on a yes.
 - Project `CLAUDE.md` files: from `/jeeves:update` and `/jeeves:review`, committed in that project's git
   (never pushed unless its own CLAUDE.md allows it); each change is reported with its revert.
 - The data repo folder: commits on its `main`, and Jeeves's sync record in `.sync-state/`.
+- With background updates on: each run's private temporary folder, in `$XDG_RUNTIME_DIR` or your own
+  `TMPDIR` when one is private to you, otherwise under `~/.cache/jeeves/` (the folder stays; each run's
+  own folder in it is removed when the run ends).
 - With encryption on: the key in your system's credential store (Keychain, Windows Credential Manager,
   `secret-tool`) or, if you choose a key file, in `~/.config/jeeves/keys/`.
 
@@ -426,7 +435,7 @@ folder (deleted when the run ends) and never commits.
 ## Install
 
 Requirements: Claude Code (the CLI or an IDE extension; claude.ai and Cowork don't install plugins with a
-`bin/` folder), git and bash. On Windows: Git for Windows, since Claude Code runs hooks and its Bash tool in
+`bin/` folder), git and bash, on macOS or Linux (Intel/AMD or ARM) or Windows (Intel/AMD). On Windows: Git for Windows, since Claude Code runs hooks and its Bash tool in
 Git Bash. Claude Code must be recent enough for plugin options: an older one refuses the plugin with
 `Unrecognized keys: "displayName", "userConfig"`; run `claude update` first (2.1.304 is known to work).
 
@@ -524,7 +533,7 @@ line, in `~/.claude/jeeves/dev-checkouts` (such as `~/src/jeeves`), and the chec
 
 Install the plugin and run `/jeeves:setup`. Signed in to GitHub with the GitHub CLI, it finds your data
 repo by itself (otherwise give its URL: `/jeeves:setup <url>`), clones it, asks for the passphrase if it is
-encrypted, offers to restore another device's settings, and merges this machine's shared files with the repo's (keeping what both hold, asking before
+encrypted, offers to restore another device's memories, and merges this machine's shared files with the repo's (keeping what both hold, asking before
 dropping text).
 
 ## Uninstall
@@ -546,6 +555,8 @@ On each device you want it gone from:
 3. Optionally, remove what Jeeves kept on the device:
    - `~/.claude/jeeves/` (the data repo record, the trusted release key, background update state, the
      development-checkout list) and `~/.claude/.jeeves-machine-id`;
+   - `~/.cache/jeeves/`, if background updates made it (their temporary folders, when no private one was
+     at hand);
    - the deny rules setup offered to add to `permissions.deny` in `~/.claude/settings.json`,
      `Edit(~/.claude/plugins/**)` and `Edit(~/.claude/jeeves/**)` (the first protects every plugin, so
      you may want to keep it).
