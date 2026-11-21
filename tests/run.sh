@@ -1054,7 +1054,13 @@ t_old_layout_moved_to_host_folder() {
 t_names_other_systems_cannot_hold_refused() {
   snap >/dev/null; n=$(commits)
   mkdir -p "$W/claude/skills/s"
-  if ( echo x > "$W/claude/skills/s/a:b.md" ) 2>/dev/null && [ -f "$W/claude/skills/s/a:b.md" ]; then
+  # Git Bash writes ':' as U+F03A, a name every system holds (the Go build sees that name): taken there.
+  case "$OSTYPE" in
+    msys*|cygwin*) echo x > "$W/claude/skills/s/a:b.md"; out=$(snap)
+      check "Git Bash's stand-in for ':' is a name every system holds: taken" bash -c '! grep -q "not taken" <<< "$1"' _ "$out"
+      rm "$W/claude/skills/s/a:b.md"; snap >/dev/null; n=$(commits) ;;
+  esac
+  if [[ $OSTYPE != msys* && $OSTYPE != cygwin* ]] && ( echo x > "$W/claude/skills/s/a:b.md" ) 2>/dev/null && [ -f "$W/claude/skills/s/a:b.md" ]; then
     out=$(snap); rc=$?
     check "says not taken and why" grep -q "not taken.*skills/s/a:b.md (its name has a character Windows does not allow)" <<< "$out"
     check "exit status 1" [ $rc = 1 ]
