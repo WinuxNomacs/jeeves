@@ -485,6 +485,20 @@ t_status_reports_diverged_and_dirty() {
   check "dirty" grep -q "^branch	main	dirty$" <<< "$out"
 }
 
+t_a_name_with_a_line_break_never_points_outside_the_tracked_folders() {
+  snap >/dev/null
+  nl='
+'
+  # Planted through the data repo: a folder "a<line break>.." under home/skills/, and the file it would reach.
+  mkdir -p "$R/home/skills/a${nl}.."; echo planted > "$R/home/skills/a${nl}../outside.md"
+  echo planted > "$R/outside.md"
+  git -C "$R" add -A && git -C "$R" commit -qm "odd name"
+  out=$(status)
+  check "status lists no path outside the tracked folders" bash -c '! grep -q "\.\./" <<< "$1"' _ "$out"
+  apply_all >/dev/null 2>&1
+  check "apply writes nothing outside ~/.claude" [ ! -e "$W/outside.md" ]
+}
+
 t_scan_flags_secrets_without_printing_them() {
   snap >/dev/null
   tok="sk-ant-api03-$(printf 'x%.0s' 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24)"
@@ -1983,6 +1997,7 @@ run_test "the edit hook ignores edits to other files" t_edit_hook_ignores_other_
 run_test "the edit hook's systemMessage is valid JSON" t_edit_hook_escapes_json
 run_test "status lists out-of-sync paths with their disk, repo and base hashes" t_status_lists_out_of_sync_paths
 run_test "status reports a diverged main and a dirty data repo" t_status_reports_diverged_and_dirty
+run_test "a name with a line break never points outside the tracked folders" t_a_name_with_a_line_break_never_points_outside_the_tracked_folders
 run_test "scan flags secrets in outgoing commits without printing them" t_scan_flags_secrets_without_printing_them
 run_test "scan checks every outgoing commit, not only the last" t_scan_checks_every_outgoing_commit_not_only_the_last
 run_test "scan checks the commits of a branch merged into main" t_scan_checks_a_branch_merged_into_main

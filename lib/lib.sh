@@ -191,7 +191,7 @@ tracked_under() {
   for d in $TRACKED_DIRS; do
     [ -d "$root/$d" ] || continue
     (cd "$root" && find "$d" -type f) | while IFS= read -r f; do
-      excluded "$f" || printf '%s\n' "$f"
+      inside "$d" "$f" && ! excluded "$f" && printf '%s\n' "$f"
     done
   done
 }
@@ -199,8 +199,16 @@ tracked_under() {
 # Tracked files in one folder under the given root, following the folder itself when it is a symlink.
 files_in_dir() {
   (cd "$1/$2" 2>/dev/null && find . -type f) | sed "s#^\./#$2/#" | while IFS= read -r f; do
-    excluded "$f" || printf '%s\n' "$f"
+    inside "$2" "$f" && ! excluded "$f" && printf '%s\n' "$f"
   done
+}
+
+# inside <folder> <path>: the path is under <folder>/ with no . or .. part. find prints a name holding a line
+# break on two lines, and the second, read as a path of its own, could be "../x": outside ~/.claude or home/
+# (a folder named "a<line break>.." in the data repo would have had apply write ~/.claude/../x).
+inside() {
+  case "$2" in "$1"/*) ;; *) return 1 ;; esac
+  case "/$2/" in */../*|*/./*) return 1 ;; esac
 }
 
 # This machine's own ID (random, made once, kept in ~/.claude outside the synced files): two devices that
