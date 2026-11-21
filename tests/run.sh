@@ -520,6 +520,10 @@ t_status_go_build_matches_the_bash_version() {
   check "no messages from either" [ ! -s "$W/go.err" ] && [ ! -s "$W/bash.err" ]
   both_versions status extra
   check "an extra argument: the same refusal" cmp -s "$W/go.out" "$W/bash.out" && cmp -s "$W/go.err" "$W/bash.err"
+  echo "$R" > "$W/claude/jeeves/data-repo"; out=$(status --data-repo 2>&1); rc=$?
+  [ -e "$W/claude/jeeves/data-repo" ]; gone=$?; echo "$R" > "$W/claude/jeeves/data-repo"
+  bout=$(JEEVES_NO_GO=1 status --data-repo 2>&1); brc=$?
+  check "--data-repo with no value: the same output, exit status and record removed" [ "$out/$rc/$gone" = "$bout/$brc/$( [ -e "$W/claude/jeeves/data-repo" ]; echo $?)" ]
   (cd "$SCRATCH" && JEEVES_DATA=$W/claude both_versions "$SRC/bin/jeeves-status")
   check "not a git repository: the same message" cmp -s "$W/go.out" "$W/bash.out"
   (unset JEEVES_DATA; cd "$SCRATCH" && HOME=$W/nohome both_versions "$SRC/bin/jeeves-status")
@@ -581,8 +585,14 @@ t_the_launcher_finds_the_plugin_folder_however_it_is_called() {
     out=$(JEEVES_NO_GO=1 "$p" 2>&1)
     check "$p runs" grep -q "^datarepo	$R$" <<< "$out"
   done
+  out=$(cd "$W/plugin" && JEEVES_NO_GO=1 bin/jeeves-status 2>&1)
+  check "by a relative path" grep -q "^datarepo	$R$" <<< "$out"
   out=$(cd "$W/plugin/bin" && JEEVES_NO_GO=1 bash jeeves-status 2>&1)
   check "and by its bare name from bin/" grep -q "^datarepo	$R$" <<< "$out"
+  # A bare name found on the PATH, from a folder whose parent holds a planted lib/launch.sh: never sourced.
+  mkdir -p "$W/x/y" "$W/x/lib"; printf 'echo planted; exit 0\n' > "$W/x/lib/launch.sh"
+  out=$(cd "$W/x/y" && PATH="$W/plugin/bin:$PATH" JEEVES_NO_GO=1 bash jeeves-status 2>&1)
+  check "and by its bare name from the PATH, never a launcher relative to the current folder" grep -q "^datarepo	$R$" <<< "$out"
 }
 
 t_a_name_with_a_line_break_never_points_outside_the_tracked_folders() {

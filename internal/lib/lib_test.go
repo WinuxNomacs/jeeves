@@ -221,4 +221,8 @@ func TestParseDataRepoArg(t *testing.T) {
 	if !a.Given || a.JeevesData != "" {
 		t.Errorf("empty: %+v", a)
 	}
+	a, rest = ParseDataRepoArg([]string{"--data-repo"})
+	if !a.Given || a.JeevesData != "" || len(rest) != 0 {
+		t.Errorf("the option alone: %+v %v", a, rest)
+	}
 }

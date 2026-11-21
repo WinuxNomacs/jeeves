@@ -1,4 +1,5 @@
-# Sourced by each ported command's bin/ wrapper as `. <bin>/../lib/launch.sh <command> "$@"`: runs the Go
+# Sourced by each ported command's bin/ wrapper as `. <bin>/../lib/launch.sh <command> "$@"`, with
+# jeeves_bin set to the wrapper's folder (as the wrapper found it): runs the Go
 # build, dist/jeeves-<os>-<arch>[.exe] <command>, when dist/ holds one for this machine; otherwise, or when
 # it cannot start, the bash version, lib/<command>.sh, saying why once per reason (not when dist/ is missing
 # altogether: such a copy ships bash only). JEEVES_NO_GO=1 always runs the bash version.
@@ -10,8 +11,7 @@ jeeves_cmd=$1; shift
 # The plugin folder as `cd <bin>/.. && pwd` gives it (logical: . and .. removed by name, symlinks kept), so a
 # path the Go build records (git's filter settings) reads the same as the bash version's.
 jeeves_root() {
-  local p seg IFS=/ out=()
-  case "$0" in */*) p=${0%/*} ;; *) p=. ;; esac
+  local p=$jeeves_bin seg IFS=/ out=()
   case "$p" in /*) p=$p/.. ;; *) p=$PWD/$p/.. ;; esac
   set -f
   for seg in $p; do
@@ -48,8 +48,9 @@ if [ ! -f "$jeeves_exe" ]; then
 fi
 
 # A build that cannot start falls back: not executable (an install copy that lost the bit), checked first
-# with a builtin; then the run's own 126 (a wrong format) or 127 (not found), after bash's message. Run
-# directly, not captured: a subshell would cost as much as the program on Windows.
+# with a builtin; then the run's own 126 (a wrong format) or 127 (not found), after bash's message (which,
+# unlike the note, shows at each run: such a build is not one a release ships). Run directly, not captured:
+# a subshell would cost as much as the program on Windows.
 if [ ! -x "$jeeves_exe" ]; then
   jeeves_fallback "the Go build dist/${jeeves_exe##*/} is not executable"; jeeves_bash "$@"
 fi

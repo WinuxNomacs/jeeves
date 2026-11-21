@@ -152,6 +152,25 @@ As built (2026-11-21, branch `feat/go-dist`):
   plugin folder however it is called; a build that is not executable falls back with only the note. The
   rehearsal from 1.4.1 checks that the Go build runs on the old state, agrees with the bash version, and
   leaves git's filter settings as the bash version writes them (plain and encrypted): REHEARSAL OK.
+- Release review (an independent agent, 2026-11-21), each finding checked before fixing:
+  - Fixed on `main` (`fix/bash-path-handling`, older bash bugs): a name with a line break made `find` give a
+    second "path" such as `../x`, and apply wrote outside `~/.claude` (reproduced by the new test on the old
+    code); `base_of` and `set_base` read paths through `ENVIRON` (awk `-v` ate backslashes); `git
+    hash-object` runs outside any repository (a SHA-256 repo around the current folder changed the hashes).
+  - Fixed here: a bare `--data-repo` (given and empty, as bash reads it); `build-go.sh` pins `GOAMD64`,
+    `GOARM64`, `GOEXPERIMENT`, `GOENV` and `GOWORK` (an inherited `GOAMD64=v3` changed the amd64 builds);
+    a broken `~/jeeves-data/.git` link reads as none, as bash's `-e`; paths that reach the program
+    unconverted on Windows are converted; the wrapper never sources a launcher relative to the caller's
+    folder (a bare name found on the PATH did); README discloses `~/.claude/jeeves/go-fallback`.
+  - Left as they are: stderr differs from bash's in error cases (an unreadable file, folder or record; the
+    parity test covers stdout, exit status, and stderr in normal runs); `//` at the start of a path is
+    collapsed by Go; Go refuses an empty host name on Windows where bash used "-win"; a build in a wrong
+    format shows bash's own error at each run (no release ships one); `JEEVES_TEST_PANIC` stays (it only
+    makes the program crash). With Git Bash's path conversion off (`MSYS_NO_PATHCONV` set, even empty),
+    the bash version cannot sync either (Git for Windows cannot open `/tmp/...` paths), so that setting is
+    unsupported, as before.
+  - Also found in testing the fixes: the wrapper refused a relative call (`bin/jeeves-status`); fixed, with
+    a test.
 
 ## Go rewrite: spike (requested and planned 2026-11-20)
 

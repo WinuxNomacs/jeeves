@@ -41,10 +41,15 @@ type DataRepoArg struct {
 }
 
 func ParseDataRepoArg(args []string) (DataRepoArg, []string) {
-	a := DataRepoArg{JeevesData: os.Getenv("JEEVES_DATA")}
+	a := DataRepoArg{JeevesData: NativePath(os.Getenv("JEEVES_DATA"))}
 	if len(args) > 0 && args[0] == "--data-repo" {
-		if len(args) > 1 && !strings.HasPrefix(args[1], "${user_config.") {
-			a.JeevesData, a.Given = args[1], true
+		// The option alone counts as given and empty, as lib.sh reads its missing value.
+		v := ""
+		if len(args) > 1 {
+			v = args[1]
+		}
+		if !strings.HasPrefix(v, "${user_config.") {
+			a.JeevesData, a.Given = NativePath(v), true
 		}
 		if len(args) > 1 {
 			args = args[2:]
@@ -63,7 +68,7 @@ func (e Env) pointerFile() string { return e.ClaudeHome + "/jeeves/data-repo" }
 // It fails when none is found, or when the repo is encrypted and this device is locked (unless
 // ALLOW_LOCKED=1). stderr gets the warnings the scripts print there.
 func FindDataRepo(e Env, a DataRepoArg, stderr io.Writer) (*Repo, error) {
-	option := os.Getenv("CLAUDE_PLUGIN_OPTION_DATA_REPO")
+	option := NativePath(os.Getenv("CLAUDE_PLUGIN_OPTION_DATA_REPO"))
 	candidate := e.ExpandPath(firstSet(a.JeevesData, option))
 	told := false
 	if a.Given {
@@ -88,7 +93,7 @@ func FindDataRepo(e Env, a DataRepoArg, stderr io.Writer) (*Repo, error) {
 	}
 	if candidate == "" {
 		candidate = e.Home + "/" + DefaultDataRepoName
-		if _, err := os.Lstat(candidate + "/.git"); err != nil {
+		if _, err := os.Stat(candidate + "/.git"); err != nil { // [ -e ]: a broken link counts as none
 			return nil, &Problem{fmt.Sprintf("Jeeves is not set up on this machine yet (no data repo at %s, the default): run /jeeves:setup", ShellPath(candidate))}
 		}
 	}

@@ -1,4 +1,12 @@
 #!/usr/bin/env bash
 # Report, without changing anything, what is out of sync between ~/.claude and the data repo (lib/status.sh
 # describes the output). lib/launch.sh runs the Go build, or the bash version where there is none.
-case "$0" in */*) . "${0%/*}/../lib/launch.sh" status "$@" ;; *) . ../lib/launch.sh status "$@" ;; esac
+# Its folder: from the path it was run by, or for a bare name (`bash jeeves-status`), the file bash ran: here,
+# or found on the PATH. Never a folder relative to wherever the caller stands.
+case "$0" in
+  */*) jeeves_bin=${0%/*} ;;
+  *) if [ -f "$0" ]; then jeeves_bin=.
+     else jeeves_bin=$(type -P -- "$0"); jeeves_bin=${jeeves_bin%/*}; fi ;;
+esac
+[ -n "$jeeves_bin" ] || { echo "jeeves-status: cannot find its own folder" >&2; exit 1; }
+. "$jeeves_bin/../lib/launch.sh" status "$@"

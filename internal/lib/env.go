@@ -23,8 +23,8 @@ type Env struct {
 
 // LoadEnv reads the environment as lib.sh does. root gives the plugin folder.
 func LoadEnv(root func() string) Env {
-	e := Env{Home: os.Getenv("HOME"), Root: root}
-	e.ClaudeHome = firstSet(os.Getenv("CLAUDE_HOME"), os.Getenv("CLAUDE_CONFIG_DIR"), e.Home+"/.claude")
+	e := Env{Home: NativePath(os.Getenv("HOME")), Root: root}
+	e.ClaudeHome = firstSet(NativePath(os.Getenv("CLAUDE_HOME")), NativePath(os.Getenv("CLAUDE_CONFIG_DIR")), e.Home+"/.claude")
 	e.Host = hostName()
 	return e
 }
@@ -63,7 +63,9 @@ func ShellPath(p string) string {
 	return cygpath("-u", p)
 }
 
-// NativePath is a path the bash scripts wrote (read from a file), in the form this program can open.
+// NativePath is a path in the scripts' form (read from a file, or from the environment or a command line
+// when Git Bash did not convert it: MSYS_NO_PATHCONV, Cygwin), in the form this program can open. A path
+// already in Windows form, and every path elsewhere, is returned as it is, with no cygpath run.
 func NativePath(p string) string {
 	if runtime.GOOS != "windows" || !strings.HasPrefix(p, "/") {
 		return p

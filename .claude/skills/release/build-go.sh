@@ -20,7 +20,10 @@ case "$1" in
   *) TARGETS=$* ;;
 esac
 
-export GOTOOLCHAIN=local CGO_ENABLED=0 GOFLAGS=-mod=readonly
+# Every setting that changes the bytes is fixed here, so neither the environment nor `go env -w` can: the
+# baseline instruction sets (a v3 amd64 build would not start on older processors), experiments, workspaces.
+export GOTOOLCHAIN=local CGO_ENABLED=0 GOFLAGS=-mod=readonly GOENV=off GOWORK=off GOEXPERIMENT= \
+  GOAMD64=v1 GOARM64=v8.0
 want=$(sed -n 's/^toolchain go//p' go.mod)
 have=$(go env GOVERSION 2>/dev/null); have=${have#go}
 [ "$have" = "$want" ] || { echo "build-go: go.mod wants Go $want; this machine has '${have:-none}'" >&2; exit 1; }

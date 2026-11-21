@@ -377,7 +377,8 @@ config, again only on a yes.
     commands from another device are held until you accept them.
   - Project memories: `/jeeves:update` may save new ones, as Claude Code saves memories.
   - `jeeves/`: Jeeves's own state on this device (the data repo's path, the trusted release key, the last
-    verified manifest, the daily check's time, development checkouts), and with background updates the
+    verified manifest, the daily check's time, development checkouts, `go-fallback`: why the bash version of a
+    command last ran instead of its compiled one, so it is said once), and with background updates the
     setting (`auto.conf`), the log, notices, the queue of items for you and set-aside changes (`auto/`).
   - `settings.json`, `keybindings.json` and memories: only by `/jeeves:restore`, which you start, from the
     backup of a device you pick (settings exist there only with `backup_settings=yes`). That device's
