@@ -4,12 +4,69 @@
 
 - **No release before 2.0** (the user's decision, 2026-11-21): 2.0 is the completed Go rewrite. Work merges
   into `main` as each phase is done; nothing is cut or tagged until then, except the 1.4.2 security fix.
-- **Up next:** 1. Release 2.0 (the Go rewrite, complete): the code review the user asked for before it
-  (2026-11-21), then the release steps (`.claude/skills/release/SKILL.md`); the tag is the user's
+- **Up next:** 1. 2.0 review fixes (below, "2.0 review (2026-11-21)"): R1 to R8, each on its own `fix/`
+  branch with tests that fail before the fix · 2. Release 2.0: the release steps
+  (`.claude/skills/release/SKILL.md`) from step 4; the tag is the user's
 - **The user's, any time:** submit 1.4.2 in the Anthropic portal (below, "Anthropic directory submission")
 - **Later:** 0. Review text gaps (below, under "Review text gaps") · 0. Injection docs: threat model in the README, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
   must differ per host)
+
+## 2.0 review (2026-11-21)
+
+The review the user asked for before 2.0, run as release step 3 (the user's choice): four independent
+reviewers (crypto and checks; sync and data integrity; unattended code; skill flows and docs) and my own
+pass. Each finding is verified by a test that fails before its fix (or shown in the code where no test can
+reach it). Grouped into fix branches, most severe first:
+
+- **R1 Outgoing checks fail closed** (`internal/lib/outgoing.go`, scan, risk, push, cleanup): `git log -p`'s
+  error is dropped, so a failing diff (a textconv that cannot decrypt) passes scan and risk with 0 lines;
+  the user's `diff.noprefix`/`srcPrefix` breaks the parser; names git quotes (`"`, tab, backslash) and
+  renames into `home/` skip risk; binary and UTF-16 files are never scanned; `netAdded` drops its error and
+  sees only `home/`. Also `clean` passes plain text through when it merely starts with the age magic line
+  (parse the header), and the scan's plain-file check is prefix-only. Cleanup scans the whole rebuilt
+  history (never runs once it holds a pushed, accepted finding) and never runs the risk check: scan only
+  what the old `origin/main..main` adds, and run risk over it.
+- **R2 Background edit check** (`internal/auto/check.go`, `run.go`): a `###` heading appended after the last
+  Security bullet ends the section for the comparison, so text added under Security passes; an indented
+  sub-bullet under a firm rule passes; the edit itself gets no secrets check (with an unpushed flagged
+  commit already on main, the edit is committed and applied). Lows: recoverSteps only in a run; run lock
+  stale while post-child steps are unbounded; SIGTERM releases the lock with a git child running; a panic
+  leaves no log or backoff; the run keeps the hook's working folder; extract's comment claims testdata
+  samples that do not exist (capture them, or reword).
+- **R3 `jeeves-git` read-only for real** (`internal/gitcmd`): `grep -O<cmd>` and abbreviated
+  `--open-files...` run a command; `diff --no-index`, `grep --no-index`, `blame --contents` read any file.
+  Move to an allowed-options list.
+- **R4 Data repo layout** (`internal/lib/links.go`, `datarepo.go`, restore): a committed `.sync-state` link
+  (or tracked files under it), `jeeves.conf` or `recipient` link must be refused like links under
+  `home/`/`hosts/`; `FindDataRepo` accepts a subfolder of another repo (compare `--show-toplevel`);
+  restore lacks the clean-main check and its host check only refuses `/` (Windows `..\`).
+- **R5 Snapshot recovers** (`internal/snapshot`): a failed snapshot's home/ copies stay and, after a later
+  edit, block every snapshot and apply; porcelain without `-z` misreads names with spaces (same block); one
+  unreadable file fails the whole run with "disk full?"; `*.sync-tmp` leftovers are taken as shared files;
+  Windows-reserved names (`con.md`, `aux/`) and unchecked memory names break Windows checkouts, and a failed
+  `merge --ff-only` is ignored without a message.
+- **R6 Key and store handling** (`internal/lib/crypt.go`, `internal/encrypt`, `internal/crypt`): the key
+  sits in the process environment, so every git child (hooks, a global `core.hooksPath`) sees it: hand it
+  only to the filter's git commands with hooks off; `--key-file` switches the device's key store before any
+  check and never back; `clean` encrypts to the working tree's `recipient` even when it differs from the
+  one this device unlocked; shell-quoting of paths in the suggested terminal command and in the filter
+  commands git runs through `sh`; a stale lock whose PID was reused blocks forever (record a start time).
+- **R7 Hooks and first push** (`lib/launch.sh`, update skill, snapshot): with no build for the machine the
+  launcher exits 1 even in hook mode (every Write, Edit and reply would show a hook error; hook mode must
+  exit 0 and say once where Jeeves runs); a new data repo's first sync is `no-remote`, which the update
+  skill does not push, and snapshot says "could not reach origin" though origin answered with no `main`.
+  Lows: apply and restore replace a symlinked `~/.claude` file with a plain one (write through the link);
+  Windows stops are forced only; notices lost when a hook's 20 s wait runs out.
+- **R8 Docs and skill text**: README disclosure still says "bash scripts, except those ported"; plugin.json
+  description mentions settings backup; "settings" still in setup/README restore text and the update
+  skill's secret removal; CHANGELOG cost figure ($0.25 vs $0.35) and its 1.5.0 wording; README worker list
+  (commit, merge, revert, push are queued too); `~/.cache/jeeves/` and `.jeeves-machine-id` missing from
+  "Files it changes" and Uninstall; skills match "no data repo is set", which no command prints; merge's
+  "not merged" check can never match and the note says `git merge --abort`; cleanup's allowed-tools miss
+  `--dry-run`; review lacks update's `jeeves-verify --trust` cases.
+
+Left as planned: new files in a symlinked shared folder (Later 2, "Follow symlinked folders").
 
 ## Bug: /jeeves hand-off to review (found 2026-11-19)
 
