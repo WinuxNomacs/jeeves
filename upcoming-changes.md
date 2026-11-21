@@ -65,6 +65,9 @@ reach it). Grouped into fix branches, most severe first:
   "Files it changes" and Uninstall; skills match "no data repo is set", which no command prints; merge's
   "not merged" check can never match and the note says `git merge --abort`; cleanup's allowed-tools miss
   `--dry-run`; review lacks update's `jeeves-verify --trust` cases.
+  And this file itself (the user's decision, 2026-11-21): it is public and ships with the plugin; replace
+  host names, personal paths and the data repo's name, hashes and sizes with generic words from now on
+  (past commits keep the old text; no history rewrite).
 
 Left as planned: new files in a symlinked shared folder (Later 2, "Follow symlinked folders").
 
