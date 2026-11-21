@@ -65,6 +65,7 @@ AskUserQuestion: the obvious options, the recommended one first; they can still 
    `keep_days=<keep>` and `auto_every_days=<every>`, one per line), then
    `jeeves-commit --branch conf/cleanup -m "<message>" -- jeeves.conf`,
    `jeeves-merge conf/cleanup -m "<summary>"` and `jeeves-push` (it runs the secrets check first; a refused
-   push: `jeeves-snapshot`, then `jeeves-push` again once; still refused, stop and ask). Say when the first automatic cleanup will run: when the history's first
+   push: `jeeves-snapshot`; if `jeeves-status` then says `main` diverged, invoke `jeeves:update` with no
+   args to merge; then `jeeves-push` again once; still refused, stop and ask). Say when the first automatic cleanup will run: when the history's first
    commit (`jeeves-git log --reverse --format=%ci main | head -1`) is `<every>` days old.
 5. Never force-push yourself, and never run `jeeves-cleanup` without the user's confirmation in step 3.
