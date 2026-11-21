@@ -2,8 +2,8 @@
 
 Jeeves (`jeeves`, display name Jeeves) is a Claude Code plugin that versions the user's global Claude Code
 preferences (`~/.claude/CLAUDE.md`, skills, agents, commands, and memories as a per-device backup) in a
-separate **data repo** (the user's own:
-`WinuxNomacs/jeeves-cmd`). This repo is the plugin code only; it holds no preferences.
+separate **data repo** (each user's own, a private git repo). This repo is the plugin code only; it holds no
+preferences.
 
 ## Purpose (the user's, 2026-11-18)
 
