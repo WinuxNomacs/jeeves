@@ -341,6 +341,7 @@ func Run(e lib.Env, args []string, stdout, stderr io.Writer) int {
 // install puts the repo copy into ~/.claude through a temp file; the disk file must still be the one
 // classified (hash want) when the copy goes into place, as a session may have written it meanwhile.
 func install(dst, src, want string) int {
+	dst = lib.WriteTarget(dst)
 	tmp := dst + ".sync-tmp"
 	if lib.CopyFile(src, tmp) != nil {
 		os.Remove(tmp)

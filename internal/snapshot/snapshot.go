@@ -274,8 +274,10 @@ func (s *run) pullOrigin() {
 	if !s.o.pull || r.GitQuiet("remote", "get-url", "origin") != nil {
 		return
 	}
-	if r.RemoteGit(nil, nil, "fetch", "-q", "origin", "main") != 0 {
-		if !s.o.hook {
+	var ferr bytes.Buffer
+	if r.RemoteGit(nil, &ferr, "fetch", "-q", "origin", "main") != 0 {
+		// An origin that answered with no main yet (a new data repo before its first push) is not offline.
+		if !s.o.hook && !strings.Contains(ferr.String(), "couldn't find remote ref") {
 			s.say("could not reach origin, recording locally")
 		}
 		return

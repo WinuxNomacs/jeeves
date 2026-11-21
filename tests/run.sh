@@ -639,12 +639,41 @@ t_memories_record_shares_the_lock_with_the_bash_scripts() {
   rm "$R/.git/hooks/pre-commit"
 }
 
+t_a_linked_claude_md_stays_a_link_when_a_change_is_installed() {
+  case "$OSTYPE" in msys*|cygwin*) echo "    (skipped: links need privileges on Windows)"; return 0 ;; esac
+  snap >/dev/null
+  mkdir -p "$W/dotfiles"; mv "$W/claude/CLAUDE.md" "$W/dotfiles/CLAUDE.md"; ln -s "$W/dotfiles/CLAUDE.md" "$W/claude/CLAUDE.md"
+  echo "rules v2" > "$R/home/CLAUDE.md"; git -C "$R" commit -qam "from another device"
+  apply >/dev/null
+  check "still a link" [ -L "$W/claude/CLAUDE.md" ]
+  check "the file it names holds the change" grep -qx "rules v2" "$W/dotfiles/CLAUDE.md"
+}
+
+t_a_new_data_repos_first_sync_is_ready_to_push() {
+  git init -q --bare -b main "$W/empty.git"; git -C "$R" remote set-url origin "$W/empty.git"
+  git -C "$R" update-ref -d refs/remotes/origin/main
+  echo "rules v2" > "$W/claude/CLAUDE.md"
+  out=$(snap); rc=$?
+  check "origin with no main yet is not called unreachable" bash -c '! grep -q "could not reach origin" <<< "$1"' _ "$out"
+  check "status says main is ahead, so the update skill pushes" grep -q "^main	ahead	[1-9][0-9]*	0$" <<< "$("$SRC/bin/jeeves-status")"
+  out=$("$SRC/bin/jeeves-push"); rc=$?
+  check "the first push goes through" bash -c '[ $1 = 0 ] && [ "$(git -C "$2" rev-parse main)" = "$(git -C "$3" rev-parse main)" ]' _ $rc "$W/empty.git" "$R"
+  git -C "$R" remote remove origin
+  check "with no origin at all: no-remote" grep -q "^main	no-remote	0	0$" <<< "$("$SRC/bin/jeeves-status")"
+}
+
 t_without_a_go_build_a_command_names_the_machines_jeeves_runs_on() {
   snap >/dev/null; plugin_copy
   mkdir -p "$W/plugin/dist"; echo x > "$W/plugin/dist/jeeves-plan9-mips"
   out=$("$W/plugin/bin/jeeves-status" 2>&1); rc=$?
   check "exit status 1" [ $rc = 1 ]
   check "says there is no build for this machine, and where Jeeves runs" grep -q "^jeeves-status: no Go build for .* in dist/; Jeeves runs on macOS and Linux" <<< "$out"
+  for hook in "jeeves-hook-edit" "jeeves-auto --hook-stop" "jeeves-auto --session-start"; do
+    out=$(echo '{}' | "$W/plugin/bin/"$hook 2>&1); rc=$?
+    check "the hook $hook exits 0 and says nothing" bash -c '[ $1 = 0 ] && [ -z "$2" ]' _ $rc "$out"
+  done
+  out=$("$W/plugin/bin/jeeves-snapshot" --hook 2>/dev/null); rc=$?
+  check "the session-start snapshot exits 0 and says once why Jeeves does nothing here" bash -c '[ $1 = 0 ] && grep -q "^jeeves: Jeeves does nothing on this machine: no Go build" <<< "$2"' _ $rc "$out"
   rm -rf "$W/plugin/dist"
   check "no dist/ at all: the same" grep -q "^jeeves-status: no Go build for" <<< "$("$W/plugin/bin/jeeves-status" 2>&1)"
 }
@@ -3296,6 +3325,8 @@ run_test "merge takes a skill's branch into main and removes it" t_merge_takes_a
 run_test "merge origin settles hosts/ by rule and stops on shared conflicts" t_merge_origin_settles_hosts_by_rule_and_stops_on_shared_conflicts
 run_test "revert undoes a commit and backs out of a conflict" t_revert_undoes_a_commit_and_backs_out_of_a_conflict
 run_test "push runs the checks first and never forces" t_push_runs_the_checks_first_and_never_forces
+run_test "a new data repo's first sync is ready to push" t_a_new_data_repos_first_sync_is_ready_to_push
+run_test "a linked CLAUDE.md stays a link when a change is installed" t_a_linked_claude_md_stays_a_link_when_a_change_is_installed
 run_test "jeeves-git only reads" t_jeeves_git_only_reads
 run_test "background updates are off until the user decides" t_background_updates_are_off_until_the_user_decides
 run_test "a background run learns, pushes, installs and tells the user once" t_a_background_run_learns_pushes_installs_and_tells_the_user_once
