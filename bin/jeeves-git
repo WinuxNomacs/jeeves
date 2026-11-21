@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
-# jeeves-git <git arguments>: runs git in the data repo, so the skills need no `cd` into it (the Bash
-# tool's folder is not kept outside the project, and a permission rule does not match past such a `cd`).
-# The data repo is found as lib/lib.sh describes; this works on a locked device too.
-. "$(dirname "$0")/../lib/lib.sh"
-ALLOW_LOCKED=1
-find_data_repo || { echo "jeeves git: $DATA_REPO_PROBLEM" >&2; exit 1; }
-# The same options as the scripts' git_repo, so jeeves-git and jeeves-status agree on what is dirty.
-exec git -C "$REPO" -c core.autocrlf=false -c core.safecrlf=false -c core.excludesFile= "$@"
+# jeeves-git <git arguments>: git in the data repo.
+# lib/launch.sh runs the Go build from dist/ (the code: internal/gitcmd/).
+# Its folder: from the path it was run by, or for a bare name (`bash jeeves-git`), the file bash ran: here,
+# or found on the PATH. Never a folder relative to wherever the caller stands.
+case "$0" in
+  */*) jeeves_bin=${0%/*} ;;
+  *) if [ -f "$0" ]; then jeeves_bin=.
+     else jeeves_bin=$(type -P -- "$0"); jeeves_bin=${jeeves_bin%/*}; fi ;;
+esac
+[ -n "$jeeves_bin" ] || { echo "jeeves-git: cannot find its own folder" >&2; exit 1; }
+. "$jeeves_bin/../lib/launch.sh" git "$@"

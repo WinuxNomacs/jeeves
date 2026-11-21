@@ -4,10 +4,10 @@
 
 - **No release before 2.0** (the user's decision, 2026-11-21): 2.0 is the completed Go rewrite. Work merges
   into `main` as each phase is done; nothing is cut or tagged until then, except the 1.4.2 security fix.
-- **Up next:** 1. Go port, Phase 1: the small commands (below, "Go port, Phase 1")
-- **Then:** 2. Phase 2: the sync core around one worker per machine, knowledge files only (settings no
-  longer backed up), never following a link from the data repo · 3. Phase 3: encryption with age built in ·
-  4. Phase 4: background updates · 5. Phase 5: the last bash versions removed · 6. Release 2.0
+- **Up next:** 1. Go port, Phase 2 (below, "Go port, Phase 2"): 2a the sync core in Go · 2b the link rule ·
+  2c knowledge files only · 2d one worker per machine · 2e the skill manages content, the worker versions
+- **Then:** 2. Phase 3: encryption with age built in · 3. Phase 4: background updates · 4. Phase 5: the last
+  bash versions removed · 5. Release 2.0
 - **The user's, any time:** submit 1.4.2 in the Anthropic portal (below, "Anthropic directory submission")
 - **Later:** 0. Review text gaps (below, under "Review text gaps") · 0. Injection docs: threat model in the README, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
@@ -115,6 +115,80 @@ version 1.4.2, the CHANGELOG, the signed manifest, the upgrade rehearsal from 1.
 user's word; then the marketplace pin. `main` already holds the fix: the release branch is merged into
 `main` keeping `main`'s files (its CHANGELOG gains the 1.4.2 entry).
 
+## Go port, Phase 2: the sync core and the worker (planned 2026-11-21)
+
+The user asked (2026-11-21) for the rest of the port to go on without stopping, asking only what is
+really theirs, to professional standards for pluggability, extensibility, data integrity and security; a
+code review comes before 2.0. Phase 2 is built in five steps, each merged into `main` when its suite and
+CI on three OSes pass, so each lands working:
+
+**2a. Port `snapshot`, `apply`, `hook-edit`, `restore` and `cleanup`** as Phase 1 did: the same output,
+messages and exit statuses, byte for byte; parity tests (`both_versions`) over each command's cases; the
+bash versions deleted once they pass on three OSes. Shared code joins `internal/lib`: the sync record
+(`Bases`, `SetBase`, `KeepBases`, through a temp file and a rename, as now), atomic copies (`CopyFile`,
+`CopySettled`), `StagedIs`, `RemoteGit` (deadline, no prompts, the key kept out), `ConfValue`, `BadName`,
+`CaseCollisions`, `MachineID`, `CleanedRoot`, `ShrinkRepo`, `PlainHistoryAt`. Each command's engine
+returns a report (what was taken, held, skipped and why), and a separate renderer prints the bash
+version's messages, so the worker (2d) and later callers reuse the engine. The data integrity rules hold
+unchanged: every copy checked, the record holds what was copied and committed, nothing reaches
+`~/.claude` from a data repo not on a clean `main`, a failure leaves nothing recorded. `jeeves-verify`
+stays bash (the snapshot hook runs it as now); `jeeves-encrypt`, `jeeves-crypt` (Phase 3) and
+`jeeves-auto` (Phase 4) stay bash meanwhile and call the ported commands through their wrappers.
+
+**2b. The link rule** ("Bug: a link committed to the data repo", below): every command that syncs, and
+`status`, refuses while `home/` or `hosts/` holds a link (`git ls-files -s` mode 120000, or a link on disk
+under them), naming the path to remove; Jeeves never follows a link from the data repo and never commits
+one. Tests first, seen failing: a committed file link, a committed folder link, a link made on disk only.
+
+**2c. Knowledge files only** (the user's decision, 2026-11-20): `settings.json` and `keybindings.json` are
+no longer backed up or restored; `backup_settings` goes from `jeeves.conf`'s reading; copies already in
+`hosts/<host>/` stay (never removed silently) until the user deletes them or runs `/jeeves:cleanup`.
+`restore` restores memories only. README, the setup, restore and update skills, and the disclosure say so.
+
+**2d. One worker per machine.** Commands that change the data repo or `~/.claude` (`snapshot`, `apply`,
+`restore`, `cleanup`, `memories record`, and the versioning commands of 2e) no longer run in the caller:
+the caller writes a request into `~/.claude/jeeves/queue/` and waits for its answer; one worker per
+machine runs the requests in order.
+- **Request:** a JSON file written to a temp name and renamed (a half-written request is never read):
+  format version, ID, the command (only those listed above), its arguments, the caller's folder and a
+  fixed list of environment variables (`HOME`, `CLAUDE_HOME`, `CLAUDE_CONFIG_DIR`, `JEEVES_DATA`,
+  `JEEVES_HOST`, `CLAUDE_PLUGIN_OPTION_DATA_REPO`, `JEEVES_KEYSTORE`, `JEEVES_KEY_DIR`, `PATH` and the
+  tests' `JEEVES_*`), never a secret: the key store is read by the worker's own child.
+- **Worker:** `jeeves worker`, started by the first caller that finds none alive (its lock file: PID and
+  start time, `O_EXCL`; a lock whose process is gone, or whose start time differs from that PID's, is
+  taken over), detached from the caller's session. It runs each request as a child process, `jeeves
+  <command> <arguments>` with the request's environment and folder (the same code a direct run uses, in
+  isolation: one request cannot change another's state), captures its output and exit status, writes
+  the answer next to the request (temp name, rename) and removes the request. Identical snapshot
+  requests waiting together run once. It exits after 10 idle seconds. Nothing listens on a socket.
+- **Caller:** waits for the answer with a deadline (a hook 20 seconds, a command 120); past it a hook
+  says nothing and leaves the request to finish (an edit is never lost, unlike today's "skipped, another
+  run at work"), a command says the request is still queued and exits 1. The answer's output is printed
+  as the command's own and its exit status returned, so the skills and the hooks see what they see today.
+- **Failure list** (each with a test that injects it): the worker killed mid-request (the request stays;
+  the next worker runs it again: every command is safe to rerun, as each starts from the data repo's
+  state); a child that hangs (a deadline per request, 10 minutes, then SIGTERM and SIGKILL; answered
+  "stopped after 10 minutes"); two callers starting a worker at once (the lock: one wins, the other
+  waits for it); a stale lock (taken over); a request that does not read, or from an unknown format
+  version or command (set aside in `queue/rejected/` and answered with why, never run); a full disk
+  (the request cannot be written: the caller says so and exits 1, or a hook stays quiet); an answer
+  nobody collects (removed after a day); a queue that grows (more than 100 requests: new ones refused
+  with a message); a worker from an older plugin version (requests carry the plugin root; a worker serves
+  only its own, so after an update the old worker exits when idle and a new one starts).
+- `JEEVES_NO_WORKER=1` runs a command in the caller, as today (tests of the commands themselves, and a
+  last resort the README names).
+
+**2e. The skill manages the content, the worker the versions.** New versioning commands, run by the
+worker: `jeeves-commit <message> -- <paths>` (stage exactly those paths under `home/`, commit on the
+current branch), `jeeves-merge` (merge `origin/main`, stopping at conflicts for the skill to resolve) and
+`jeeves-push` (`jeeves-scan`, then `jeeves-risk`'s check for flags the user has not accepted, then the
+push; never forced). The `update`, `review`, `cleanup` and `encryption` skills call them instead of
+writing history through `jeeves-git`, which keeps read-only use (log, show, diff, status) and the merge
+resolution the skill does by hand. Their allow lists and the tests that read skill text follow.
+
+Docs with each step: README (commands, the worker, "What Jeeves runs, sends and changes": the worker
+process, its queue folder), `.claude/CLAUDE.md` layout, CHANGELOG 2.0.0.
+
 ## Go port, Phase 1: the small commands (planned 2026-11-21)
 
 Ports `git`, `risk`, `scan`, `check`, `memories`, `update-check`, `github` and `init` into `cmd/jeeves`, one
@@ -135,10 +209,9 @@ statuses stay the same, byte for byte; the README changes only where noted. Step
    `JEEVES_AGE_KEY` for git's own processes only; git still runs the bash `jeeves-crypt` (Phase 3 ports
    it). `risk_flags` stays in `lib/lib.sh` too until Phase 2 (`jeeves-apply` uses it); the parity test
    keeps both in step.
-4. **`check`, `update-check`:** `check`'s network checks keep their deadlines. `update-check` reads the
-   pin with Go's own HTTPS client instead of curl (https only, also after a redirect; the same 10-second
-   deadline; at most 64 KiB read; the proxy variables honoured, as curl does): one dependency fewer; the
-   README's "What Jeeves runs, sends and changes" and the update notice section say so.
+4. **`check`, `update-check`:** `check`'s network checks keep their deadlines. `update-check` still runs
+   curl, with the same arguments: Go's own HTTPS client (`net/http`) was measured at 6.2 MB a build
+   against 2.2 MB without it (linux-amd64, 2026-11-21), about 20 MB more per release across the five.
 5. **`memories`:** `record` takes the data repo's lock, which the bash sync scripts share, so the lock file
    keeps its format (the holder's PID; takeover under `lock.takeover`). On Windows a Go PID is not one
    Git Bash's `kill -0` knows: the launcher passes its own `$$` (`JEEVES_LOCK_PID`; the wrapper lives as
@@ -161,7 +234,7 @@ match), an unwritable record (silent, as now), a clock set back (counted as neve
 today; they run against the Go build. `memories record` while another run holds the lock: waits 30
 seconds, then says so with nothing recorded (a test, both lock holders).
 
-Docs: README (curl gone from the update check; the Go notes list the ported commands), `.claude/CLAUDE.md`
+Docs: README (the Go notes list the ported commands), `.claude/CLAUDE.md`
 Go bullet (the ported commands), CHANGELOG 2.0.0.
 
 ## Go port, Phase 0: distribution (planned with the user, 2026-11-21)
@@ -1070,6 +1143,14 @@ Suite 105 passed (2026-11-19).
   `bin/jeeves-status`, `dist/` committed, `build-go.sh --check`, release steps and rehearsal checks, README
   and CHANGELOG; tests in `tests/run.sh` (parity, fallback, crash, the launcher's folder) and `go test`.
   Full suite 150 passed on all three OSes in CI. Not released (2.0 is).
+- Go port Phase 1 (2026-11-21; "Go port, Phase 1" above): `git`, `scan`, `risk`, `check`, `memories`,
+  `update-check`, `github` and `init` in `internal/<command>/` (shared code in `internal/lib/`: `run.go`,
+  `crypt.go`, `lock.go`, `outgoing.go`); their bash versions and `status`'s removed once the parity tests
+  passed on all three OSes, and the launcher names where Jeeves runs when no build fits. `update-check`
+  kept curl (net/http measured at +4 MB a build). The parity tests found two bash bugs, fixed in both:
+  line 0 under a heading holding a `+word`, and names with a space garbled by git's trailing tab. Tests:
+  the lock shared with the bash scripts, the launcher with and without a bash version, `go test`. CI
+  green on three OSes (runs 44927817230 with parity, 44927823930 after the removal). Not released.
 
 ## Review text gaps (found by the 2026-11-19 dry run; older text, not this phase's)
 

@@ -331,8 +331,10 @@ project or a `JEEVES_DATA=` prefix, so commands written that way would each ask 
 ## What Jeeves runs, sends and changes
 
 Everything Jeeves does runs from the commands in `bin/` and from the skills' instructions to Claude. The
-commands are bash scripts, except those already ported to Go (so far `jeeves-status`), whose `bin/` script
-runs the compiled program for your system from `dist/`, or the bash version in `lib/` where there is none.
+commands are bash scripts, except those already ported to Go (so far `jeeves-status`, `jeeves-git`,
+`jeeves-scan`, `jeeves-risk`, `jeeves-check`, `jeeves-memories`, `jeeves-update-check`, `jeeves-github` and
+`jeeves-init`), whose `bin/` script runs the compiled program for your system from `dist/`: macOS and Linux
+on Intel/AMD or ARM, and Windows on Intel/AMD (elsewhere they stop and say so).
 The programs are built from `cmd/` and `internal/` in this repo with the Go standard library only, and the
 build is reproducible: anyone with the Go version `go.mod` names gets the same bytes, which
 `bash .claude/skills/release/build-go.sh --check` confirms (CI checks it on Linux, macOS and Windows for each
@@ -533,8 +535,9 @@ folder and its copy on GitHub: delete those yourself if you no longer want the b
 
 `tests/run.sh` (or `tests/run.sh <part of a test name>`). Each test uses a scratch `~/.claude`, data repo and
 bare remote, so nothing real is touched. The encryption tests need age 1.3.0 or later on the PATH and are
-skipped without it. The Go code has its own tests (`go test ./...`); the suite's parity tests run each
-ported command's Go build and bash version on the same state and compare them byte for byte.
+skipped without it. The Go code has its own tests (`go test ./...`); while a command is being ported, the
+suite's parity tests run its Go build and bash version on the same state and compare them byte for byte,
+and its bash version is removed once they pass on Linux, macOS and Windows.
 
 ## License
 

@@ -348,7 +348,7 @@ added_lines() {
   [ -f "$old" ] || old=/dev/null
   git -c core.autocrlf=false -c core.quotepath=false diff --no-index --no-color --no-ext-diff --no-textconv \
     -U0 -- "$old" "$2" 2>/dev/null | awk '
-    /^@@/ { for (i = 2; i <= NF; i++) if (substr($i, 1, 1) == "+") { split(substr($i, 2), a, ","); n = a[1] + 0 }
+    /^@@/ { for (i = 2; i <= NF && $i !~ /^@+$/; i++) if (substr($i, 1, 1) == "+") { split(substr($i, 2), a, ","); n = a[1] + 0 }
             hunk = 1; next }
     !hunk || /^\\/ { next }
     /^\+/ { print "line " n "\t" substr($0, 2); n++ }'
@@ -362,9 +362,10 @@ outgoing_added() {
   awk '
   /^commit / { c = $2; hunk = 0; next }
   /^diff / { hunk = 0; next }
-  !hunk && /^\+\+\+ / { f = substr($0, 7); next }
+  # git ends the name with a tab when it holds a space (for patch tools); the tab is not part of it.
+  !hunk && /^\+\+\+ / { f = substr($0, 7); sub(/\t$/, "", f); next }
   /^@@/ { match($0, /^@+/); np = RLENGTH - 1; hunk = 1
-          for (i = 2; i <= NF; i++) if (substr($i, 1, 1) == "+") { split(substr($i, 2), a, ","); n = a[1] + 0 }
+          for (i = 2; i <= NF && $i !~ /^@+$/; i++) if (substr($i, 1, 1) == "+") { split(substr($i, 2), a, ","); n = a[1] + 0 }
           next }
   /^\\/ { next }
   hunk { m = substr($0, 1, np)
@@ -444,20 +445,6 @@ shrink_repo() {
   git_repo reflog expire --expire=now --all && git_repo gc -q --prune=now 2>/dev/null
 }
 
-# True when the given plugin folder is a development checkout the user lists, one per line, in
-# ~/.claude/jeeves/dev-checkouts (`~` and `~/` taken as the home folder). jeeves-verify, which sources
-# nothing, has its own copy of this loop.
-is_dev_checkout() {
-  local d f=$CLAUDE_HOME/jeeves/dev-checkouts
-  [ -f "$f" ] || return 1
-  while IFS= read -r d || [ -n "$d" ]; do
-    d=${d%$'\r'}
-    case "$d" in "~") d=$HOME ;; "~/"*) d=$HOME/${d#"~/"} ;; esac
-    [ -n "$d" ] && [ "$(cd "$d" 2>/dev/null && pwd -P)" = "$1" ] && return 0
-  done < "$f"
-  return 1
-}
-
 # Run a command with a deadline in seconds (no `timeout` on macOS): past it, the command is stopped by its own
 # PID, gracefully and then by force, and this returns 124.
 with_deadline() {
@@ -510,13 +497,4 @@ take_lock() {
 release_lock() {
   [ "$LOCK_HELD" = 1 ] && [ "$(cat "$CRYPT_DIR/lock" 2>/dev/null)" = "$$" ] && rm -f "$CRYPT_DIR/lock"
   LOCK_HELD=0
-}
-
-# This machine's OS as Jeeves names it: linux, wsl, macos or windows (Git Bash).
-os_name() {
-  case "$(uname -s)" in
-    Darwin) echo macos ;;
-    MINGW*|MSYS*|CYGWIN*) echo windows ;;
-    *) if grep -qi microsoft /proc/version 2>/dev/null; then echo wsl; else echo linux; fi ;;
-  esac
 }

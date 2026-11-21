@@ -50,13 +50,15 @@ for kind in plain crypt; do
   chk "new hook records the work in progress" A bash -c 'git -C "$1" cat-file --textconv main:home/CLAUDE.md | grep -q "v3 in progress"' _ "$K/repoA"
   st=$(A "$NEW/bin/jeeves-status" 2>&1)
   chk "new status: clean main" grep -q "^branch	main	clean" <<< "$st"
-  # the Go build (1.5.0): runs on the old state with no fallback note, prints what the bash version prints,
-  # and leaves git's filter settings as the bash version writes them (both name this checkout's bin/)
+  # the Go build (2.0): runs on the old state with no fallback note, prints what the old release's bash
+  # version prints on the same state, and points git's filter settings at this checkout's bin/
   chk "new status runs the Go build" bash -c '! grep -q "running the bash version" <<< "$1"' _ "$st"
-  cfg=$(git -C "$K/repoA" config --get-regexp '^(filter|diff|merge)\.jeeves\.' | sort)
-  bst=$(A env JEEVES_NO_GO=1 "$NEW/bin/jeeves-status" 2>&1)
-  chk "new status: the Go and bash versions agree on the old state" [ "$st" = "$bst" ]
-  chk "new status: the same git settings from both" [ "$cfg" = "$(git -C "$K/repoA" config --get-regexp '^(filter|diff|merge)\.jeeves\.' | sort)" ]
+  bst=$(A "$OLD/bin/jeeves-status" 2>&1)
+  st=$(A "$NEW/bin/jeeves-status" 2>&1)
+  chk "new status: the same output as the old release's on the old state" [ "$st" = "$bst" ]
+  if [ $kind = crypt ]; then
+    chk "new status: git's filter runs this checkout's jeeves-crypt" bash -c 'git -C "$1" config filter.jeeves.clean | grep -qF "\"$2/bin/jeeves-crypt\" clean"' _ "$K/repoA" "$NEW"
+  fi
   # background updates (1.5.0): off on an upgraded device until the user decides; their hooks change nothing
   n=$(git -C "$K/repoA" rev-list --count main)
   chk "new: background updates offered, undecided" A bash -c '"$1/bin/jeeves-auto" --session-start | grep -q /jeeves:autoupdate' _ "$NEW"
