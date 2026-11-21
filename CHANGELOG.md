@@ -7,8 +7,9 @@ A new version reaches installed copies only when `version` in `.claude-plugin/pl
 **A security fix.**
 
 - **A folder whose name held a line break, planted in your data repo, could make a sync write a file outside
-  `~/.claude`.** Paths are now checked to stay inside the synced folders. Only someone who can push to your
-  data repo (for example from another of your devices) could have planted one.
+  `~/.claude`.** A name with a line break is no longer read as two paths, and every path read from a folder
+  listing must stay inside its synced folder. Only someone who can push to your data repo (for example from
+  another of your devices) could have planted one.
 
 ## 1.4.1 (2026-11-20)
 
