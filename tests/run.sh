@@ -2735,9 +2735,10 @@ t_commands_that_change_things_go_through_one_worker() {
 t_two_callers_at_once_get_one_worker_and_both_answers() {
   snap >/dev/null
   echo "agent b" > "$W/claude/agents/b.md"
-  snap > "$W/o1" 2>&1 & p1=$!; snap > "$W/o2" 2>&1 & p2=$!; apply > "$W/o3" 2>&1 & p3=$!
+  snap > "$W/o1" 2>&1 & p1=$!; snap > "$W/o2" 2>&1 & p2=$!; snap --no-pull > "$W/o3" 2>&1 & p3=$!
   wait $p1; r1=$?; wait $p2; r2=$?; wait $p3; r3=$?
   check "every caller answered, status 0" [ "$r1$r2$r3" = 000 ]
+  [ "$r1$r2$r3" = 000 ] || { echo "statuses $r1$r2$r3"; cat "$W/o1" "$W/o2" "$W/o3" "$(queue)/worker.log"; }
   check "the change was recorded once" [ "$(git -C "$R" log --format=%s | grep -c 'agents/b.md')" = 1 ]
   check "nothing is left in the queue" [ -z "$(ls "$(queue)" | grep -E '\.(req|out|ans)$')" ]
   echo 999999 > "$(queue)/worker.lock"
