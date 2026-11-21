@@ -93,9 +93,8 @@ code that runs, and the release check would warn at every session start.
   command is being ported it falls back to its bash version in `lib/<command>.sh` (`JEEVES_NO_GO=1` forces
   bash), and once the parity tests pass on all three OSes that bash version is deleted (the user's rule):
   done for `status`, `git`, `scan`, `risk`, `check`, `memories`, `update-check`, `github`, `init`,
-  `snapshot`, `apply`, `hook-edit`, `restore`, `cleanup` and `encrypt`, whose launcher, with no build for the machine,
-  says where Jeeves runs and exits 1; `auto` (`internal/auto/`, Phase 4) is ported with its bash version
-  still in `lib/auto.sh`, and every background test runs against both (the "(bash version)" pass). The
+  `snapshot`, `apply`, `hook-edit`, `restore`, `cleanup`, `encrypt` and `auto` (`internal/auto/`), whose
+  launcher, with no build for the machine, says where Jeeves runs and exits 1. The
   `jeeves-auto` wrapper sets `jeeves_exec=1`, so the launcher `exec`s the build: a run is a supervisor, and
   a signal sent to its PID must reach it. `internal/proc/` starts and stops supervised processes (the
   worker, its children, a run's child in its own process group or, on Windows, a kill-on-close job object).
@@ -167,8 +166,7 @@ code that runs, and the release check would warn at every session start.
   processes running, so end them by the PID of their top `bash.exe` (`taskkill /PID <pid> /T /F`). No
   GNU-only flags (no `sed -i`, no `\|` in sed), no `timeout`, no `date -d` or `date -r` (missing or different
   on macOS; format dates with git), no associative arrays, no `set -u`, no `jq`.
-  `jeeves-auto` alone also uses `perl` with JSON::PP (a core module; on macOS, Linux and Git for Windows by
-  default) to read transcripts and hook input; without it, background updates stay off. No `mkdir` as a lock: uutils coreutils (Ubuntu 26.04's default) lets two processes create the same folder
+  No `mkdir` as a lock: uutils coreutils (Ubuntu 26.04's default) lets two processes create the same folder
   at once; `take_lock` in `lib/lib.sh` uses bash's `noclobber` instead.
 - When a test's own git command writes files (switch, merge, checkout), give it `-c core.autocrlf=false`, as
   the scripts' `git_repo` does: Git for Windows would write CRLF and the scripts would see a dirty repo.

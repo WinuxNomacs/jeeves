@@ -50,5 +50,5 @@ AskUserQuestion: the obvious options, the recommended one first; they can still 
      memories, in a private folder; it has no shell or web access. A script checks its edit (the Security
      section and the user's firm rules unchanged, nothing removed, nothing risky) and scans for secrets
      before anything is pushed; a refused edit is kept for the user, never pushed.
-3. Report the result of the command in one or two lines. If `jeeves-auto on` refused (perl with JSON::PP, or
-   the `claude` command, missing), say what is missing and that background updates stay off.
+3. Report the result of the command in one or two lines. If `jeeves-auto on` refused (the `claude` command
+   missing), say what is missing and that background updates stay off.

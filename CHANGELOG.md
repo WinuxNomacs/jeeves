@@ -22,7 +22,7 @@ Built so far (prepared as 1.5.0, never published):
   does not load your settings' permissions or hooks. A script checks its edit and scans for secrets before
   anything is pushed; a refused edit is kept for you, never pushed. No worker is left behind: a watchdog
   stops a stranded session, and each session start cleans up after a run that crashed.
-- Background updates need `perl` with JSON::PP (standard on macOS, Linux and Git for Windows).
+- Background updates need nothing installed beyond Claude Code itself (no perl).
 - **age is built in:** encryption no longer needs age or age-plugin-batchpass installed. Data repos
   encrypted by earlier versions open unchanged, and the files stay readable with the age command line.
   git's filter runs as one process per checkout instead of one per file.
