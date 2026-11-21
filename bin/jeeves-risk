@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# jeeves-risk: lines a push of the data repo would add that could plant instructions or code (lib/risk.sh).
+# lib/launch.sh runs the Go build, or the bash version (lib/risk.sh) where there is none.
+# Its folder: from the path it was run by, or for a bare name (`bash jeeves-risk`), the file bash ran: here,
+# or found on the PATH. Never a folder relative to wherever the caller stands.
+case "$0" in
+  */*) jeeves_bin=${0%/*} ;;
+  *) if [ -f "$0" ]; then jeeves_bin=.
+     else jeeves_bin=$(type -P -- "$0"); jeeves_bin=${jeeves_bin%/*}; fi ;;
+esac
+[ -n "$jeeves_bin" ] || { echo "jeeves-risk: cannot find its own folder" >&2; exit 1; }
+. "$jeeves_bin/../lib/launch.sh" risk "$@"

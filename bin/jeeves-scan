@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# jeeves-scan: secrets in what a push of the data repo would send (lib/scan.sh describes the output).
+# lib/launch.sh runs the Go build, or the bash version (lib/scan.sh) where there is none.
+# Its folder: from the path it was run by, or for a bare name (`bash jeeves-scan`), the file bash ran: here,
+# or found on the PATH. Never a folder relative to wherever the caller stands.
+case "$0" in
+  */*) jeeves_bin=${0%/*} ;;
+  *) if [ -f "$0" ]; then jeeves_bin=.
+     else jeeves_bin=$(type -P -- "$0"); jeeves_bin=${jeeves_bin%/*}; fi ;;
+esac
+[ -n "$jeeves_bin" ] || { echo "jeeves-scan: cannot find its own folder" >&2; exit 1; }
+. "$jeeves_bin/../lib/launch.sh" scan "$@"

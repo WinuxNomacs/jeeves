@@ -54,7 +54,9 @@ fi
 if [ ! -x "$jeeves_exe" ]; then
   jeeves_fallback "the Go build dist/${jeeves_exe##*/} is not executable"; jeeves_bash "$@"
 fi
-JEEVES_ROOT=$JEEVES_ROOT "$jeeves_exe" "$jeeves_cmd" "$@"
+# JEEVES_LOCK_PID: this shell's $$, which the program writes into the data repo's lock: the bash scripts
+# check a holder with kill -0, which in Git Bash knows no Windows PID (this shell lives as long as the program).
+JEEVES_ROOT=$JEEVES_ROOT JEEVES_LOCK_PID=$$ "$jeeves_exe" "$jeeves_cmd" "$@"
 jeeves_rc=$?
 if [ $jeeves_rc = 126 ] || [ $jeeves_rc = 127 ]; then
   jeeves_fallback "the Go build dist/${jeeves_exe##*/} did not start"; jeeves_bash "$@"

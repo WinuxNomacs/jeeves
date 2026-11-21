@@ -85,7 +85,10 @@ code that runs, and the release check would warn at every session start.
 - Go port (in progress, `upcoming-changes.md` "Go port"): `go.mod`, `cmd/jeeves/` (one program, a
   subcommand per script), `internal/lib/` (the port of `lib/lib.sh`), `internal/<command>/`. A ported
   command's `bin/` script is a launcher that runs `dist/jeeves-<os>-<arch>[.exe] <command>` and falls back
-  to its bash version in `lib/<command>.sh` (`JEEVES_NO_GO=1` forces bash); so far only `status`. Each
+  to its bash version in `lib/<command>.sh` (`JEEVES_NO_GO=1` forces bash); so far `status`, `git`, `scan`,
+  `risk`, `check`, `memories`, `update-check`, `github` and `init`. `memories record` shares the data repo's
+  lock with the bash scripts: the launcher passes its `$$` (`JEEVES_LOCK_PID`) for the lock file, since Git
+  Bash's `kill -0` knows no Windows PID. Each
   wrapper sources `lib/launch.sh`, which starts no process of its own (each costs tens of milliseconds in
   Git Bash). `dist/` is committed: after any Go change, rebuild it with
   `bash .claude/skills/release/build-go.sh` (needs the Go version `go.mod` names) and commit the builds

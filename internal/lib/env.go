@@ -108,3 +108,25 @@ func absLogical(p string) (string, error) {
 	}
 	return filepath.ToSlash(a), nil
 }
+
+// IsDevCheckout: the plugin folder (physical, native form) is listed in ~/.claude/jeeves/dev-checkouts, as
+// lib.sh's is_dev_checkout (each entry resolved as `cd <entry> && pwd -P`, ~ expanded).
+func (e Env) IsDevCheckout(root string) bool {
+	b, err := os.ReadFile(e.ClaudeHome + "/jeeves/dev-checkouts")
+	if err != nil {
+		return false
+	}
+	for _, d := range strings.Split(string(b), "\n") {
+		d = strings.TrimSuffix(d, "\r")
+		if d == "" {
+			continue
+		}
+		d = NativePath(e.ExpandPath(d))
+		if p, err := filepath.EvalSymlinks(d); err == nil && filepath.Clean(p) == filepath.Clean(root) {
+			if fi, err := os.Stat(p); err == nil && fi.IsDir() {
+				return true
+			}
+		}
+	}
+	return false
+}

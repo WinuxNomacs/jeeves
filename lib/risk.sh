@@ -9,7 +9,7 @@
 # all of main before the first push). In an encrypted data repo it reads the plain text (with the key).
 # The data repo is found as lib/lib.sh describes.
 
-. "$(dirname "$0")/../lib/lib.sh"
+. "$(dirname "$0")/lib.sh"
 
 [ $# = 0 ] || { echo "risk: takes no options" >&2; exit 2; }
 say() { echo "jeeves risk: $*"; }

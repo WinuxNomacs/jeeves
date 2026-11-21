@@ -8,7 +8,7 @@
 # The matched text itself is never printed, so a finding does not spread the secret further. In an encrypted data repo it reads the plain text (with the key), and also refuses any file
 # under home/ or hosts/ that main would send unencrypted. The data repo is found as lib/lib.sh describes.
 
-. "$(dirname "$0")/../lib/lib.sh"
+. "$(dirname "$0")/lib.sh"
 
 [ $# = 0 ] || { echo "scan: takes no options" >&2; exit 2; }
 say() { echo "jeeves scan: $*"; }

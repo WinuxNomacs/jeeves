@@ -26,7 +26,12 @@ Built so far (prepared as 1.5.0, never published):
 - **`jeeves-status` runs as a compiled program** (Go) on macOS, Linux and Windows: the first command of a
   port that makes Jeeves faster and the same on every system (about 16 times faster on a Mac, 28 on
   Windows). Where no build fits your machine, the bash version runs, as before. The builds are
-  reproducible from the source; the README says how to check them.
+  reproducible from the source; the README says how to check them. Also ported: `jeeves-git`,
+  `jeeves-scan`, `jeeves-risk`, `jeeves-check`, `jeeves-memories`, `jeeves-update-check`,
+  `jeeves-github` and `jeeves-init`.
+- Fixed: `jeeves-scan` and `jeeves-risk` named the wrong line (line 0) when the nearest heading above an
+  added line held a word starting with `+`, and garbled the place of a line in a file whose name has a
+  space (`jeeves-risk` then did not show the line).
 - **Fixed (security):** a folder whose name held a line break, planted in the data repo, could make a sync
   write a file outside `~/.claude`. Paths are now checked to stay inside the synced folders.
 - Fixed: the order of paths in `jeeves-status` no longer depends on your system's language settings, and

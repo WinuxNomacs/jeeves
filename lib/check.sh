@@ -17,7 +17,7 @@
 # repo; empty: an empty folder; missing: nothing there; other: a folder with files that is not a git repo.
 # Each network check has a deadline. JEEVES_GH and JEEVES_SSH name the gh and ssh commands (tests use them).
 
-. "$(dirname "$0")/../lib/lib.sh"
+. "$(dirname "$0")/lib.sh"
 
 [ $# = 0 ] || { echo "check: takes no options" >&2; exit 2; }
 gh=${JEEVES_GH:-gh} ssh=${JEEVES_SSH:-ssh}

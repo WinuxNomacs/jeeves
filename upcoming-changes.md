@@ -135,10 +135,9 @@ statuses stay the same, byte for byte; the README changes only where noted. Step
    `JEEVES_AGE_KEY` for git's own processes only; git still runs the bash `jeeves-crypt` (Phase 3 ports
    it). `risk_flags` stays in `lib/lib.sh` too until Phase 2 (`jeeves-apply` uses it); the parity test
    keeps both in step.
-4. **`check`, `update-check`:** `check`'s network checks keep their deadlines. `update-check` reads the
-   pin with Go's own HTTPS client instead of curl (https only, also after a redirect; the same 10-second
-   deadline; at most 64 KiB read; the proxy variables honoured, as curl does): one dependency fewer; the
-   README's "What Jeeves runs, sends and changes" and the update notice section say so.
+4. **`check`, `update-check`:** `check`'s network checks keep their deadlines. `update-check` still runs
+   curl, with the same arguments: Go's own HTTPS client (`net/http`) was measured at 6.2 MB a build
+   against 2.2 MB without it (linux-amd64, 2026-11-21), about 20 MB more per release across the five.
 5. **`memories`:** `record` takes the data repo's lock, which the bash sync scripts share, so the lock file
    keeps its format (the holder's PID; takeover under `lock.takeover`). On Windows a Go PID is not one
    Git Bash's `kill -0` knows: the launcher passes its own `$$` (`JEEVES_LOCK_PID`; the wrapper lives as
@@ -161,7 +160,7 @@ match), an unwritable record (silent, as now), a clock set back (counted as neve
 today; they run against the Go build. `memories record` while another run holds the lock: waits 30
 seconds, then says so with nothing recorded (a test, both lock holders).
 
-Docs: README (curl gone from the update check; the Go notes list the ported commands), `.claude/CLAUDE.md`
+Docs: README (the Go notes list the ported commands), `.claude/CLAUDE.md`
 Go bullet (the ported commands), CHANGELOG 2.0.0.
 
 ## Go port, Phase 0: distribution (planned with the user, 2026-11-21)

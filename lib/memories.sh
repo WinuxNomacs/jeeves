@@ -17,7 +17,7 @@
 #
 # The data repo is found as lib/lib.sh describes.
 
-. "$(dirname "$0")/../lib/lib.sh"
+. "$(dirname "$0")/lib.sh"
 
 say() { echo "jeeves memories: $*"; }
 usage() { echo "usage: jeeves-memories list [--all] | record <hash> <outcome> [<hash> <outcome>...]" >&2; exit 2; }
@@ -27,6 +27,8 @@ all=
 case "$cmd" in list) [ $# = 0 ] || { [ $# = 1 ] && [ "$1" = --all ] && all=1; } || usage ;; record) [ $# -ge 2 ] && [ $(( $# % 2 )) = 0 ] || usage ;; esac
 find_data_repo || { say "$DATA_REPO_PROBLEM"; exit 1; }
 RECORD=$REPO/hosts/.memory-review
+# Byte order for globs and sorts, so the list's order does not depend on the locale (the Go version's too).
+LC_COLLATE=C
 
 # memory_files <projects folder> <source>: "<hash>\t<source>\t<project>\t<file>" for each memory file.
 memory_files() {
@@ -34,7 +36,7 @@ memory_files() {
   for dir in "$1"/*/memory; do
     [ -d "$dir" ] || continue
     key=$(basename "$(dirname "$dir")")
-    find "$dir" -type f -name '*.md' ! -name MEMORY.md | sort | while IFS= read -r f; do
+    find "$dir" -type f -name '*.md' ! -name MEMORY.md | LC_ALL=C sort | while IFS= read -r f; do
       printf '%s\t%s\t%s\t%s\n' "$(blob_hash -- "$f")" "$2" "$key" "$f"
     done
   done

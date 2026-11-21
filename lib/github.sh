@@ -9,7 +9,7 @@
 # with a message on stderr when gh fails (not signed in, offline, a name already taken). JEEVES_GH names the
 # gh command (tests use it).
 
-. "$(dirname "$0")/../lib/lib.sh"
+. "$(dirname "$0")/lib.sh"
 
 TOPIC=jeeves-data
 gh=${JEEVES_GH:-gh}

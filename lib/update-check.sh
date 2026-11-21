@@ -10,7 +10,7 @@
 # with JEEVES_UPDATE_CHECK=off. Always exits 0: it runs from the session-start hook.
 # Portable bash: macOS bash 3.2, Git Bash, Linux.
 
-. "$(dirname "$0")/../lib/lib.sh"
+. "$(dirname "$0")/lib.sh"
 
 now=0
 [ "$1" = --now ] && now=1
