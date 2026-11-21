@@ -362,8 +362,8 @@ func (u *runner) body(sid, tp, folder string) {
 // Claude Code refuses edits even with an allow rule). Never the shared /tmp.
 func (s *state) runBase() string {
 	if x := os.Getenv("XDG_RUNTIME_DIR"); x != "" {
-		if fi, err := os.Stat(x); err == nil && fi.IsDir() && ownedBy(fi) && fi.Mode().Perm() == 0o700 {
-			return x
+		if fi, err := os.Stat(lib.NativePath(x)); err == nil && fi.IsDir() && ownedBy(fi) && private(fi) {
+			return lib.NativePath(x)
 		}
 	}
 	d := strings.TrimSuffix(os.Getenv("TMPDIR"), "/")
