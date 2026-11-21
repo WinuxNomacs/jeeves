@@ -23,6 +23,15 @@ A new version reaches installed copies only when `version` in `.claude-plugin/pl
 - Background updates need `perl` with JSON::PP (standard on macOS, Linux and Git for Windows).
 - New splash image: a friendlier Jeeves.
 
+## 1.4.2 (2026-11-21)
+
+**A security fix.**
+
+- **A folder whose name held a line break, planted in your data repo, could make a sync write a file outside
+  `~/.claude`.** A name with a line break is no longer read as two paths, and every path read from a folder
+  listing must stay inside its synced folder. Only someone who can push to your data repo (for example from
+  another of your devices) could have planted one.
+
 ## 1.4.1 (2026-11-20)
 
 **Fixes for commands that hand off to each other, and a full account of what Jeeves does.**
