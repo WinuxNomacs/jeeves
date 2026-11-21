@@ -2,6 +2,14 @@
 
 A new version reaches installed copies only when `version` in `.claude-plugin/plugin.json` changes.
 
+## 1.4.2 (2026-11-21)
+
+**A security fix.**
+
+- **A folder whose name held a line break, planted in your data repo, could make a sync write a file outside
+  `~/.claude`.** Paths are now checked to stay inside the synced folders. Only someone who can push to your
+  data repo (for example from another of your devices) could have planted one.
+
 ## 1.4.1 (2026-11-20)
 
 **Fixes for commands that hand off to each other, and a full account of what Jeeves does.**
