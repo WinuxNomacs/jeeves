@@ -25,10 +25,10 @@ Built so far (prepared as 1.5.0, never published):
 - Background updates need `perl` with JSON::PP (standard on macOS, Linux and Git for Windows).
 - **`jeeves-status` runs as a compiled program** (Go) on macOS, Linux and Windows: the first command of a
   port that makes Jeeves faster and the same on every system (about 16 times faster on a Mac, 28 on
-  Windows). Where no build fits your machine, the bash version runs, as before. The builds are
-  reproducible from the source; the README says how to check them. Also ported: `jeeves-git`,
+  Windows). The builds are reproducible from the source; the README says how to check them. Also ported: `jeeves-git`,
   `jeeves-scan`, `jeeves-risk`, `jeeves-check`, `jeeves-memories`, `jeeves-update-check`,
-  `jeeves-github` and `jeeves-init`.
+  `jeeves-github` and `jeeves-init`. These no longer have a bash version: they run on macOS and Linux
+  (Intel/AMD or ARM) and Windows (Intel/AMD), and elsewhere say so.
 - Fixed: `jeeves-scan` and `jeeves-risk` named the wrong line (line 0) when the nearest heading above an
   added line held a word starting with `+`, and garbled the place of a line in a file whose name has a
   space (`jeeves-risk` then did not show the line).

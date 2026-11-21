@@ -1,8 +1,10 @@
 # Sourced by each ported command's bin/ wrapper as `. <bin>/../lib/launch.sh <command> "$@"`, with
-# jeeves_bin set to the wrapper's folder (as the wrapper found it): runs the Go
-# build, dist/jeeves-<os>-<arch>[.exe] <command>, when dist/ holds one for this machine; otherwise, or when
-# it cannot start, the bash version, lib/<command>.sh, saying why once per reason (not when dist/ is missing
-# altogether: such a copy ships bash only). JEEVES_NO_GO=1 always runs the bash version.
+# jeeves_bin set to the wrapper's folder (as the wrapper found it): runs the Go build,
+# dist/jeeves-<os>-<arch>[.exe] <command>. While a command still has its bash version, lib/<command>.sh,
+# that runs where no build fits or the build cannot start, saying why once per reason (silently when dist/ is
+# missing altogether: such a copy ships bash only), and JEEVES_NO_GO=1 forces it. A command without one
+# (its bash version removed once the Go build passed parity on every OS) stops there, naming the machines
+# Jeeves has builds for.
 # Every process counts here (each costs tens of milliseconds in Git Bash), so the folder and the platform
 # come from bash itself: no dirname, uname or $(cd ... && pwd).
 
@@ -27,8 +29,12 @@ jeeves_root() {
 jeeves_root
 
 jeeves_bash() { exec bash "$JEEVES_ROOT/lib/$jeeves_cmd.sh" "$@"; }
-# Says, once per reason, that the bash version runs instead of the Go build.
+jeeves_has_bash() { [ -f "$JEEVES_ROOT/lib/$jeeves_cmd.sh" ]; }
+# Says, once per reason, that the bash version runs instead of the Go build; with no bash version, says why
+# the command cannot run and exits 1.
 jeeves_fallback() {
+  jeeves_has_bash || {
+    echo "jeeves-$jeeves_cmd: $1; Jeeves runs on macOS and Linux (amd64 or arm64) and Windows (amd64)" >&2; exit 1; }
   local mark=${CLAUDE_HOME:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}}/jeeves/go-fallback
   if [ "$(cat "$mark" 2>/dev/null)" != "$1" ]; then
     echo "jeeves: running the bash version of $jeeves_cmd: $1" >&2
@@ -36,7 +42,7 @@ jeeves_fallback() {
   fi
 }
 
-{ [ "$JEEVES_NO_GO" = 1 ] || [ ! -d "$JEEVES_ROOT/dist" ]; } && jeeves_bash "$@"
+{ [ "$JEEVES_NO_GO" = 1 ] || [ ! -d "$JEEVES_ROOT/dist" ]; } && jeeves_has_bash && jeeves_bash "$@"
 case "$OSTYPE" in
   darwin*) jeeves_os=darwin ;; linux*) jeeves_os=linux ;; msys*|cygwin*) jeeves_os=windows ;; *) jeeves_os=$OSTYPE ;;
 esac

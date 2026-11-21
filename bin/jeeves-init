@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# jeeves-init <folder> [<remote url>]: a new, empty data repo (lib/init.sh).
-# lib/launch.sh runs the Go build, or the bash version (lib/init.sh) where there is none.
+# jeeves-init <folder> [<remote url>]: a new, empty data repo.
+# lib/launch.sh runs the Go build from dist/ (the code: internal/initcmd/).
 # Its folder: from the path it was run by, or for a bare name (`bash jeeves-init`), the file bash ran: here,
 # or found on the PATH. Never a folder relative to wherever the caller stands.
 case "$0" in

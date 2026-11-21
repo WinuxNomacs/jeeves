@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# jeeves-scan: secrets in what a push of the data repo would send (lib/scan.sh describes the output).
-# lib/launch.sh runs the Go build, or the bash version (lib/scan.sh) where there is none.
+# jeeves-scan: secrets in what a push of the data repo would send.
+# lib/launch.sh runs the Go build from dist/ (the code: internal/scan/).
 # Its folder: from the path it was run by, or for a bare name (`bash jeeves-scan`), the file bash ran: here,
 # or found on the PATH. Never a folder relative to wherever the caller stands.
 case "$0" in

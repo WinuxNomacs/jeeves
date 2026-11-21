@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# jeeves-git <git arguments>: git in the data repo (lib/git.sh describes it).
-# lib/launch.sh runs the Go build, or the bash version (lib/git.sh) where there is none.
+# jeeves-git <git arguments>: git in the data repo.
+# lib/launch.sh runs the Go build from dist/ (the code: internal/gitcmd/).
 # Its folder: from the path it was run by, or for a bare name (`bash jeeves-git`), the file bash ran: here,
 # or found on the PATH. Never a folder relative to wherever the caller stands.
 case "$0" in

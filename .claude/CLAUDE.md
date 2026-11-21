@@ -84,17 +84,20 @@ code that runs, and the release check would warn at every session start.
 - `tests/run.sh` — tests; each runs against a scratch `~/.claude`, data repo and bare remote.
 - Go port (in progress, `upcoming-changes.md` "Go port"): `go.mod`, `cmd/jeeves/` (one program, a
   subcommand per script), `internal/lib/` (the port of `lib/lib.sh`), `internal/<command>/`. A ported
-  command's `bin/` script is a launcher that runs `dist/jeeves-<os>-<arch>[.exe] <command>` and falls back
-  to its bash version in `lib/<command>.sh` (`JEEVES_NO_GO=1` forces bash); so far `status`, `git`, `scan`,
-  `risk`, `check`, `memories`, `update-check`, `github` and `init`. `memories record` shares the data repo's
+  command's `bin/` script is a launcher that runs `dist/jeeves-<os>-<arch>[.exe] <command>`; while a
+  command is being ported it falls back to its bash version in `lib/<command>.sh` (`JEEVES_NO_GO=1` forces
+  bash), and once the parity tests pass on all three OSes that bash version is deleted (the user's rule):
+  done for `status`, `git`, `scan`, `risk`, `check`, `memories`, `update-check`, `github` and `init`, whose
+  launcher, with no build for the machine, says where Jeeves runs and exits 1. `memories record` shares the data repo's
   lock with the bash scripts: the launcher passes its `$$` (`JEEVES_LOCK_PID`) for the lock file, since Git
   Bash's `kill -0` knows no Windows PID. Each
   wrapper sources `lib/launch.sh`, which starts no process of its own (each costs tens of milliseconds in
   Git Bash). `dist/` is committed: after any Go change, rebuild it with
   `bash .claude/skills/release/build-go.sh` (needs the Go version `go.mod` names) and commit the builds
   with the change; `--check` (CI, release step 4) fails when `dist/` is not a build of the source.
-  `go test ./...` and the suite's parity tests, which compare both versions byte for byte. Go and bash must
-  agree; a difference is a bug in one of them. `jeeves-verify` stays bash. On Windows, Git Bash hands the
+  `go test ./...`, and for a command being ported, parity tests that compare both versions byte for byte
+  (the `both_versions` helper; Phase 1's are in the history of `tests/run.sh`). Go and bash must agree; a
+  difference is a bug in one of them. `jeeves-verify` stays bash. On Windows, Git Bash hands the
   program Windows-form paths; it converts them back with `cygpath` (about 150 ms a call there) only where
   a path is printed or recorded.
 - `.claude/skills/release/` — the release procedure (a skill for working on the repo, not shipped as one).

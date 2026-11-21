@@ -27,8 +27,23 @@ func firstWord(s string) string {
 	return ""
 }
 
-// Run prints os, git, gh, gh-auth, gh-protocol, ssh-github, gh-install, age, age-install, keystore and
-// datarepo lines (bin/jeeves-check lists their values). Always 0, but 2 for an argument.
+// Run prints, one fact per line (tab-separated):
+//
+//	os           linux | wsl | macos | windows
+//	git          ok <version> | missing
+//	gh           ok <version> | missing                 the GitHub CLI
+//	gh-auth      ok <login> | fail <why> | skip          signed in to GitHub through gh
+//	gh-protocol  https | ssh | skip                      how gh clones (its git_protocol setting)
+//	ssh-github   ok <login> | fail <why> | skip          an SSH key GitHub accepts
+//	gh-install   <command> | none                        how to install gh here (run only after the user agrees)
+//	age          ok <version> | old <version> | missing  age, for encryption (1.3.0 or later, with age-plugin-batchpass)
+//	age-install  <command> | none                        how to install age here (none: the release download)
+//	keystore     keychain | wincred | secret-service | none  where an encryption key would be kept
+//	datarepo     <path> repo | empty | missing | other
+//
+// datarepo: the data repo folder (JEEVES_DATA or --data-repo, the plugin option data_repo, or
+// ~/jeeves-data), ~/ expanded; repo: a git repo; empty: an empty folder; missing: nothing there; other: a
+// folder with files that is not a git repo. Exit status 0, or 2 for an argument.
 func Run(e lib.Env, args []string, stdout, stderr io.Writer) int {
 	a, args := lib.ParseDataRepoArg(args)
 	if len(args) != 0 {

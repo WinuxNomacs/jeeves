@@ -1,6 +1,6 @@
 // Command jeeves is the Go build of Jeeves's scripts, one program with a subcommand per script
-// (`jeeves status` is bin/jeeves-status). The bin/ launchers run it when dist/ holds a build for this OS
-// and processor, and the bash scripts otherwise.
+// (`jeeves status` is bin/jeeves-status). The bin/ launchers run it from dist/, the build for this OS and
+// processor (lib/launch.sh).
 package main
 
 import (

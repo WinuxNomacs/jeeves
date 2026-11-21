@@ -17,8 +17,19 @@ import (
 	"github.com/WinuxNomacs/jeeves/internal/lib"
 )
 
-// Run: jeeves memories list [--all] | record <hash> <outcome> [<hash> <outcome>...] (bin/jeeves-memories
-// describes both).
+// Run:
+//
+//	jeeves memories list      memory files not reviewed yet, or changed since, one per line:
+//	                          <hash> TAB <source> TAB <project> TAB <file>
+//	                          source: "this-machine", or the host whose backup in hosts/ holds it; project:
+//	                          the project folder's name under projects/; file: the absolute path to read.
+//	                          This machine's live memories come first; MEMORY.md (an index) is left out, and
+//	                          a file found in several places is listed once.
+//	jeeves memories record <hash> <outcome> [<hash> <outcome>...]
+//	                          adds each reviewed memory and what came of it (such as "promoted 2, kept 3,
+//	                          left out 1") to the record, and commits it on main
+//	jeeves memories list --all
+//	                          every memory file, reviewed or not, in the same form (for /jeeves:review)
 func Run(e lib.Env, args []string, stdout, stderr io.Writer) int {
 	a, args := lib.ParseDataRepoArg(args)
 	say := func(f string, a ...any) { fmt.Fprintf(stdout, "jeeves memories: "+f+"\n", a...) }
