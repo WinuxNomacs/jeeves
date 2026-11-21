@@ -27,7 +27,8 @@ Built so far (prepared as 1.5.0, never published):
   port that makes Jeeves faster and the same on every system (about 16 times faster on a Mac, 28 on
   Windows). The builds are reproducible from the source; the README says how to check them. Also ported: `jeeves-git`,
   `jeeves-scan`, `jeeves-risk`, `jeeves-check`, `jeeves-memories`, `jeeves-update-check`,
-  `jeeves-github` and `jeeves-init`. These no longer have a bash version: they run on macOS and Linux
+  `jeeves-github`, `jeeves-init`, `jeeves-snapshot`, `jeeves-apply`, `jeeves-hook-edit`,
+  `jeeves-restore` and `jeeves-cleanup`. These no longer have a bash version: they run on macOS and Linux
   (Intel/AMD or ARM) and Windows (Intel/AMD), and elsewhere say so.
 - Fixed: `jeeves-scan` and `jeeves-risk` named the wrong line (line 0) when the nearest heading above an
   added line held a word starting with `+`, and garbled the place of a line in a file whose name has a

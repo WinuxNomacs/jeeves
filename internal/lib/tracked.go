@@ -88,10 +88,15 @@ func HashOf(p string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("cannot read %s: %w", p, err)
 	}
+	return BlobHash(b), nil
+}
+
+// BlobHash is the git blob hash (SHA-1) of the given content.
+func BlobHash(b []byte) string {
 	h := sha1.New()
 	h.Write([]byte("blob " + strconv.Itoa(len(b)) + "\x00"))
 	h.Write(b)
-	return hex.EncodeToString(h.Sum(nil)), nil
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 // Bases reads the hashes recorded at the last sync on this device (.sync-state/hashes: "<hash>\t<path>"

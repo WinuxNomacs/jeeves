@@ -88,7 +88,11 @@ code that runs, and the release check would warn at every session start.
   command is being ported it falls back to its bash version in `lib/<command>.sh` (`JEEVES_NO_GO=1` forces
   bash), and once the parity tests pass on all three OSes that bash version is deleted (the user's rule):
   done for `status`, `git`, `scan`, `risk`, `check`, `memories`, `update-check`, `github` and `init`, whose
-  launcher, with no build for the machine, says where Jeeves runs and exits 1. `memories record` shares the data repo's
+  launcher, with no build for the machine, says where Jeeves runs and exits 1; `snapshot`, `apply`,
+  `hook-edit`, `restore` and `cleanup` are ported with their bash versions still in `lib/` (Phase 2a). The
+  tests inject copy failures through `JEEVES_TEST_COPY_HOOK` (a program run instead of each copy, with
+  `cp -p`'s arguments; the tests' fake `cp`), the Go build's seam for what the bash versions get from a
+  fake `cp` on the PATH. `memories record` shares the data repo's
   lock with the bash scripts: the launcher passes its `$$` (`JEEVES_LOCK_PID`) for the lock file, since Git
   Bash's `kill -0` knows no Windows PID. Each
   wrapper sources `lib/launch.sh`, which starts no process of its own (each costs tens of milliseconds in
