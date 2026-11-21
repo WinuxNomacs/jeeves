@@ -6,7 +6,7 @@
   into `main` as each phase is done; nothing is cut or tagged until then, except the 1.4.2 security fix.
 - **Up next:** 1. Go port, Phase 4: background updates in Go (below, "Go port, Phase 4"; `feat/go-4`: 4a
   and 4b built, 4c once 4b's parity passes on three OSes)
-- **Then:** 2. Phase 5: the last bash versions removed · 3. Release 2.0
+- **Then:** 2. Phase 5: the last bash removed (below, "Go port, Phase 5") · 3. Release 2.0
 - **The user's, any time:** submit 1.4.2 in the Anthropic portal (below, "Anthropic directory submission")
 - **Later:** 0. Review text gaps (below, under "Review text gaps") · 0. Injection docs: threat model in the README, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
@@ -216,6 +216,29 @@ against scratch folders (the repo's CLAUDE.md, "Working on the plugin") before t
 
 Docs with each step: README (commands, the worker, "What Jeeves runs, sends and changes": the worker
 process, its queue folder), `.claude/CLAUDE.md` layout, CHANGELOG 2.0.0.
+
+## Go port, Phase 5: the last bash removed (planned 2026-11-21)
+
+Once Phase 4 is merged no command has a bash version, so what is left of the bash scripts goes, and the
+launcher becomes what it will stay:
+- **`lib/lib.sh` and `lib/keys.sh` deleted.** The tests that sourced them to check a function directly get
+  Go tests of the same behaviour where none exists yet (`BadName`, `RunDeadline`, `TakeLock` taking over a
+  dead holder's lock and waiting for a live one), and the suite's lock holders write the lock file with a
+  live PID instead of calling `take_lock`. The plugin-files tests use another shipped file.
+- **The launcher (`lib/launch.sh`) has no fallback:** it finds the build for this system and `exec`s it
+  (every command, as `jeeves-auto` already does: one process fewer, and a signal reaches the program); with
+  no build for the machine, or a build that cannot start, it says where Jeeves runs and exits 1.
+  `JEEVES_NO_GO` and the `go-fallback` note go. The launcher tests follow (the folder found however the
+  wrapper is called, now checked by the Go build's own output).
+- **Docs:** `.claude/CLAUDE.md` (layout: `lib/` holds only the launcher; the script rules apply to the
+  launcher, `jeeves-verify`, the tests and the release scripts), the README's "Working on Jeeves", the
+  CHANGELOG.
+- `jeeves-verify` stays bash (it checks the builds, so it cannot be one), as decided.
+
+Failure list (the launcher runs at every hook and command): no build for this system or processor (a
+message naming where Jeeves runs, exit 1; a hook stays quiet but for that line), a build without its
+execute bit or of the wrong format (the same, naming the build), a plugin folder reached by a relative
+path, a bare name, a Windows path or a link (found as now, each tested).
 
 ## Go port, Phase 4: background updates in Go (planned 2026-11-21)
 

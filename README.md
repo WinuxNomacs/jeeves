@@ -403,8 +403,7 @@ config, again only on a yes.
     commands from another device are held until you accept them.
   - Project memories: `/jeeves:update` may save new ones, as Claude Code saves memories.
   - `jeeves/`: Jeeves's own state on this device (the data repo's path, the trusted release key, the last
-    verified manifest, the daily check's time, development checkouts, `go-fallback`: why the bash version of a
-    command last ran instead of its compiled one, so it is said once), the worker's queue (`queue/`: each
+    verified manifest, the daily check's time, development checkouts), the worker's queue (`queue/`: each
     request until it is answered, an answer nobody collected for up to a day, requests it could not run in
     `rejected/`, and `worker.log`), and with background updates the setting (`auto.conf`), the log,
     notices, the queue of items for you and set-aside changes (`auto/`).
@@ -558,9 +557,7 @@ folder and its copy on GitHub: delete those yourself if you no longer want the b
 
 `tests/run.sh` (or `tests/run.sh <part of a test name>`). Each test uses a scratch `~/.claude`, data repo and
 bare remote, so nothing real is touched. With age 1.3.0 or later on the PATH, the encryption tests also
-read Jeeves's files with the age command line (skipped without it). The Go code has its own tests (`go test ./...`); while a command is being ported, the
-suite's parity tests run its Go build and bash version on the same state and compare them byte for byte,
-and its bash version is removed once they pass on Linux, macOS and Windows.
+read Jeeves's files with the age command line (skipped without it). The Go code has its own tests (`go test ./...`).
 
 ## License
 

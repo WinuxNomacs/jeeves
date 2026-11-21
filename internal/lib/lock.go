@@ -38,6 +38,9 @@ func olderThanAMinute(p string) bool {
 	return err == nil && time.Since(fi.ModTime()) > time.Minute
 }
 
+// holderAlive checks a lock holder (a variable, so a test can change the lock while it is checked).
+var holderAlive = alive
+
 // alive is bash's `kill -0 <pid>`.
 func alive(pid string) bool {
 	n, err := strconv.Atoi(pid)
@@ -57,7 +60,7 @@ func TakeLock(cryptDir string, secs int) *Lock {
 	for i := 0; !createExclusive(l.path, l.pid); i++ {
 		if createExclusive(l.path+".takeover", l.pid) {
 			pid := catTrim(l.path)
-			stale := (pid != "" && !alive(pid)) || (pid == "" && olderThanAMinute(l.path))
+			stale := (pid != "" && !holderAlive(pid)) || (pid == "" && olderThanAMinute(l.path))
 			if _, err := os.Stat(l.path); stale && err == nil && catTrim(l.path) == pid {
 				os.Remove(l.path)
 			}

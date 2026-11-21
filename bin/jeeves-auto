@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # jeeves-auto: background updates (status, on, off, the Stop and SessionStart hooks, a run, hold, release,
-# queue). lib/launch.sh runs the Go build from dist/ (the code: internal/auto/), in place of this shell: a run
-# is a supervisor, and a signal sent to its PID must reach it.
+# queue). lib/launch.sh runs the Go build from dist/ (the code: internal/auto/).
 # Its folder: from the path it was run by, or for a bare name (`bash jeeves-auto`), the file bash ran: here,
 # or found on the PATH. Never a folder relative to wherever the caller stands.
 case "$0" in
@@ -10,5 +9,4 @@ case "$0" in
      else jeeves_bin=$(type -P -- "$0"); jeeves_bin=${jeeves_bin%/*}; fi ;;
 esac
 [ -n "$jeeves_bin" ] || { echo "jeeves-auto: cannot find its own folder" >&2; exit 1; }
-jeeves_exec=1
 . "$jeeves_bin/../lib/launch.sh" auto "$@"
