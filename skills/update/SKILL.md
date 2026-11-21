@@ -117,8 +117,9 @@ AskUserQuestion: the obvious options, the recommended one first; they can still 
 - **A secret or conflict marker the scan reports (`jeeves-scan`, or `jeeves-push`, which runs it) stops
   everything:** tell the user what it found (file, line and commit, never the
   value) and ask how to proceed. Never search files, transcripts or the environment for credentials. The
-  way out, once the user agrees: they remove the secret where it lives (`~/.claude/<path>`; for a host's
-  `settings.json`, its `env` block), then `jeeves-snapshot`, then the commits not yet pushed are folded
+  way out, once the user agrees: they remove the secret where it lives (`~/.claude/<path>` for
+  `home/<path>`; `~/.claude/projects/<project>/memory/<file>` for this device's
+  `hosts/<host>/projects/<project>/memory/<file>`), then `jeeves-snapshot`, then the commits not yet pushed are folded
   into one so the secret leaves the history. When `~/.claude/<path>` never held it (a held file, or this
   run's edit not yet installed), remove it in `home/<path>` instead and commit that
   (`jeeves-commit -m "<message>" -- home/<path>`). Then, with nothing left uncommitted (the fold refuses
@@ -253,7 +254,7 @@ AskUserQuestion: the obvious options, the recommended one first; they can still 
 ## Find the data repo
 
 Run `jeeves-status --data-repo "${user_config.data_repo}"`. If it says the data repo is encrypted and this
-device is locked, stop and point the user to `/jeeves:encryption`. If it says no data repo is set, or that the data
+device is locked, stop and point the user to `/jeeves:encryption`. If it says Jeeves is not set up on this machine yet, or that the data
 repo is not a git repository, stop and tell the user to run `/jeeves:setup` (after setting the plugin option
 `data_repo` if it is empty). Never clone or create the data repo here: setup also offers to restore another
 machine's backup, which only it can do before the first sync. Otherwise go on: that command also records

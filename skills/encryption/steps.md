@@ -20,7 +20,7 @@ what the status shows and stop.
 ## First: the state
 
 Run `jeeves-status` (the skill that read this file has recorded the data repo already) and note its
-`datarepo` line (on a locked device it says so); if it says no data repo is set, stop and point the user to
+`datarepo` line (on a locked device it prints only that the device is locked); if it says Jeeves is not set up on this machine yet, stop and point the user to
 `/jeeves:setup`. Commands find the data repo on their own: run the `jeeves-` scripts bare, and git in the data repo as `jeeves-git <arguments>`, never
 with a `cd` into it. Run `jeeves-encrypt status`, then go by the state and the request:
 

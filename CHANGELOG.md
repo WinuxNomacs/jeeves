@@ -2,16 +2,17 @@
 
 A new version reaches installed copies only when `version` in `.claude-plugin/plugin.json` changes.
 
-## 2.0.0 (unreleased: the Go rewrite)
+## 2.0.0 (unreleased)
 
-Built so far (prepared as 1.5.0, never published):
+**Jeeves rewritten as one compiled program, with background updates, built-in encryption and a security
+review.**
 
 **Background updates: Jeeves can keep your rules up to date while you work. Off until you turn it on.**
 
 - **`/jeeves:autoupdate`** turns background updates on or off on each device. When on, at most once an hour
   per session (once there is enough new to review), a separate headless Claude Code session reviews what the
   session taught, as `/jeeves:update` does, adds or revises global rules, syncs and pushes. Your session is
-  not interrupted. Each run uses plan usage (measured at about $0.25 to $0.80 of list-price usage per run).
+  not interrupted. Each run uses plan usage (measured at about $0.35 to $0.80 of list-price usage per run).
 - **The next session start tells you** what a background update changed, with the command to undo it, and
   what waits for you. New sessions mention `/jeeves:autoupdate` once until you decide.
 - **Background runs do less than `/jeeves:update`:** they never remove or merge a rule, rename a heading, or
@@ -39,14 +40,31 @@ Built so far (prepared as 1.5.0, never published):
   `settings.json` and `keybindings.json` are no longer backed up or restored, and `backup_settings` in
   `jeeves.conf` no longer does anything; copies an earlier version backed up stay in the data repo, no
   longer updated, until you delete them. `/jeeves:restore` restores memories.
-- **`jeeves-status` runs as a compiled program** (Go) on macOS, Linux and Windows: the first command of a
-  port that makes Jeeves faster and the same on every system (about 16 times faster on a Mac, 28 on
-  Windows). The builds are reproducible from the source; the README says how to check them. Also ported: `jeeves-git`,
-  `jeeves-scan`, `jeeves-risk`, `jeeves-check`, `jeeves-memories`, `jeeves-update-check`,
-  `jeeves-github`, `jeeves-init`, `jeeves-snapshot`, `jeeves-apply`, `jeeves-hook-edit`,
-  `jeeves-restore`, `jeeves-cleanup`, `jeeves-crypt`, `jeeves-encrypt` and `jeeves-auto`: every command, so
-  Jeeves no longer needs perl or age installed. They run on macOS and Linux (Intel/AMD or ARM) and Windows
-  (Intel/AMD), and elsewhere say so.
+- **Every command is one compiled program** (Go), the same on every system and faster (`jeeves-status`
+  about 16 times on a Mac, 28 on Windows): Jeeves no longer needs perl or age installed. It runs on macOS
+  and Linux (Intel/AMD or ARM) and Windows (Intel/AMD); elsewhere a command says so and the hooks do
+  nothing. The builds are reproducible from the source; the README says how to check them.
+- **Fixed (security), from the review before this release:**
+  - The secrets and risk checks passed a push when git could not read the commits (an encrypted file that
+    would not decrypt), and the risk check missed files moved into `home/`, names git quotes, and your
+    `diff.noprefix` setting; binary and UTF-16 files were never scanned for secrets. They now fail closed
+    and read every line a push sends.
+  - Jeeves now runs its git commands in the data repo with no hooks, so no hook (the repo's or a global
+    one) runs while the data repo's key is loaded.
+  - A link committed in place of the data repo's `.sync-state` folder could replace this device's sync
+    record and make later writes go outside the data repo; a commit from origin holding one is no longer
+    taken.
+  - `jeeves-git` could run a program (`grep -O`) or read a file outside the data repo (`diff --no-index`):
+    it now refuses both.
+  - A background update could add text under the Security section behind a new subheading, or under a rule
+    you set firmly as an indented sub-item; its edit is now also checked for secrets before it is committed.
+  - Encryption: a recipient another device put in the data repo is no longer used unless this device
+    unlocked it, and `--key-file` no longer changes the key store when the command fails.
+- **Fixed, from the same review:** a snapshot that failed part-way could leave copies that stopped every
+  later snapshot after your next edit; a file name with a space, one unreadable file or a name Windows
+  reserves (`con.md`) could stop snapshots; a new data repo's first sync did not push; apply replaced a
+  linked `~/.claude/CLAUDE.md` with a plain file; a lock left by a process killed outright could block
+  Jeeves until deleted by hand.
 - Fixed: `jeeves-scan` and `jeeves-risk` named the wrong line (line 0) when the nearest heading above an
   added line held a word starting with `+`, and garbled the place of a line in a file whose name has a
   space (`jeeves-risk` then did not show the line).

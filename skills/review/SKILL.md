@@ -9,6 +9,7 @@ argument-hint: "[a rule or concern to start from, or nothing]"
 disable-model-invocation: true
 allowed-tools:
   - Bash(jeeves-verify)
+  - Bash(jeeves-verify --trust)
   - Bash(jeeves-status *)
   - Bash(jeeves-snapshot)
   - Bash(jeeves-snapshot --no-pull)
@@ -110,9 +111,13 @@ AskUserQuestion: the obvious options, the recommended one first; they can still 
 First of all, `jeeves-verify`: if it says the installed plugin differs from its signed release, stop: show
 the user what it listed, run no other `jeeves-` command, and say that reinstalling the plugin is the way
 out (its notice says how). If it says the signature cannot be checked (no OpenSSH 8.1 or later), tell the user
-in one line what to install, then go on. Otherwise go on without mentioning it. Note the session's project first: `git rev-parse --show-toplevel` in the session's working folder (outside
+in one line what to install, then go on. If it says not set up (a device set up before signed releases), run
+`jeeves-verify --trust` once: it records the release key and prints its fingerprint; show the fingerprint and
+ask the user to compare it with the README's (`https://github.com/WinuxNomacs/jeeves#verifying-the-plugin`),
+then go on. If it says the key differs from the one trusted, stop and show its message. Otherwise (verified, a
+development checkout, or a version without a release key) go on without mentioning it. Note the session's project first: `git rev-parse --show-toplevel` in the session's working folder (outside
 a git repo there is no project part). Then `jeeves-status --data-repo "${user_config.data_repo}"`. If the
-device is locked, stop and point the user to `/jeeves:encryption`; if no data repo is set or it is not a git
+device is locked, stop and point the user to `/jeeves:encryption`; if it says Jeeves is not set up on this machine yet or it is not a git
 repository, point them to `/jeeves:setup`. From here on, run the `jeeves-` scripts bare and git in the data
 repo as `jeeves-git <arguments>`; never `cd` into the data repo or set `JEEVES_DATA` before a command (a
 permission rule does not match past either). Paths such as `home/CLAUDE.md` are under the folder on the

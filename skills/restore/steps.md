@@ -4,7 +4,7 @@ Followed by `/jeeves:restore` and by `/jeeves:setup` (step 4); speak as the skil
 The host to restore from is the one that skill gives.
 
 1. Run `jeeves-status` (the skill that read this file has recorded the data repo already) and note its
-   `datarepo` line; if it says no data repo is set, stop and point the user to `/jeeves:setup`. Commands
+   `datarepo` line; if it says Jeeves is not set up on this machine yet, stop and point the user to `/jeeves:setup`. Commands
    find the data repo on their own: run the `jeeves-` scripts bare, and git in the data
    repo as `jeeves-git <arguments>`, never with a `cd` into it.
 2. `jeeves-restore` prints this host's name and the hosts with a backup. Without a host given (the

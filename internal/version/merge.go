@@ -164,12 +164,13 @@ func (s *session) continueMerge() int {
 	files := s.unmerged()
 	for _, f := range files {
 		p := filepath.Join(s.r.Dir, filepath.FromSlash(f))
-		if lib.HasConflictMarkers(p) {
-			s.say("%s still holds conflict markers; nothing committed", f)
+		// The encrypted-merge driver's note (the key could not be read) first: it holds markers too.
+		if data, err := os.ReadFile(p); err == nil && strings.HasPrefix(string(data), "<<<<<<< jeeves: not merged") {
+			s.say("%s was not merged (the key could not be read); run jeeves-merge --abort, then /jeeves:encryption", f)
 			return 1
 		}
-		if data, err := os.ReadFile(p); err == nil && strings.HasPrefix(string(data), "jeeves: not merged") {
-			s.say("%s was not merged (the key could not be read); run jeeves-merge --abort, then /jeeves:encryption", f)
+		if lib.HasConflictMarkers(p) {
+			s.say("%s still holds conflict markers; nothing committed", f)
 			return 1
 		}
 	}
