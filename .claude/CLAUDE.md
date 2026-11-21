@@ -43,7 +43,7 @@ code that runs, and the release check would warn at every session start.
   `gh`), `jeeves-cleanup` (folds old history into one root commit and force-pushes with a lease; `--auto`
   runs from the session-start snapshot per `jeeves.conf`; `--all` after encrypting), `jeeves-encrypt`
   (encryption on, unlock, lock, passphrase), `jeeves-crypt` (git's filter, textconv and merge driver for an
-  encrypted data repo: git's long-running filter process, `internal/crypt/`; no bash version, so it never falls back), `jeeves-memories`
+  encrypted data repo: git's long-running filter process, `internal/crypt/`), `jeeves-memories`
   (the memories the session review has not reviewed yet, and the shared record `hosts/.memory-review`),
   `jeeves-git` (git commands that only read, in the data repo), `jeeves-commit`, `jeeves-merge`, `jeeves-revert`
   and `jeeves-push` (the data repo's history, changed on the skills' behalf: `internal/version/`; each
@@ -82,38 +82,26 @@ code that runs, and the release check would warn at every session start.
 - Shared files (`home/`, synced) vs per-device memories (`hosts/<host>/`, backup only): the lists are in
   `internal/lib/tracked.go`. Knowledge files only (the user's decision, 2026-11-20): settings and
   keybindings are not backed up; copies a version before 2.0 left in `hosts/<host>/` are kept as they are.
-- `lib/lib.sh` — shared code: finding the data repo, tracked paths list, hashes, three-way classification.
-  `lib/keys.sh` (was `lib/crypt.sh`; renamed so the launcher can never take it for `jeeves-crypt`'s bash
-  version) — the key store read (`store_get`) that `jeeves-auto`'s git commands need until Phase 4;
-  encryption itself is Go (`internal/encrypt/`, `internal/lib/crypt.go`, `agecrypt.go`, `passphrase.go`).
+- `lib/launch.sh` — the launcher every `bin/` wrapper sources: it finds `dist/jeeves-<os>-<arch>[.exe]`
+  and `exec`s it with the command (a signal sent to the caller's PID reaches the program; the lock PID,
+  `JEEVES_LOCK_PID`, is the shell's `$$`, which exec keeps and Git Bash's `kill -0` knows); with no build for
+  the machine, or one that cannot start, it says where Jeeves runs and exits 1. It starts no process of its
+  own (each costs tens of milliseconds in Git Bash).
 - `tests/run.sh` — tests; each runs against a scratch `~/.claude`, data repo and bare remote.
-- Go port (in progress, `upcoming-changes.md` "Go port"): `go.mod`, `cmd/jeeves/` (one program, a
-  subcommand per script), `internal/lib/` (the port of `lib/lib.sh`), `internal/<command>/`. A ported
-  command's `bin/` script is a launcher that runs `dist/jeeves-<os>-<arch>[.exe] <command>`; while a
-  command is being ported it falls back to its bash version in `lib/<command>.sh` (`JEEVES_NO_GO=1` forces
-  bash), and once the parity tests pass on all three OSes that bash version is deleted (the user's rule):
-  done for `status`, `git`, `scan`, `risk`, `check`, `memories`, `update-check`, `github`, `init`,
-  `snapshot`, `apply`, `hook-edit`, `restore`, `cleanup`, `encrypt` and `auto` (`internal/auto/`), whose
-  launcher, with no build for the machine, says where Jeeves runs and exits 1. The
-  `jeeves-auto` wrapper sets `jeeves_exec=1`, so the launcher `exec`s the build: a run is a supervisor, and
-  a signal sent to its PID must reach it. `internal/proc/` starts and stops supervised processes (the
-  worker, its children, a run's child in its own process group or, on Windows, a kill-on-close job object).
-  The tests inject copy failures through `JEEVES_TEST_COPY_HOOK` (a program run instead of each copy, with
-  `cp -p`'s arguments; the tests' fake `cp`). `memories record` shares the data repo's
-  lock with the bash scripts: the launcher passes its `$$` (`JEEVES_LOCK_PID`) for the lock file, since Git
-  Bash's `kill -0` knows no Windows PID. Each
-  wrapper sources `lib/launch.sh`, which starts no process of its own (each costs tens of milliseconds in
-  Git Bash). `dist/` is committed: after any Go change, rebuild it with
-  `bash .claude/skills/release/build-go.sh` (needs the Go version `go.mod` names) and commit the builds
-  with the change; `--check` (CI, release step 4) fails when `dist/` is not a build of the source.
-  `internal/worker/` is the machine's worker (2d): `cmd/jeeves` sends the commands that change the data
-  repo or `~/.claude` (`worker.Queued`) through it, and a child it runs (`JEEVES_IN_WORKER=1`) runs them
-  directly; the tests set `JEEVES_WORKER_IDLE=1`, and `JEEVES_NO_WORKER=1` runs a command in the caller.
-  `go test ./...`, and for a command being ported, parity tests that compare both versions byte for byte
-  (the `both_versions` helper; Phase 1's are in the history of `tests/run.sh`). Go and bash must agree; a
-  difference is a bug in one of them. `jeeves-verify` stays bash. On Windows, Git Bash hands the
-  program Windows-form paths; it converts them back with `cygpath` (about 150 ms a call there) only where
-  a path is printed or recorded.
+- The Go program (`upcoming-changes.md` "Go port"): `go.mod`, `cmd/jeeves/` (one program, a subcommand per
+  `bin/` wrapper), `internal/lib/` (shared code: finding the data repo, tracked paths, hashes, the sync
+  record, copies, locks, age, key stores, passphrase dialogs), `internal/<command>/`, `internal/proc/`
+  (starting and stopping supervised processes: the worker, its children, a background run's child in its
+  own process group or, on Windows, a kill-on-close job object), `internal/worker/` (the machine's worker:
+  `cmd/jeeves` sends the commands that change the data repo or `~/.claude`, `worker.Queued`, through it; a
+  child it runs, `JEEVES_IN_WORKER=1`, runs them directly; the tests set `JEEVES_WORKER_IDLE=1`, and
+  `JEEVES_NO_WORKER=1` runs a command in the caller). The tests inject copy failures through
+  `JEEVES_TEST_COPY_HOOK` (a program run instead of each copy, with `cp -p`'s arguments). `dist/` is
+  committed: after any Go change, rebuild it with `bash .claude/skills/release/build-go.sh` (needs the Go
+  version `go.mod` names) and commit the builds with the change; `--check` (CI, release step 4) fails when
+  `dist/` is not a build of the source. `go test ./...` beside the suite. `jeeves-verify` stays bash (it
+  checks the builds). On Windows, Git Bash hands the program Windows-form paths; it converts them back with
+  `cygpath` (about 150 ms a call there) only where a path is printed or recorded.
 - `.claude/skills/release/` — the release procedure (a skill for working on the repo, not shipped as one).
 - This file is `.claude/CLAUDE.md`, for working on the repo; Claude Code loads it here as project context.
   At the root it would be shipped with the plugin to no effect, and `claude plugin validate --strict` fails.
@@ -158,21 +146,21 @@ code that runs, and the release check would warn at every session start.
   `bin/jeeves-verify` with `CLAUDE_HOME=<scratch>` (Claude Code adds an `.in_use/` folder there; verify skips it). For scripts, also run the last tag's `bin/`
   (a `git worktree` of it) against a scratch data repo, then the new `bin/` on the state it wrote.
 
-## Rules for the scripts
+## Rules for the code
 
-- Portable bash: macOS bash 3.2, Git Bash, Linux. Run the tests under Windows Git Bash too when a change
+- Shell code (the launcher, `jeeves-verify`, the tests, the release scripts) is portable bash: macOS bash 3.2, Git Bash, Linux. Run the tests under Windows Git Bash too when a change
   could differ there (from WSL: copy the tree to a `C:` folder and run `bash.exe -lc tests/run.sh`). There the
   suite takes about two hours (CI's Windows job, about 17 minutes); stopping the WSL command leaves the Windows
   processes running, so end them by the PID of their top `bash.exe` (`taskkill /PID <pid> /T /F`). No
   GNU-only flags (no `sed -i`, no `\|` in sed), no `timeout`, no `date -d` or `date -r` (missing or different
   on macOS; format dates with git), no associative arrays, no `set -u`, no `jq`.
   No `mkdir` as a lock: uutils coreutils (Ubuntu 26.04's default) lets two processes create the same folder
-  at once; `take_lock` in `lib/lib.sh` uses bash's `noclobber` instead.
+  at once; the Go lock (`internal/lib/lock.go`) creates its file exclusively instead.
 - When a test's own git command writes files (switch, merge, checkout), give it `-c core.autocrlf=false`, as
-  the scripts' `git_repo` does: Git for Windows would write CRLF and the scripts would see a dirty repo.
+  the program's `Repo.Git` does: Git for Windows would write CRLF and the program would see a dirty repo.
 - Hooks must never block a session: hook mode always exits 0 and prints only what needs attention.
-- Data integrity: check every copy (`copy_file`, `copy_settled`) and stop with nothing recorded when one
-  fails; a sync record (`set_base`) holds the hash of what was copied and committed, never of the disk file
+- Data integrity: check every copy (`lib.CopyFile`, `lib.CopySettled`) and stop with nothing recorded when
+  one fails; a sync record (`Repo.SetBase`) holds the hash of what was copied and committed, never of the disk file
   read again later; nothing reaches `~/.claude` from a data repo that is not on a clean `main`.
 - The scripts never push, with three exceptions: `jeeves-push`, which the skills run, pushes `main` (never
   forced) after `jeeves-scan` and `jeeves-risk` pass over what it sends; `jeeves-cleanup` force-pushes the data repo's `main`, always
@@ -185,7 +173,7 @@ code that runs, and the release check would warn at every session start.
   user's own terminal; to age only as `AGE_PASSPHRASE` of that one process); the key goes to stores on
   stdin. Plain text must never reach a commit: the filter is required, a failure stops git, and
   `jeeves-scan` checks what a push sends. age is built in (`filippo.io/age`); the tests' cross-checks with
-  the age command line, and a command's bash version under parity, need age 1.3+ on the PATH (skipped
+  the age command line need age 1.3+ on the PATH (skipped
   without it; the workflow installs a pinned age and fails if they are skipped); for Windows, unzip the
   release's Windows archive next to the copied tree and put it on the PATH. Tests inject a failing
   encryption with `JEEVES_TEST_CRYPT_FAIL` (text whose files fail to encrypt; `*` for all).
