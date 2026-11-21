@@ -85,6 +85,17 @@ func Findings(r *lib.Repo, rng string) ([]Finding, int, error) {
 	return found, len(added), nil
 }
 
+// Secret is the kind of possible secret (or conflict marker) a line holds, "" for none: the patterns a push
+// is checked with, for checks before a commit (a background run's edit).
+func Secret(line string) string {
+	for _, k := range kinds {
+		if k.re.MatchString(line) {
+			return k.kind
+		}
+	}
+	return ""
+}
+
 // Run returns 0 when nothing is found, 1 with each finding listed as file:line and its kind.
 func Run(e lib.Env, args []string, stdout, stderr io.Writer) int {
 	a, args := lib.ParseDataRepoArg(args)

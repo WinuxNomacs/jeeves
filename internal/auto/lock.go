@@ -93,6 +93,21 @@ func (s *state) takeRunLock(owner string) bool {
 	return createExclusive(s.lock, line())
 }
 
+// refreshRunLock restarts the lock's clock while it is this run's own, at each step after the child: the
+// lock goes stale deadline+300 s after its time, and the steps after a child that ran close to its
+// deadline (each bounded, but several) could pass that while the run is alive and well. A step that hangs
+// still lets it go stale.
+func (s *state) refreshRunLock() {
+	f, ok := s.lockFields()
+	if !ok || len(f) < 3 || f[0] != lib.LockPID() || f[2] != "auto" {
+		return
+	}
+	tmp := s.lock + ".sync-tmp"
+	if os.WriteFile(tmp, []byte(fmt.Sprintf("%s %d %s\n", lib.LockPID(), now(), "auto")), 0o666) != nil || os.Rename(tmp, s.lock) != nil {
+		os.Remove(tmp)
+	}
+}
+
 // releaseRunLock removes the lock if it is this run's own.
 func (s *state) releaseRunLock() {
 	f, ok := s.lockFields()
