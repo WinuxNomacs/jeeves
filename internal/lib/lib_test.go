@@ -176,6 +176,15 @@ func TestARecordThatCannotBeWrittenIsReported(t *testing.T) {
 	}
 }
 
+func TestShellQuoteSurvivesEveryCharacterShTreatsSpecially(t *testing.T) {
+	for _, w := range []string{"/plain/path", "/a b/c", `/q"u$o` + "`t`" + `'e/x`, "/x'y"} {
+		out, err := exec.Command("sh", "-c", "printf %s "+ShellQuote(w)).Output()
+		if err != nil || string(out) != w {
+			t.Errorf("ShellQuote(%q) gave %q to sh (%v)", w, out, err)
+		}
+	}
+}
+
 func TestALockedEncryptedRepoIsRefusedUnlessAllowed(t *testing.T) {
 	e, repo := scratch(t)
 	os.WriteFile(repo+"/recipient", []byte("age1abc\n"), 0o644)
@@ -188,7 +197,7 @@ func TestALockedEncryptedRepoIsRefusedUnlessAllowed(t *testing.T) {
 		t.Errorf("with ALLOW_LOCKED: %v", err)
 	}
 	out, _ := exec.Command("git", "-C", repo, "config", "filter.jeeves.clean").Output()
-	if string(out) != `"/plugin/bin/jeeves-crypt" clean %f`+"\n" {
+	if string(out) != `'/plugin/bin/jeeves-crypt' clean %f`+"\n" {
 		t.Errorf("filter not set up: %q", out)
 	}
 }

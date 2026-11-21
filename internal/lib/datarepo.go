@@ -198,13 +198,13 @@ func (r *Repo) Unlocked() bool {
 func (r *Repo) CryptSetup(e Env) {
 	bin := e.Root() + "/bin/jeeves-crypt"
 	want := []string{
-		`filter.jeeves.process "` + bin + `" process`,
-		`filter.jeeves.clean "` + bin + `" clean %f`,
-		`filter.jeeves.smudge "` + bin + `" smudge %f`,
+		`filter.jeeves.process ` + ShellQuote(bin) + ` process`,
+		`filter.jeeves.clean ` + ShellQuote(bin) + ` clean %f`,
+		`filter.jeeves.smudge ` + ShellQuote(bin) + ` smudge %f`,
 		`filter.jeeves.required true`,
-		`diff.jeeves.textconv "` + bin + `" textconv`,
+		`diff.jeeves.textconv ` + ShellQuote(bin) + ` textconv`,
 		`merge.jeeves.name Jeeves (encrypted)`,
-		`merge.jeeves.driver "` + bin + `" merge %O %A %B %L`,
+		`merge.jeeves.driver ` + ShellQuote(bin) + ` merge %O %A %B %L`,
 		`core.checkstat minimal`,
 		`core.trustctime false`,
 	}
@@ -223,12 +223,29 @@ func (r *Repo) CryptSetup(e Env) {
 	}
 }
 
+// ShellQuote quotes a word for sh (git runs filters and drivers through it, Git for Windows through its
+// own sh): single quotes, each one inside written as '\”.
+func ShellQuote(w string) string { return "'" + strings.ReplaceAll(w, "'", `'\''`) + "'" }
+
+// NoHooksDir is the hooks folder every git command Jeeves runs in the data repo is given: one that never
+// exists, so no hook runs (nor an fsmonitor program). A hook or a global core.hooksPath (husky, pre-commit)
+// would run with this process's environment, the data repo's key included while it is loaded, and Jeeves's
+// own commits are no project's to check.
+// The tests' seam: JEEVES_TEST_HOOKS names a hooks folder to run instead, to inject a failing commit or
+// push.
+func (r *Repo) NoHooksDir() string {
+	if d := os.Getenv("JEEVES_TEST_HOOKS"); d != "" {
+		return d
+	}
+	return r.CryptDir + "/no-hooks"
+}
+
 // Git runs git in the data repo with the settings every script uses (lib.sh's git_repo): files are copied
 // byte for byte, so no line-ending conversion, and the user's own ignore list never applies. Its stderr
 // goes to the repo's stderr, as the scripts let git's own messages through. Returns stdout.
 func (r *Repo) Git(args ...string) (string, error) {
 	cmd := exec.Command("git", append([]string{"-C", r.Dir, "-c", "core.autocrlf=false",
-		"-c", "core.safecrlf=false", "-c", "core.excludesFile="}, args...)...)
+		"-c", "core.safecrlf=false", "-c", "core.excludesFile=", "-c", "core.hooksPath=" + r.NoHooksDir(), "-c", "core.fsmonitor=false"}, args...)...)
 	var out bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, r.Stderr
 	err := cmd.Run()

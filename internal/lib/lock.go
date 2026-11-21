@@ -33,10 +33,17 @@ func createExclusive(p, pid string) bool {
 	return f.Close() == nil && werr == nil
 }
 
-func olderThanAMinute(p string) bool {
+func olderThanAMinute(p string) bool { return olderThan(p, time.Minute) }
+
+func olderThan(p string, d time.Duration) bool {
 	fi, err := os.Stat(p)
-	return err == nil && time.Since(fi.ModTime()) > time.Minute
+	return err == nil && time.Since(fi.ModTime()) > d
 }
+
+// lockLimit is how long a lock may be held before it counts as stale even with its PID alive: a holder
+// killed outright (SIGKILL, a power cut) leaves its lock, and after a restart its PID often belongs to
+// another process. No Jeeves command holds the lock nearly this long.
+var lockLimit = 2 * time.Hour
 
 // holderAlive checks a lock holder (a variable, so a test can change the lock while it is checked).
 var holderAlive = alive
@@ -51,7 +58,8 @@ func alive(pid string) bool {
 }
 
 // TakeLock waits up to secs for the lock in cryptDir, taking over one whose process is gone (or an empty
-// one over a minute old), one waiter at a time under lock.takeover; nil when it is not had in time.
+// one over a minute old, or any held past lockLimit), one waiter at a time under lock.takeover; nil when it
+// is not had in time.
 func TakeLock(cryptDir string, secs int) *Lock {
 	if os.MkdirAll(cryptDir, 0o777) != nil {
 		return nil
@@ -60,7 +68,7 @@ func TakeLock(cryptDir string, secs int) *Lock {
 	for i := 0; !createExclusive(l.path, l.pid); i++ {
 		if createExclusive(l.path+".takeover", l.pid) {
 			pid := catTrim(l.path)
-			stale := (pid != "" && !holderAlive(pid)) || (pid == "" && olderThanAMinute(l.path))
+			stale := (pid != "" && !holderAlive(pid)) || (pid == "" && olderThanAMinute(l.path)) || olderThan(l.path, lockLimit)
 			if _, err := os.Stat(l.path); stale && err == nil && catTrim(l.path) == pid {
 				os.Remove(l.path)
 			}

@@ -565,7 +565,7 @@ func (s *run) record() int {
 	add := func(args ...string) bool {
 		errBuf.Reset()
 		cmd := lib.Command("git", append([]string{"-C", r.Dir, "-c", "core.autocrlf=false", "-c", "core.safecrlf=false",
-			"-c", "core.excludesFile="}, args...)...)
+			"-c", "core.excludesFile=", "-c", "core.hooksPath=" + r.NoHooksDir(), "-c", "core.fsmonitor=false"}, args...)...)
 		cmd.Stdout, cmd.Stderr = &errBuf, &errBuf
 		return cmd.Run() == nil
 	}

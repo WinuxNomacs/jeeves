@@ -53,7 +53,7 @@ func (x *run) sayErr(f string, a ...any) { fmt.Fprintf(x.stderr, "jeeves encrypt
 func Run(e lib.Env, args []string, stdout, stderr io.Writer) int {
 	a, args := lib.ParseDataRepoArg(args)
 	usage := func() int {
-		fmt.Fprintln(stderr, "usage: jeeves-encrypt status | on | unlock | lock | passphrase [--terminal] [--key-file]")
+		fmt.Fprintln(stderr, "usage: jeeves-encrypt status | lock | on | unlock | passphrase [--terminal]; on and unlock also take --key-file")
 		return 2
 	}
 	if len(args) == 0 {
@@ -76,6 +76,10 @@ func Run(e lib.Env, args []string, stdout, stderr io.Writer) int {
 	default:
 		return usage()
 	}
+	// The key goes into a file only where this device first stores it.
+	if keyFile && x.cmd != "on" && x.cmd != "unlock" {
+		return usage()
+	}
 	os.Setenv("ALLOW_LOCKED", "1")
 	r, err := lib.FindDataRepo(e, a, stderr)
 	if err != nil {
@@ -86,9 +90,6 @@ func Run(e lib.Env, args []string, stdout, stderr io.Writer) int {
 	if os.MkdirAll(r.CryptDir, 0o700) != nil {
 		return 1
 	}
-	if keyFile && x.cmd != "status" && x.cmd != "lock" {
-		os.WriteFile(r.CryptDir+"/keystore", []byte("file\n"), 0o600)
-	}
 	if x.cmd == "on" || x.cmd == "unlock" || x.cmd == "passphrase" {
 		lock := lib.TakeLock(r.CryptDir, 30)
 		if lock == nil {
@@ -96,6 +97,30 @@ func Run(e lib.Env, args []string, stdout, stderr io.Writer) int {
 			return 1
 		}
 		defer lock.Release()
+	}
+	// --key-file: the file store for this run, kept only once the key is stored there (a cancelled or
+	// failed run leaves the device's store as it was).
+	if keyFile {
+		store := r.CryptDir + "/keystore"
+		before, had := os.ReadFile(store)
+		if os.WriteFile(store, []byte("file\n"), 0o600) != nil {
+			x.say("could not choose the file store (%s); nothing changed", lib.ShellPath(store))
+			return 1
+		}
+		var rc int
+		if x.cmd == "on" {
+			rc = x.on()
+		} else {
+			rc = x.unlock()
+		}
+		if rc != 0 {
+			if had == nil {
+				os.WriteFile(store, before, 0o600)
+			} else {
+				os.Remove(store)
+			}
+		}
+		return rc
 	}
 	switch x.cmd {
 	case "status":
@@ -156,7 +181,7 @@ func (x *run) ask(msg string) (string, int) {
 	p, err := lib.AskPassphrase(msg, x.terminal)
 	if errors.Is(err, lib.ErrNoDialog) {
 		x.sayErr("no password dialog can be shown here; in your own terminal, run:")
-		x.sayErr("  JEEVES_DATA=\"%s\" \"%s/bin/jeeves-encrypt\" %s --terminal", x.r.ShellDir, x.e.Root(), x.cmd)
+		x.sayErr("  JEEVES_DATA=%s %s %s --terminal", lib.ShellQuote(x.r.ShellDir), lib.ShellQuote(x.e.Root()+"/bin/jeeves-encrypt"), x.cmd)
 		return "", 3
 	}
 	if err != nil || p == "" {
