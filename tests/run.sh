@@ -2073,7 +2073,7 @@ t_the_background_child_is_confined_and_gets_no_session_variables() {
     check "the child does not get $gone" bash -c '! grep -q "^$1=" <<< "$2"' _ "$gone" "$e"
   done
   # On Windows Git Bash gives a native program a path-like value in Windows form (right for Claude Code).
-  gbp=/bin/bash; case "$OSTYPE" in msys*|cygwin*) [ "$JEEVES_NO_GO" = 1 ] || gbp=$(cygpath -m /bin)/bash ;; esac
+  gbp=/bin/bash; case "$OSTYPE" in msys*|cygwin*) gbp=$(cygpath -m /bin)/bash ;; esac
   check "the child keeps what its sign-in or platform needs" grep -qxF "CLAUDE_CODE_GIT_BASH_PATH=$gbp" <<< "$e"
   check "the settings' env is carried over" grep -qx "MY_SETTING=x y" <<< "$e"
   check "but never sits in the folder the child can read" bash -c '! grep -q settings-env "$1"' _ "$FAKE_LOG.files"
