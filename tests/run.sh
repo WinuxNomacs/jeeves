@@ -2355,6 +2355,19 @@ t_a_run_killed_mid_commit_is_put_right_by_the_next() {
   check "a change that is not the run's own is left alone" grep -q "user's own" "$R/home/CLAUDE.md"
 }
 
+t_a_session_start_puts_right_a_killed_runs_step_with_updates_off() {
+  auto_env
+  echo enabled=no > "$CLAUDE_HOME/jeeves/auto.conf"
+  printf 'half-written\n' > "$R/home/CLAUDE.md"
+  mkdir -p "$CLAUDE_HOME/jeeves/auto"
+  echo "commit $(git hash-object --no-filters "$R/home/CLAUDE.md")" > "$CLAUDE_HOME/jeeves/auto/in-progress"
+  autobin --session-start >/dev/null
+  check "the half-written file is put back" bash -c '! grep -q half-written "$1"' _ "$R/home/CLAUDE.md"
+  check "the marker is gone" [ ! -e "$CLAUDE_HOME/jeeves/auto/in-progress" ]
+  check "the data repo is clean" [ -z "$(git -C "$R" status --porcelain)" ]
+  check "the run lock is not left behind" [ ! -e "$CLAUDE_HOME/jeeves/auto/run.lock" ]
+}
+
 t_a_run_that_cannot_start_backs_off_and_says_why() {
   auto_env
   git -C "$R" checkout -q -b elsewhere
@@ -3167,6 +3180,7 @@ run_test "stopping a background run stops its child" t_stopping_a_background_run
 run_test "a killed background supervisor's child is stopped by its watchdog" t_a_killed_supervisors_child_is_stopped_by_its_watchdog
 run_test "a leftover background child and folder are cleaned up at session start" t_a_leftover_child_and_folder_are_cleaned_up_at_session_start
 run_test "a background run killed mid-commit is put right by the next" t_a_run_killed_mid_commit_is_put_right_by_the_next
+run_test "a session start puts right a killed run's step, also with background updates off" t_a_session_start_puts_right_a_killed_runs_step_with_updates_off
 run_test "a background run that cannot start backs off and says why" t_a_run_that_cannot_start_backs_off_and_says_why
 run_test "the background log keeps the last 50 runs" t_the_background_log_keeps_the_last_50_runs
 

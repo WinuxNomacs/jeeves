@@ -118,6 +118,7 @@ func (u *runner) cleanMain() bool {
 // caller does, output captured.
 func (u *runner) queued(cmd string, args []string, direct func(lib.Env, []string, io.Writer, io.Writer) int) (string, int) {
 	var b bytes.Buffer
+	u.refreshRunLock()
 	rc := worker.Run(u.e, cmd, args, &b, &b, direct)
 	return b.String(), rc
 }
@@ -165,6 +166,12 @@ func (s *state) run(sid, tp, folder string) (rc int) {
 		signal.Stop(sigs)
 		if p := recover(); p != nil {
 			if _, ok := p.(errExit); !ok {
+				// A bug: recorded where the user and the next run see it (this process's output goes
+				// nowhere), backed off like any failure, then the panic goes on.
+				msg := firstRunes(strings.ReplaceAll(fmt.Sprint(p), "\n", " "), 120)
+				u.logRun("failed", "(internal error: "+msg+")")
+				u.notice("problem-run", "jeeves: a background update stopped on an internal error (see jeeves-auto status); it tries again later.")
+				u.backoff(3600)
 				u.cleanup()
 				panic(p)
 			}
@@ -304,6 +311,7 @@ func (u *runner) body(sid, tp, folder string) {
 		return
 	}
 	u.outcome = "reviewed"
+	u.refreshRunLock()
 	summary := readSummary(run + "/out/summary.txt")
 	hash := u.commitEdit(run, summary)
 

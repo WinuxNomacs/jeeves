@@ -15,13 +15,14 @@ import (
 	"unicode/utf8"
 )
 
-// The parts of Claude Code's transcript lines (JSON, one object per line) a run reads, checked against
-// transcripts of the pinned Claude Code version (testdata/).
+// The parts of Claude Code's transcript lines (JSON, one object per line) a run reads. Checked against
+// hand-written lines (auto_test.go, tests/run.sh) and the wrappers seen in real transcripts (2026-11-21);
+// no transcript is kept in the repo, as one holds a user's own work.
 var (
 	// Pasted images: their base64 data is dropped before decoding.
 	imageData = regexp.MustCompile(`"data":"[A-Za-z0-9+/=]{256,}"`)
 	// Messages Claude Code injects as the user's: never the user's own words.
-	injected = regexp.MustCompile(`^<(system-reminder|local-command|command-name|command-message|command-args|task-notification|bash-input|bash-stdout|bash-stderr|user-prompt-submit-hook)`)
+	injected = regexp.MustCompile(`^<(system-reminder|local-command|command-name|command-message|command-args|task-notification|bash-input|bash-stdout|bash-stderr|user-prompt-submit-hook|ide_opened_file|ide_selection|pasted_content)`)
 	toolName = regexp.MustCompile(`[^A-Za-z0-9_:.-]`)
 )
 

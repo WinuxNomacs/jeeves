@@ -116,11 +116,34 @@ func (s *state) hookStop(stdin io.Reader) int {
 	c := lib.Command(s.e.Root()+"/bin/jeeves-auto", "run", sid, tp, folder)
 	c.Env = scrubbed(os.Environ(), "supervisor")
 	c.Stdin, c.Stdout, c.Stderr = nil, nil, nil
+	// Not in the session's folder (the user's project): a run lives for minutes, and on Windows a process's
+	// folder cannot be removed or renamed meanwhile.
+	c.Dir = os.TempDir()
 	proc.StartDetached(c)
 	if c.Process != nil {
 		c.Process.Release()
 	}
 	return 0
+}
+
+// recoverIdle puts right a step a killed run left half done when no run is at work: otherwise, with
+// background updates off or backing off, every snapshot would skip the dirty data repo until the next run.
+// Briefly: a session start must not wait.
+func (s *state) recoverIdle() {
+	if !exists(s.dir+"/in-progress") || !s.takeRunLock("auto") {
+		return
+	}
+	defer s.releaseRunLock()
+	a, _ := lib.ParseDataRepoArg(nil)
+	r, err := lib.FindDataRepo(s.e, a, io.Discard)
+	if err != nil {
+		return
+	}
+	r.Stderr = io.Discard
+	if l := lib.TakeLock(r.CryptDir, 5); l != nil {
+		s.recoverSteps(r)
+		l.Release()
+	}
 }
 
 // sessionStart is the SessionStart hook: leftovers cleaned up, the one-line offer while background updates
@@ -132,6 +155,7 @@ func (s *state) sessionStart() int {
 	if out := s.reapLeftovers(false); len(out) > 0 {
 		s.logRun("cleaned", "("+strings.Join(out, " ")+")")
 	}
+	s.recoverIdle()
 	if !exists(s.conf) {
 		fmt.Fprintln(s.stdout, "jeeves: background updates (a /jeeves:update review about once an hour of use, in a separate headless session; off by default) are not decided on this device. Tell the user once, in one line, that /jeeves:autoupdate turns them on or keeps them off; either answer ends this reminder.")
 	}
