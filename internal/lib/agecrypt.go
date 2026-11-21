@@ -15,9 +15,43 @@ import (
 // scrypt stanza, the format `age -e -j batchpass -a` writes, so a data repo stays readable with the age
 // command line either way.
 
-// IsAge reports whether data is age output (binary or armored).
+// IsAge reports whether data is age output (binary or armored), by the shape of its header, not only its
+// first line: the clean filter passes age output through as it is, so plain text that merely starts with
+// the magic line must not count. Binary: the magic line, a "-> " stanza, then the "--- <MAC>" line that
+// ends the header. Armored: the BEGIN line, base64 lines, the END line.
 func IsAge(data []byte) bool {
-	return bytes.HasPrefix(data, []byte(AgeMagic)) || bytes.HasPrefix(data, []byte(armor.Header))
+	if bytes.HasPrefix(data, []byte(AgeMagic+"\n-> ")) {
+		head := data
+		if len(head) > 1<<20 {
+			head = head[:1<<20]
+		}
+		i := bytes.Index(head, []byte("\n--- "))
+		if i < 0 || len(head) < i+5+43+1 {
+			return false
+		}
+		return isBase64(head[i+5:i+5+43]) && head[i+5+43] == '\n'
+	}
+	if bytes.HasPrefix(data, []byte(armor.Header+"\n")) || bytes.HasPrefix(data, []byte(armor.Header+"\r\n")) {
+		body := strings.TrimSpace(string(data))
+		if !strings.HasSuffix(body, armor.Footer) {
+			return false
+		}
+		body = strings.TrimSuffix(strings.TrimPrefix(body, armor.Header), armor.Footer)
+		return isBase64([]byte(strings.Join(strings.Fields(body), "")))
+	}
+	return false
+}
+
+func isBase64(b []byte) bool {
+	if len(b) == 0 {
+		return false
+	}
+	for _, c := range b {
+		if !(c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '+' || c == '/' || c == '=') {
+			return false
+		}
+	}
+	return true
 }
 
 // NewKey makes a data repo key: the private key (AGE-SECRET-KEY-1...) and its recipient (age1...).

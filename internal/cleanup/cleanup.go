@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/WinuxNomacs/jeeves/internal/lib"
+	"github.com/WinuxNomacs/jeeves/internal/risk"
 	"github.com/WinuxNomacs/jeeves/internal/scan"
 )
 
@@ -222,6 +223,38 @@ func Run(e lib.Env, args []string, stdout, stderr io.Writer) int {
 	}
 
 	old := r.RevParse("main")
+	// What the force-push brings that origin lacks is only what main adds over origin/main (the rebuilt
+	// history holds nothing else): it gets the checks jeeves-push runs, before anything changes. Lines
+	// origin already has (a finding the user accepted then) are not checked again.
+	if hasOrigin && origin != old {
+		rng := "main"
+		if origin != "" {
+			rng = origin + "..main"
+		}
+		if r.EncryptedAt("main") && !e.LoadKey(r) {
+			return skip("the data repo's key is not in this device's key store (run /jeeves:encryption)")
+		}
+		found, _, err := scan.Findings(r, rng)
+		if err != nil {
+			return skip("%s", err)
+		}
+		if len(found) > 0 {
+			for _, f := range found {
+				fmt.Fprintf(stdout, "jeeves scan: %s\n", f.Msg)
+			}
+			say("not run, because of the possible secrets above in commits not yet pushed; nothing changed")
+			return finish(1)
+		}
+		flags, err := risk.Flags(r, rng)
+		if err != nil {
+			return skip("%s", err)
+		}
+		if len(flags) > 0 {
+			risk.Print(flags, stdout)
+			say("not run: the commits not yet pushed hold the flagged lines above, which jeeves-push asks the user about first; nothing changed")
+			return finish(1)
+		}
+	}
 	os.MkdirAll(r.StateDir, 0o777)
 	bundle := r.StateDir + "/" + lib.CleanupBundleName
 	fail := func(f string, v ...any) int {
@@ -306,14 +339,6 @@ func Run(e lib.Env, args []string, stdout, stderr io.Writer) int {
 	release := func() { signal.Stop(sig); close(stopWatch) }
 
 	if hasOrigin {
-		var out bytes.Buffer
-		if scan.Run(e, nil, &out, stderr) != 0 {
-			release()
-			undo()
-			fmt.Fprint(stdout, out.String())
-			say("not pushed, because of the possible secrets above; nothing changed")
-			return finish(1)
-		}
 		var perr bytes.Buffer
 		if r.RemoteGit(&perr, &perr, "push", "-q", "--force-with-lease=main:"+origin, "origin", "main") != 0 {
 			release()

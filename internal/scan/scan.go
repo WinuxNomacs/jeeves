@@ -38,30 +38,43 @@ type Finding struct {
 }
 
 // Findings checks what a push of main would send (the commits in rng) and how many lines they add. The key
-// must be loaded (lib.Env.LoadKey) when the data repo is encrypted.
-func Findings(r *lib.Repo, rng string) ([]Finding, int) {
+// must be loaded (lib.Env.LoadKey) when the data repo is encrypted. An error when the commits could not be
+// read: nothing is known about them then, and nothing may be pushed.
+func Findings(r *lib.Repo, rng string) ([]Finding, int, error) {
 	var found []Finding
 	if r.EncryptedAt("main") {
 		// Each blob under home/ or hosts/ in the outgoing commits, once, with the first commit that holds it.
-		commits, _ := r.Git("rev-list", "--abbrev-commit", rng)
+		commits, err := r.Git("rev-list", "--abbrev-commit", rng)
+		if err != nil {
+			return nil, 0, fmt.Errorf("could not list the outgoing commits (%s): %w", rng, err)
+		}
 		seen := map[string]bool{}
 		for _, c := range strings.Fields(commits) {
-			tree, _ := r.Git("-c", "core.quotepath=false", "ls-tree", "-r", c, "--", "home", "hosts")
-			for _, l := range strings.Split(strings.TrimRight(tree, "\n"), "\n") {
+			tree, err := r.Git("-c", "core.quotepath=false", "ls-tree", "-r", "-z", c, "--", "home", "hosts")
+			if err != nil {
+				return nil, 0, fmt.Errorf("could not read commit %s: %w", c, err)
+			}
+			for _, l := range strings.Split(strings.TrimRight(tree, "\x00"), "\x00") {
 				meta, path, ok := strings.Cut(l, "\t")
 				m := strings.Fields(meta)
 				if !ok || len(m) < 3 || seen[m[2]] {
 					continue
 				}
 				seen[m[2]] = true
-				blob, _ := r.Git("cat-file", "blob", m[2])
-				if !strings.HasPrefix(blob, lib.AgeMagic) {
+				blob, err := r.Git("cat-file", "blob", m[2])
+				if err != nil {
+					return nil, 0, fmt.Errorf("could not read %s in commit %s: %w", path, c, err)
+				}
+				if !lib.IsAge([]byte(blob)) {
 					found = append(found, Finding{Msg: fmt.Sprintf("not encrypted: %s (commit %s)", strings.TrimSpace(path), c), Plain: true})
 				}
 			}
 		}
 	}
-	added := r.OutgoingAdded(rng)
+	added, err := r.OutgoingAdded(rng)
+	if err != nil {
+		return nil, 0, err
+	}
 	for _, k := range kinds {
 		for _, l := range added {
 			if k.re.MatchString(l.Text) {
@@ -69,7 +82,7 @@ func Findings(r *lib.Repo, rng string) ([]Finding, int) {
 			}
 		}
 	}
-	return found, len(added)
+	return found, len(added), nil
 }
 
 // Run returns 0 when nothing is found, 1 with each finding listed as file:line and its kind.
@@ -89,7 +102,11 @@ func Run(e lib.Env, args []string, stdout, stderr io.Writer) int {
 		say("the data repo's key is not in this device's key store: run /jeeves:encryption")
 		return 1
 	}
-	found, added := Findings(r, r.OutgoingRange())
+	found, added, err := Findings(r, r.OutgoingRange())
+	if err != nil {
+		say("%s; do not push until it reads", err)
+		return 1
+	}
 	for _, f := range found {
 		say("%s", f.Msg)
 	}
