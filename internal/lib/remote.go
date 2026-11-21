@@ -18,9 +18,12 @@ import (
 func (r *Repo) RemoteGit(stdout, stderr io.Writer, args ...string) int {
 	cmd := exec.Command("git", append([]string{"-C", r.Dir, "-c", "core.autocrlf=false", "-c", "core.safecrlf=false",
 		"-c", "core.hooksPath=" + r.NoHooksDir(), "-c", "core.fsmonitor=false"}, args...)...)
-	env := []string{}
+	// git's messages in English, as callers read them (a refused push, an origin with no main yet): the
+	// user's language would translate them. LC_ALL and LANGUAGE would override LC_MESSAGES.
+	env := []string{"LC_MESSAGES=C"}
 	for _, kv := range os.Environ() {
-		if !strings.HasPrefix(kv, "JEEVES_AGE_KEY=") {
+		k, _, _ := strings.Cut(kv, "=")
+		if k != "JEEVES_AGE_KEY" && k != "LC_ALL" && k != "LANGUAGE" && k != "LC_MESSAGES" {
 			env = append(env, kv)
 		}
 	}

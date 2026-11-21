@@ -106,7 +106,7 @@ func Run(e lib.Env, args []string, stdout, stderr io.Writer) int {
 			}
 			saved = true
 		}
-		if lib.CopyFile(src+"/"+rel, disk) != nil {
+		if lib.CopyFile(src+"/"+rel, lib.WriteTarget(disk)) != nil {
 			failed = append(failed, rel+" (could not be written)")
 			return false
 		}

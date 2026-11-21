@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -159,6 +160,19 @@ func CopyFile(src, dst string) error {
 		return err
 	}
 	return nil
+}
+
+// WriteTarget is where a write to a ~/.claude file goes: through a link to a file (a dotfiles setup, say)
+// to the file it names, so the link stays; the path itself otherwise.
+func WriteTarget(p string) string {
+	if fi, err := os.Lstat(p); err == nil && fi.Mode()&fs.ModeSymlink != 0 {
+		if t, err := filepath.EvalSymlinks(p); err == nil {
+			if ti, err := os.Stat(t); err == nil && ti.Mode().IsRegular() {
+				return t
+			}
+		}
+	}
+	return p
 }
 
 // Copy results of CopySettled.

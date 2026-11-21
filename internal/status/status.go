@@ -17,6 +17,7 @@ import (
 //	datarepo <absolute path of the data repo>
 //	branch   <name>  clean | dirty | merging
 //	main     even | ahead | behind | diverged | no-remote  <ahead>  <behind>
+//	         (ahead also before the first push to an origin that has no main yet; no-remote: no origin)
 //
 // Returns the exit status.
 func Run(e lib.Env, args []string, stdout, stderr io.Writer) int {
@@ -63,6 +64,14 @@ func Run(e lib.Env, args []string, stdout, stderr io.Writer) int {
 	fmt.Fprintf(stdout, "branch\t%s\t%s\n", branch, tree)
 
 	if _, err := r.Git("rev-parse", "-q", "--verify", "refs/remotes/origin/main"); err != nil {
+		// An origin with no main yet (a new data repo, before its first push): all of main is ahead.
+		if r.GitQuiet("remote", "get-url", "origin") == nil {
+			n, _ := r.Out("rev-list", "--count", "main")
+			if n != "" && n != "0" {
+				fmt.Fprintf(stdout, "main\tahead\t%s\t0\n", n)
+				return 0
+			}
+		}
 		fmt.Fprint(stdout, "main\tno-remote\t0\t0\n")
 		return 0
 	}

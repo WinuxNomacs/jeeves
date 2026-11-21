@@ -7,6 +7,7 @@
 # come from bash itself: no dirname, uname or $(cd ... && pwd).
 
 jeeves_cmd=$1; shift
+jeeves_args=" $* "
 
 # The plugin folder as `cd <bin>/.. && pwd` gives it (logical: . and .. removed by name, symlinks kept), so a
 # path the Go build records (git's filter settings) reads the same however the wrapper was called.
@@ -37,8 +38,15 @@ jeeves_root() {
 }
 jeeves_root
 
-# jeeves_cannot <why>: the command cannot run on this machine.
+# jeeves_cannot <why>: the command cannot run on this machine. A hook never blocks a session or shows an
+# error: it exits 0, and only the session-start snapshot says, once a session, why Jeeves does nothing here.
 jeeves_cannot() {
+  case "$jeeves_cmd$jeeves_args" in
+    "hook-edit "*|*" --hook-stop "*|*" --session-start "*) exit 0 ;;
+    *" --hook "*)
+      echo "jeeves: Jeeves does nothing on this machine: $1; it runs on macOS and Linux (amd64 or arm64) and Windows (amd64)"
+      exit 0 ;;
+  esac
   echo "jeeves-$jeeves_cmd: $1; Jeeves runs on macOS and Linux (amd64 or arm64) and Windows (amd64)" >&2
   exit 1
 }
