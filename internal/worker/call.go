@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/WinuxNomacs/jeeves/internal/lib"
+	"github.com/WinuxNomacs/jeeves/internal/proc"
 )
 
 // maxWaiting is how many requests may wait; past it a new one is refused (a worker that cannot keep up,
@@ -124,7 +125,7 @@ func spawn(exe, q string) error {
 	c := newCommand(exe, "worker")
 	c.Stdout, c.Stderr = log, log
 	c.Dir = os.TempDir() // not the caller's folder, which the worker would keep in use (Windows: undeletable)
-	if err := startDetached(c); err != nil {
+	if err := proc.StartDetached(c); err != nil {
 		return err
 	}
 	return c.Process.Release()

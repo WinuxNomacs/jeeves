@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/WinuxNomacs/jeeves/internal/lib"
+	"github.com/WinuxNomacs/jeeves/internal/proc"
 )
 
 // Settings with the tests' overrides (seconds), from this process's environment.
@@ -151,7 +152,7 @@ func run(q, exe string, r *Request, stderr io.Writer) int {
 	case err := <-done:
 		exit = lib.ExitCode(err)
 	case <-time.After(deadline):
-		stop(cmd, done, 5*time.Second)
+		proc.StopWithin(cmd, done, 5*time.Second)
 		note(base, "jeeves-%s: stopped after %s; nothing more was done, run it again\n", r.Command, deadline)
 		exit = 124
 	}
