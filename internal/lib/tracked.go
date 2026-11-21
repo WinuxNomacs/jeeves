@@ -22,6 +22,10 @@ var (
 )
 
 func Excluded(p string) bool {
+	// A copy a killed Jeeves run left half made (its temp file) is never a shared file.
+	if strings.HasSuffix(p, ".sync-tmp") {
+		return true
+	}
 	for _, x := range ExcludedPrefixes {
 		if strings.HasPrefix(p, x) {
 			return true

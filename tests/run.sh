@@ -2515,6 +2515,47 @@ t_a_failed_copy_records_nothing_and_loses_no_edit() {
   check "the next snapshot records the edit" grep -qx "rules v2" "$R/home/CLAUDE.md"
 }
 
+t_a_failed_snapshot_leaves_nothing_that_stops_the_next() {
+  snap >/dev/null; n=$(commits)
+  echo "rules v2" > "$W/claude/CLAUDE.md"; echo "new" > "$W/claude/agents/a b.md"; echo "z" > "$W/claude/agents/z.md"
+  fake_cp "repo/home/agents/z.md" "exit 1"
+  with_fake_cp snap >/dev/null
+  check "nothing committed" [ "$(commits)" = "$n" ]
+  check "the copies it made are taken back" [ -z "$(git -C "$R" status --porcelain)" ]
+  echo "rules v3" > "$W/claude/CLAUDE.md"
+  out=$(snap); rc=$?
+  check "after a later edit, the next snapshot records everything" bash -c '[ $1 = 0 ] && grep -qx "rules v3" "$2/home/CLAUDE.md" && [ -f "$2/home/agents/a b.md" ]' _ $rc "$R"
+}
+
+t_a_leftover_with_a_space_in_its_name_is_taken_as_the_snapshots_own() {
+  snap >/dev/null
+  echo "new" > "$W/claude/agents/a b.md"; cp "$W/claude/agents/a b.md" "$R/home/agents/a b.md"
+  out=$(snap); rc=$?
+  check "recorded, not skipped" bash -c '[ $1 = 0 ] && ! grep -q "uncommitted changes" <<< "$2"' _ $rc "$out"
+  check "committed" git -C "$R" cat-file -e "HEAD:home/agents/a b.md"
+}
+
+t_an_unreadable_file_is_reported_and_the_rest_recorded() {
+  snap >/dev/null
+  echo "x" > "$W/claude/agents/locked.md"; chmod 000 "$W/claude/agents/locked.md"
+  if cat "$W/claude/agents/locked.md" >/dev/null 2>&1; then chmod 644 "$W/claude/agents/locked.md"; echo "    (skipped: permissions do not stop reading here)"; return 0; fi
+  echo "rules v2" > "$W/claude/CLAUDE.md"
+  out=$(snap)
+  chmod 644 "$W/claude/agents/locked.md"
+  check "says which file could not be read" grep -q "could not be read (check its permissions): agents/locked.md" <<< "$out"
+  check "the other change is recorded" grep -qx "rules v2" "$R/home/CLAUDE.md"
+  check "and committed" [ -z "$(git -C "$R" status --porcelain)" ]
+}
+
+t_temp_files_and_reserved_names_are_never_shared() {
+  snap >/dev/null
+  echo "half" > "$W/claude/agents/a.md.sync-tmp"; echo "dev" > "$W/claude/agents/con.md"
+  out=$(snap)
+  check "a temp file is not taken" bash -c '! git -C "$1" cat-file -e HEAD:home/agents/a.md.sync-tmp 2>/dev/null' _ "$R"
+  check "a name Windows reserves is refused, with why" grep -q "agents/con.md (a part of its name (con.md) is a device name Windows reserves)" <<< "$out"
+  check "and not taken" bash -c '! git -C "$1" cat-file -e HEAD:home/agents/con.md 2>/dev/null' _ "$R"
+}
+
 t_a_failed_backup_copy_keeps_the_last_backup_whole() {
   mkdir -p "$W/claude/projects/-p/memory"; echo m1 > "$W/claude/projects/-p/memory/one.md"; echo m2 > "$W/claude/projects/-p/memory/two.md"
   snap >/dev/null; n=$(commits)
@@ -3177,6 +3218,10 @@ run_test "the manifests and hooks.json are valid and wire up the hooks" t_plugin
 run_test "an edit during the snapshot is recorded and never undone by apply" t_an_edit_during_the_snapshot_is_recorded_and_never_undone_by_apply
 run_test "a file that keeps changing is left for the next snapshot" t_a_file_that_keeps_changing_is_left_for_the_next_snapshot
 run_test "a failed copy records nothing and loses no edit" t_a_failed_copy_records_nothing_and_loses_no_edit
+run_test "a failed snapshot leaves nothing that stops the next" t_a_failed_snapshot_leaves_nothing_that_stops_the_next
+run_test "a leftover with a space in its name is taken as the snapshot's own" t_a_leftover_with_a_space_in_its_name_is_taken_as_the_snapshots_own
+run_test "an unreadable file is reported and the rest recorded" t_an_unreadable_file_is_reported_and_the_rest_recorded
+run_test "temp files and names Windows reserves are never shared" t_temp_files_and_reserved_names_are_never_shared
 run_test "a failed backup copy keeps the last backup whole" t_a_failed_backup_copy_keeps_the_last_backup_whole
 run_test "a failed install is not recorded, so no old copy is pushed back" t_a_failed_install_is_not_recorded_so_no_old_copy_is_pushed_back
 run_test "apply leaves a file written while it installs" t_apply_leaves_a_file_written_while_it_installs

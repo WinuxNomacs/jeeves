@@ -264,7 +264,25 @@ func BadName(p string) string {
 	if strings.HasSuffix(p, ".") || strings.HasSuffix(p, " ") || strings.Contains(p, "./") || strings.Contains(p, " /") {
 		return "a part of its name ends in a dot or space, which Windows does not allow"
 	}
+	for _, part := range strings.Split(p, "/") {
+		base, _, _ := strings.Cut(strings.ToUpper(part), ".")
+		if reservedName(base) {
+			return "a part of its name (" + part + ") is a device name Windows reserves"
+		}
+	}
 	return ""
+}
+
+// reservedName: a name Windows keeps for a device, whatever extension follows (CON, NUL, COM1, LPT9...).
+func reservedName(n string) bool {
+	switch n {
+	case "CON", "PRN", "AUX", "NUL":
+		return true
+	}
+	if len(n) == 4 && (strings.HasPrefix(n, "COM") || strings.HasPrefix(n, "LPT")) && n[3] >= '1' && n[3] <= '9' {
+		return true
+	}
+	return false
 }
 
 // CaseCollisions are the paths that differ only in case from another: they collide on Windows and macOS.
