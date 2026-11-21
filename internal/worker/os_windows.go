@@ -6,18 +6,28 @@ import (
 	"strconv"
 	"syscall"
 	"time"
+
+	"golang.org/x/sys/windows"
 )
 
-// tryLock opens p with no sharing, so a second opener fails while the worker lives; Windows closes the
-// handle when the process ends, so a dead worker never holds the queue. The handle is not inheritable.
+// tryLock locks one byte of p far past its end (LockFileEx, exclusive, without waiting), on a handle
+// opened with full sharing, so the file stays readable, writable and deletable while the worker lives;
+// Windows releases the lock when the process ends, so a dead worker never holds the queue. The handle is
+// not inheritable.
 func tryLock(p string, mark bool) (*os.File, bool) {
-	name, err := syscall.UTF16PtrFromString(p)
+	name, err := windows.UTF16PtrFromString(p)
 	if err != nil {
 		return nil, false
 	}
-	h, err := syscall.CreateFile(name, syscall.GENERIC_READ|syscall.GENERIC_WRITE, 0, nil,
-		syscall.OPEN_ALWAYS, syscall.FILE_ATTRIBUTE_NORMAL, 0)
+	h, err := windows.CreateFile(name, windows.GENERIC_READ|windows.GENERIC_WRITE,
+		windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil,
+		windows.OPEN_ALWAYS, windows.FILE_ATTRIBUTE_NORMAL, 0)
 	if err != nil {
+		return nil, false
+	}
+	ol := &windows.Overlapped{OffsetHigh: 1} // byte 4 GiB: never part of the file's content
+	if windows.LockFileEx(h, windows.LOCKFILE_EXCLUSIVE_LOCK|windows.LOCKFILE_FAIL_IMMEDIATELY, 0, 1, 0, ol) != nil {
+		windows.CloseHandle(h)
 		return nil, false
 	}
 	f := os.NewFile(uintptr(h), p)
@@ -65,4 +75,20 @@ func stop(cmd *exec.Cmd, done <-chan error, grace time.Duration) {
 		cmd.Process.Kill()
 		<-done
 	}
+}
+
+// openLog opens the worker's log for appending, shared for deletion, so the queue folder can be removed
+// while a worker still runs (the file goes when it closes).
+func openLog(p string) (*os.File, error) {
+	name, err := windows.UTF16PtrFromString(p)
+	if err != nil {
+		return nil, err
+	}
+	h, err := windows.CreateFile(name, windows.FILE_APPEND_DATA,
+		windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil,
+		windows.OPEN_ALWAYS, windows.FILE_ATTRIBUTE_NORMAL, 0)
+	if err != nil {
+		return nil, err
+	}
+	return os.NewFile(uintptr(h), p), nil
 }

@@ -355,7 +355,8 @@ commands are bash scripts, except those already ported to Go (so far `jeeves-sta
 `jeeves-init`, `jeeves-snapshot`, `jeeves-apply`, `jeeves-hook-edit`, `jeeves-restore` and
 `jeeves-cleanup`), whose `bin/` script runs the compiled program for your system from `dist/`: macOS and
 Linux on Intel/AMD or ARM, and Windows on Intel/AMD (elsewhere they stop and say so).
-The programs are built from `cmd/` and `internal/` in this repo with the Go standard library only, and the
+The programs are built from `cmd/` and `internal/` in this repo with the Go standard library and the Go team's `golang.org/x/sys` (Windows' file lock),
+pinned in `go.mod` and checked against `go.sum`, and the
 build is reproducible: anyone with the Go version `go.mod` names gets the same bytes, which
 `bash .claude/skills/release/build-go.sh --check` confirms (CI checks it on Linux, macOS and Windows for each
 release, and the signed manifest holds their hashes). They are not signed by Apple or Microsoft; they arrive
