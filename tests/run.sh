@@ -610,6 +610,8 @@ t_a_name_with_a_line_break_never_points_outside_the_tracked_folders() {
 }
 
 t_a_path_with_a_backslash_keeps_its_sync_record() {
+  # Windows reads a backslash as a folder separator: no such name there.
+  case "$OSTYPE" in msys*|cygwin*) echo "skip: Windows has no backslash in a file name"; return ;; esac
   # The snapshot refuses such a name (Windows cannot hold it), so the record is written here as a sync would.
   snap >/dev/null
   mkdir -p "$W/claude/skills/x"; echo one > "$W/claude/skills/x/a\b.md"
