@@ -4,9 +4,8 @@
 
 - **No release before 2.0** (the user's decision, 2026-11-21): 2.0 is the completed Go rewrite. Work merges
   into `main` as each phase is done; nothing is cut or tagged until then, except the 1.4.2 security fix.
-- **Up next:** 1. Go port, Phase 4: background updates in Go (below, "Go port, Phase 4"; `feat/go-4`: 4a
-  and 4b built, 4c once 4b's parity passes on three OSes)
-- **Then:** 2. Phase 5: the last bash removed (below, "Go port, Phase 5") · 3. Release 2.0
+- **Up next:** 1. Release 2.0 (the Go rewrite, complete): the code review the user asked for before it
+  (2026-11-21), then the release steps (`.claude/skills/release/SKILL.md`); the tag is the user's
 - **The user's, any time:** submit 1.4.2 in the Anthropic portal (below, "Anthropic directory submission")
 - **Later:** 0. Review text gaps (below, under "Review text gaps") · 0. Injection docs: threat model in the README, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
@@ -1312,6 +1311,18 @@ Suite 105 passed (2026-11-19).
   44947431241); `lib/keys.sh` keeps only the key store read `jeeves-auto` needs. Tests: the encryption
   tests without the age command line, each step and misstep of `jeeves-encrypt`, the filter's failure
   tests, `go test ./internal/lib ./internal/crypt`. Not released.
+- Go port Phase 4 (2026-11-21; "Go port, Phase 4" above): `internal/proc` (the worker's process helpers,
+  and a child in its own process group or, on Windows, a kill-on-close job object), `jeeves-auto` in Go
+  (`internal/auto/`: the transcript read with `encoding/json`, tool calls encoded as the bash version's
+  JSON::PP did, the edit check's rules in Go, a `--watch` process on Unix), its bash version removed after
+  every background test passed against both on three OSes (CI run 44953707759), so perl is no longer
+  needed. Found on the way: `lib.Command` started a wrapper on Windows by a backslash path, which the
+  launcher could not split (cleanup's own snapshot and the Stop hook's run found no build); the tests'
+  setup reused a test's folder when one ran twice. Not released.
+- Go port Phase 5 (2026-11-21; "Go port, Phase 5" above): `lib/lib.sh` and `lib/keys.sh` deleted, their
+  tests ported to Go (`internal/lib/lock_test.go`); the launcher execs the build with no fallback, and
+  `JEEVES_NO_GO` is gone. Jeeves is the Go program, `lib/launch.sh` and `bin/jeeves-verify` (CI run
+  44953875377, 165 tests on each OS). Not released.
 
 ## Review text gaps (found by the 2026-11-19 dry run; older text, not this phase's)
 
