@@ -14,24 +14,6 @@ import (
 // AgeMagic starts every age file.
 const AgeMagic = "age-encryption.org/v1"
 
-// AgeMinVersion is the oldest age with age-plugin-batchpass, which takes the passphrase without a terminal.
-const AgeMinVersion = "1.3.0"
-
-var ageVersionRe = regexp.MustCompile(`^v?([0-9][0-9.]*)`)
-
-// AgeVersion is age's version (1.3.2), or "" when age is missing (JEEVES_AGE names the command).
-func AgeVersion() string {
-	age := os.Getenv("JEEVES_AGE")
-	if age == "" {
-		age = "age"
-	}
-	out, _ := Command(age, "--version").Output()
-	if m := ageVersionRe.FindStringSubmatch(FirstLine(string(out))); m != nil {
-		return m[1]
-	}
-	return ""
-}
-
 // VersionAtLeast compares dotted versions part by part, as keys.sh's version_at_least (a part that is not
 // a number decides nothing).
 func VersionAtLeast(v, min string) bool {

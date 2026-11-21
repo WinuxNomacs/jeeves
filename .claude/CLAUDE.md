@@ -43,7 +43,7 @@ code that runs, and the release check would warn at every session start.
   `gh`), `jeeves-cleanup` (folds old history into one root commit and force-pushes with a lease; `--auto`
   runs from the session-start snapshot per `jeeves.conf`; `--all` after encrypting), `jeeves-encrypt`
   (encryption on, unlock, lock, passphrase), `jeeves-crypt` (git's filter, textconv and merge driver for an
-  encrypted data repo; git runs it once per file, so it sources only `lib/crypt.sh`), `jeeves-memories`
+  encrypted data repo: git's long-running filter process, `internal/crypt/`; no bash version, so it never falls back), `jeeves-memories`
   (the memories the session review has not reviewed yet, and the shared record `hosts/.memory-review`),
   `jeeves-git` (git commands that only read, in the data repo), `jeeves-commit`, `jeeves-merge`, `jeeves-revert`
   and `jeeves-push` (the data repo's history, changed on the skills' behalf: `internal/version/`; each
@@ -83,7 +83,7 @@ code that runs, and the release check would warn at every session start.
   `internal/lib/tracked.go`. Knowledge files only (the user's decision, 2026-11-20): settings and
   keybindings are not backed up; copies a version before 2.0 left in `hosts/<host>/` are kept as they are.
 - `lib/lib.sh` — shared code: finding the data repo, tracked paths list, hashes, three-way classification.
-  `lib/crypt.sh` — encryption: the key stores (Keychain, Windows Credential Manager through PowerShell,
+  `lib/keys.sh` (was `lib/crypt.sh`; renamed so the launcher can never take it for `jeeves-crypt`'s bash version) — encryption: the key stores (Keychain, Windows Credential Manager through PowerShell,
   `secret-tool`, a key file), the passphrase dialogs, age helpers.
 - `tests/run.sh` — tests; each runs against a scratch `~/.claude`, data repo and bare remote.
 - Go port (in progress, `upcoming-changes.md` "Go port"): `go.mod`, `cmd/jeeves/` (one program, a
@@ -180,9 +180,11 @@ code that runs, and the release check would warn at every session start.
 - Encryption: a passphrase never goes through the chat or a command line (a dialog, or `--terminal` in the
   user's own terminal; to age only as `AGE_PASSPHRASE` of that one process); the key goes to stores on
   stdin. Plain text must never reach a commit: the filter is required, a failure stops git, and
-  `jeeves-scan` checks what a push sends. Tests for it need age 1.3+ on the PATH (skipped without it; the workflow installs a pinned age and fails
-  if they are skipped); for
-  Windows, unzip the release's Windows archive next to the copied tree and put it on the PATH.
+  `jeeves-scan` checks what a push sends. age is built in (`filippo.io/age`); the tests' cross-checks with
+  the age command line, and a command's bash version under parity, need age 1.3+ on the PATH (skipped
+  without it; the workflow installs a pinned age and fails if they are skipped); for Windows, unzip the
+  release's Windows archive next to the copied tree and put it on the PATH. Tests inject a failing
+  encryption with `JEEVES_TEST_CRYPT_FAIL` (text whose files fail to encrypt; `*` for all).
 - Tests: `tests/run.sh` (or `tests/run.sh <a word from the test's name>`; check how many ran). To see a new
   check fail on the old code, put back only the file under test (`git show HEAD:<file> > <file>`), never
   `git stash`, which stashes the tests too.

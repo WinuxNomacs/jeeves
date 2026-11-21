@@ -35,11 +35,6 @@ with a `cd` into it. Run `jeeves-encrypt status`, then go by the state and the r
 
 ## Tools (before Turn on, Unlock or Change the passphrase)
 
-- `age missing` or `age old`: Jeeves needs age 1.3.0 or later. Run `jeeves-check`; offer its
-  `age-install` command (run only after the user agrees). With `age-install none`, explain the official
-  download: https://github.com/FiloSottile/age/releases, the archive for this system, and putting `age`,
-  `age-keygen` and `age-plugin-batchpass` on the PATH (for example `~/.local/bin`). Once installed, run
-  `jeeves-encrypt status` again and go on. If the user declines, say that encryption needs it and stop.
 - `keystore none` (Turn on and Unlock only): this device has no credential store. Ask whether to keep the
   key in a file only this user can read (anything that can read that file or its backups can read the key)
   or to set up a store first (Linux: `secret-tool` with GNOME Keyring or KWallet). A file: add `--key-file`
