@@ -4,7 +4,7 @@
 
 - **No release before 2.0** (the user's decision, 2026-11-21): 2.0 is the completed Go rewrite. Work merges
   into `main` as each phase is done; nothing is cut or tagged until then, except the 1.4.2 security fix.
-- **Up next:** 1. Go port, Phase 1: the small commands
+- **Up next:** 1. Go port, Phase 1: the small commands (below, "Go port, Phase 1")
 - **Then:** 2. Phase 2: the sync core around one worker per machine, knowledge files only (settings no
   longer backed up), never following a link from the data repo · 3. Phase 3: encryption with age built in ·
   4. Phase 4: background updates · 5. Phase 5: the last bash versions removed · 6. Release 2.0
@@ -114,6 +114,55 @@ user chose a security release before 2.0: a branch from the `v1.4.1` tag with on
 version 1.4.2, the CHANGELOG, the signed manifest, the upgrade rehearsal from 1.4.1, CI, and the tag on the
 user's word; then the marketplace pin. `main` already holds the fix: the release branch is merged into
 `main` keeping `main`'s files (its CHANGELOG gains the 1.4.2 entry).
+
+## Go port, Phase 1: the small commands (planned 2026-11-21)
+
+Ports `git`, `risk`, `scan`, `check`, `memories`, `update-check`, `github` and `init` into `cmd/jeeves`, one
+package each under `internal/`, shared code in `internal/lib`. Each `bin/` script becomes the three-line
+wrapper (as `jeeves-status`), its bash body moved to `lib/<command>.sh`. Behaviour, messages and exit
+statuses stay the same, byte for byte; the README changes only where noted. Steps, one commit each:
+
+1. **`internal/lib` additions:** `GitRepo` (the scripts' `git_repo` options), `WithDeadline` (the command's
+   own process: a graceful stop, then a forced one after a second, status 124; `exec.CommandContext`
+   with `Cancel` and `WaitDelay`), `OSName` (linux, wsl, macos, windows), `KeystoreKind`, `StoreGet` (the
+   key read through the same system tools as `lib/crypt.sh`: `security`, `secret-tool`, the same
+   PowerShell text, a key file; reused by Phase 3), `EncryptedAt`, `IsDevCheckout`, `VersionAtLeast`,
+   `TakeLock` / `ReleaseLock`.
+2. **`git`, `init`, `github`:** git and gh are still run as programs (gh with its own `--jq`).
+3. **`scan` and `risk`:** `outgoing_added` (the `git log -p --cc -U0` parser), the secret patterns and
+   `risk_flags` in Go regexps (POSIX classes and `(?i)` match grep's for these patterns; `go test` holds
+   each pattern's matching and non-matching samples). An encrypted repo: the key from `StoreGet` into
+   `JEEVES_AGE_KEY` for git's own processes only; git still runs the bash `jeeves-crypt` (Phase 3 ports
+   it). `risk_flags` stays in `lib/lib.sh` too until Phase 2 (`jeeves-apply` uses it); the parity test
+   keeps both in step.
+4. **`check`, `update-check`:** `check`'s network checks keep their deadlines. `update-check` reads the
+   pin with Go's own HTTPS client instead of curl (https only, also after a redirect; the same 10-second
+   deadline; at most 64 KiB read; the proxy variables honoured, as curl does): one dependency fewer; the
+   README's "What Jeeves runs, sends and changes" and the update notice section say so.
+5. **`memories`:** `record` takes the data repo's lock, which the bash sync scripts share, so the lock file
+   keeps its format (the holder's PID; takeover under `lock.takeover`). On Windows a Go PID is not one
+   Git Bash's `kill -0` knows: the launcher passes its own `$$` (`JEEVES_LOCK_PID`; the wrapper lives as
+   long as the program), which Go writes into the lock, and Go checks a bash holder's PID through
+   `kill -0` in bash (only while a lock is held). Tests: a Go record waits for a bash-held lock and the
+   reverse, and a stale lock from either is taken over.
+6. **Tests:** each command's existing tests run the Go build (the wrappers' default); a parity test per
+   command (`both_versions`) runs its cases through both versions and compares stdout, stderr and exit
+   status: odd names (spaces, accents, a line break), an encrypted repo, a merge commit, no
+   `origin/main`, gh and ssh stand-ins that fail or hang, an unreadable record. The full suite also runs
+   once locally with `JEEVES_NO_GO=1` before the bash versions go.
+7. **Bash versions removed** (the user's rule: once parity passes on all three OSes): CI by hand on the
+   branch; when green, `lib/status.sh` and the eight `lib/<command>.sh` are deleted, with their parity
+   tests. The launcher, finding no bash version and no build that fits, says which machines 2.0 has
+   builds for and exits 1 (a test). Then `dist/` rebuilt and checked, the full suite, merge.
+
+Failure list (`update-check` runs from the session-start hook, unattended): no network or a hung server
+(the deadline; silent, tried the next day), an odd or huge answer (the size limit, the strict `vX.Y.Z`
+match), an unwritable record (silent, as now), a clock set back (counted as never checked). Each has a test
+today; they run against the Go build. `memories record` while another run holds the lock: waits 30
+seconds, then says so with nothing recorded (a test, both lock holders).
+
+Docs: README (curl gone from the update check; the Go notes list the ported commands), `.claude/CLAUDE.md`
+Go bullet (the ported commands), CHANGELOG 2.0.0.
 
 ## Go port, Phase 0: distribution (planned with the user, 2026-11-21)
 
