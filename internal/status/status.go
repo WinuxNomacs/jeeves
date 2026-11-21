@@ -30,6 +30,10 @@ func Run(e lib.Env, args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stdout, "jeeves status: %s\n", err)
 		return 1
 	}
+	if msg := r.LinkProblem(); msg != "" {
+		fmt.Fprintf(stdout, "jeeves status: %s\n", msg)
+		return 1
+	}
 
 	bases := r.Bases()
 	for _, p := range lib.AllTracked(e.ClaudeHome, r.HomeCopy) {

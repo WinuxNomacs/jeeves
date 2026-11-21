@@ -33,6 +33,10 @@ Built so far (prepared as 1.5.0, never published):
 - Fixed: `jeeves-scan` and `jeeves-risk` named the wrong line (line 0) when the nearest heading above an
   added line held a word starting with `+`, and garbled the place of a line in a file whose name has a
   space (`jeeves-risk` then did not show the line).
+- **Fixed (security):** a link (symbolic link) committed to the data repo could make a sync install a file
+  from elsewhere on the machine, such as an SSH key, as `~/.claude/CLAUDE.md`, and the next push send it;
+  a linked folder could make a snapshot write through it. Jeeves now never follows or commits a link in
+  the data repo: every command that reads its files stops and names the link to remove.
 - **Fixed (security):** a folder whose name held a line break, planted in the data repo, could make a sync
   write a file outside `~/.claude`. Paths are now checked to stay inside the synced folders.
 - Fixed: the order of paths in `jeeves-status` no longer depends on your system's language settings, and

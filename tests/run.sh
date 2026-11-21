@@ -521,6 +521,55 @@ t_risk_reads_an_encrypted_data_repo_with_the_key() {
   mv "$W/keys.away" "$W/keys"
 }
 
+# Links in the data repo: Jeeves never follows one (a committed link could install any file on the machine,
+# an SSH key say, as ~/.claude/CLAUDE.md, or make a snapshot write through a linked folder).
+commit_link() { # commit_link <path in the data repo> <target>: a committed link, made the same way on every OS
+  local blob
+  blob=$(printf '%s' "$2" | git -C "$R" hash-object -w --stdin)
+  git -C "$R" update-index --add --cacheinfo "120000,$blob,$1" && git -C "$R" commit -qm "link $1"
+  git -C "$R" -c core.autocrlf=false checkout -q -- "$1" 2>/dev/null
+}
+
+t_a_committed_link_is_refused_and_never_followed() {
+  snap >/dev/null
+  echo "secret key" > "$W/outside.txt"
+  commit_link home/CLAUDE.md "$W/outside.txt"
+  out=$(apply_all 2>&1); rc=$?
+  check "apply refuses, naming the link" grep -q "the data repo holds a link, which Jeeves never follows: home/CLAUDE.md" <<< "$out"
+  check "apply exits 1" [ $rc = 1 ]
+  check "the outside file is not installed" bash -c '! grep -q "secret key" "$1"' _ "$W/claude/CLAUDE.md"
+  out=$(snap 2>&1); rc=$?
+  check "snapshot refuses too" bash -c 'grep -q "holds a link" <<< "$1" && [ $2 = 1 ]' _ "$out" $rc
+  check "the session-start hook says so and exits 0" bash -c 'out=$("$1/bin/jeeves-snapshot" --hook); [ $? = 0 ] && grep -q "holds a link" <<< "$out"' _ "$SRC"
+  out=$(status 2>&1); rc=$?
+  check "status refuses too" bash -c 'grep -q "holds a link" <<< "$1" && [ $2 = 1 ]' _ "$out" $rc
+  check "jeeves-git still works, to remove it" bash -c '"$1/bin/jeeves-git" rm -q home/CLAUDE.md && "$1/bin/jeeves-git" commit -qm "link removed"' _ "$SRC"
+  check "and then status runs again" grep -q "^datarepo	" <<< "$(status)"
+}
+
+t_a_committed_folder_link_is_refused_and_never_written_through() {
+  snap >/dev/null
+  mkdir -p "$W/elsewhere"
+  commit_link home/commands "$W/elsewhere"
+  mkdir -p "$W/claude/commands"; echo c > "$W/claude/commands/c.md"
+  out=$(snap 2>&1)
+  check "snapshot refuses, naming the link" grep -q "holds a link, which Jeeves never follows: home/commands" <<< "$out"
+  check "nothing is written through it" [ -z "$(ls -A "$W/elsewhere")" ]
+}
+
+t_a_link_made_in_the_data_repo_on_disk_is_refused_and_never_committed() {
+  case "$OSTYPE" in msys*|cygwin*) echo "skip: links need extra rights on Windows"; return ;; esac
+  snap >/dev/null
+  mkdir -p "$R/hosts/laptop/projects/-p/memory"; ln -s "$W/claude/settings.json" "$R/hosts/laptop/projects/-p/memory/m.md"
+  out=$(snap 2>&1)
+  check "snapshot refuses, naming it" grep -q "holds a link, which Jeeves never follows: hosts/laptop/projects/-p/memory/m.md" <<< "$out"
+  check "and does not commit it" [ -z "$(git -C "$R" ls-files hosts/laptop)" ]
+  out=$(mem list 2>&1); rc=$?
+  check "the memory list refuses too" bash -c 'grep -q "holds a link" <<< "$1" && [ $2 = 1 ]' _ "$out" $rc
+  out=$(restore laptop --memories 2>&1); rc=$?
+  check "and restore" bash -c 'grep -q "holds a link" <<< "$1" && [ $2 = 1 ]' _ "$out" $rc
+}
+
 t_memories_record_shares_the_lock_with_the_bash_scripts() {
   local m=$W/claude/projects h out start
   mkdir -p "$m/-p/memory"; echo a > "$m/-p/memory/a.md"; snap >/dev/null
@@ -2618,6 +2667,9 @@ run_test "a path with a backslash keeps its sync record" t_a_path_with_a_backsla
 run_test "hashes do not depend on the current folder" t_hashes_do_not_depend_on_the_current_folder
 run_test "memories record shares the data repo's lock with the bash scripts" t_memories_record_shares_the_lock_with_the_bash_scripts
 run_test "scan and risk name each line right" t_scan_and_risk_name_each_line_right
+run_test "a committed link is refused and never followed" t_a_committed_link_is_refused_and_never_followed
+run_test "a committed folder link is refused and never written through" t_a_committed_folder_link_is_refused_and_never_written_through
+run_test "a link made in the data repo on disk is refused and never committed" t_a_link_made_in_the_data_repo_on_disk_is_refused_and_never_committed
 run_test "without a Go build for this machine, the bash version runs and says so once" t_without_a_go_build_for_this_machine_the_bash_version_runs_and_says_so_once
 run_test "without a Go build or a bash version, a command names the machines Jeeves runs on" t_without_a_go_build_or_a_bash_version_a_command_names_the_machines_jeeves_runs_on
 run_test "with a Go build that cannot start, the bash version runs" t_with_a_go_build_that_cannot_start_the_bash_version_runs

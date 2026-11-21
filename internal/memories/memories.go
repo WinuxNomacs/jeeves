@@ -59,6 +59,10 @@ func Run(e lib.Env, args []string, stdout, stderr io.Writer) int {
 		say("%s", err)
 		return 1
 	}
+	if msg := r.LinkProblem(); msg != "" {
+		say("%s", msg)
+		return 1
+	}
 	record := r.Dir + "/hosts/.memory-review"
 	switch cmd {
 	case "list":

@@ -48,6 +48,10 @@ func Run(e lib.Env, args []string, stdout, stderr io.Writer) int {
 		say("%s", err)
 		return 1
 	}
+	if msg := r.LinkProblem(); msg != "" {
+		say("%s; nothing restored", msg)
+		return 1
+	}
 
 	backups := "none"
 	if hs := lib.HostBackups(r); len(hs) > 0 {

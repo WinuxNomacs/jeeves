@@ -277,6 +277,10 @@ How the data stays whole:
   `jeeves-apply`, which also checks a file again just before replacing it.
 - A file holding git conflict markers (an unfinished merge) is never installed or recorded unless you name
   it after `--force`, and `jeeves-scan` flags markers in what a push would send.
+- Jeeves never follows a link (symbolic link) in the data repo, and never commits one: while `home/` or
+  `hosts/` holds one, committed or made on disk, every command that reads the data repo's files stops and
+  names it, so a link pushed by someone else cannot make a sync install a file from elsewhere on your
+  machine (an SSH key, say) or write through a linked folder. Remove it with `jeeves-git rm`, then commit.
 - A shared folder that disappears from `~/.claude` (moved, deleted, or a link to a drive that is not
   there) is not recorded as deleting its files on every device: the snapshot says so, and `/jeeves:update`
   asks you whether to delete them everywhere or put them back.

@@ -131,6 +131,10 @@ func Run(e lib.Env, args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	defer lock.Release()
+	if msg := r.LinkProblem(); msg != "" {
+		say("%s; nothing installed", msg)
+		return 1
+	}
 
 	if b := r.Branch(); b != "main" {
 		if b == "" {

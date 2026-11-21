@@ -89,7 +89,7 @@ command against its bash version until that version is deleted):
 - **Phase 5:** the last bash versions and the launcher's fallback removed; `bin/` holds only the wrappers
   and `jeeves-verify`.
 
-## Bug: a link committed to the data repo (found by the 1.4.2 review, 2026-11-21)
+## Bug: a link committed to the data repo (found by the 1.4.2 review, 2026-11-21; fixed in step 2b)
 
 Reproduced on 1.4.1 and 1.4.2 (Linux; Windows Git does not make links by default): someone who can push
 to the data repo commits `home/CLAUDE.md` as a symbolic link (say `../../.ssh/id_ed25519` from

@@ -183,6 +183,9 @@ func (s *run) main(a lib.DataRepoArg) int {
 		s.say("skipped, %s is on '%s', not main; ~/.claude changes are not recorded yet", r.ShellDir, b)
 		return 1
 	}
+	if !s.noLinks() {
+		return 1
+	}
 	if st, _ := r.Out("status", "--porcelain"); r.Merging() || (st != "" && !s.onlyOwnLeftovers()) {
 		s.say("skipped, %s has uncommitted changes; ~/.claude changes are not recorded yet", r.ShellDir)
 		return 1
@@ -193,6 +196,10 @@ func (s *run) main(a lib.DataRepoArg) int {
 	}
 
 	s.pullOrigin()
+	// What the pull brought in is checked too.
+	if !s.noLinks() {
+		return 1
+	}
 
 	// A ~/.claude with none of the shared files, on a device that has synced them: most likely the folder
 	// moved or was emptied, and taking that would delete them on every device. Record nothing and say so.
@@ -209,6 +216,15 @@ func (s *run) main(a lib.DataRepoArg) int {
 		return 1
 	}
 	return s.record()
+}
+
+// noLinks: the data repo holds no link (said, nothing recorded, when it does).
+func (s *run) noLinks() bool {
+	if msg := s.r.LinkProblem(); msg != "" {
+		s.say("skipped, %s", msg)
+		return false
+	}
+	return true
 }
 
 // onlyOwnLeftovers: the uncommitted changes are only what an earlier snapshot left (it failed or was
