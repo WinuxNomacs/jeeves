@@ -4,10 +4,9 @@
 
 - **No release before 2.0** (the user's decision, 2026-11-21): 2.0 is the completed Go rewrite. Work merges
   into `main` as each phase is done; nothing is cut or tagged until then, except the 1.4.2 security fix.
-- **Up next:** 1. Go port, Phase 2 (below, "Go port, Phase 2"): 2e the skill manages content, the worker
-  versions (2a-2d built, merged as each passes CI)
-- **Then:** 2. Phase 3: encryption with age built in (below, "Go port, Phase 3") · 3. Phase 4: background updates · 4. Phase 5: the last
-  bash versions removed · 5. Release 2.0
+- **Up next:** 1. Go port, Phase 3: encryption with age built in (below, "Go port, Phase 3"; built on
+  `feat/go-3`, merged once its parity test passes on three OSes and the bash version is removed)
+- **Then:** 2. Phase 4: background updates · 3. Phase 5: the last bash versions removed · 4. Release 2.0
 - **The user's, any time:** submit 1.4.2 in the Anthropic portal (below, "Anthropic directory submission")
 - **Later:** 0. Review text gaps (below, under "Review text gaps") · 0. Injection docs: threat model in the README, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
@@ -1221,11 +1220,13 @@ Suite 105 passed (2026-11-19).
   line 0 under a heading holding a `+word`, and names with a space garbled by git's trailing tab. Tests:
   the lock shared with the bash scripts, the launcher with and without a bash version, `go test`. CI
   green on three OSes (runs 44927817230 with parity, 44927823930 after the removal). Not released.
-- Go port Phase 2a-2d (2026-11-21; "Go port, Phase 2" above): `snapshot`, `apply`, `hook-edit`,
+- Go port Phase 2 (2026-11-21; "Go port, Phase 2" above): `snapshot`, `apply`, `hook-edit`,
   `restore` and `cleanup` in Go (`internal/lib/record.go`, `remote.go`), their bash versions removed after
   parity on three OSes; the link rule (`internal/lib/links.go`); knowledge files only (memories backed up
   and restored; settings and keybindings no longer); one worker per machine (`internal/worker/`). Tests:
-  the link cases, the 2c rewrites, eight worker failure tests and `go test ./internal/worker`. Not released.
+  the link cases, the 2c rewrites, eight worker failure tests and `go test ./internal/worker`. 2e: the versioning commands `jeeves-commit`, `jeeves-merge`,
+  `jeeves-revert`, `jeeves-push` (`internal/version/`), `jeeves-git` read-only, the skills rewritten to use
+  them. Merged 2026-11-21 (CI run 44943357225 green on three OSes). Not released.
 
 ## Review text gaps (found by the 2026-11-19 dry run; older text, not this phase's)
 
