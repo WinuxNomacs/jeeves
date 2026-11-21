@@ -4,11 +4,10 @@
 
 - **No release before 2.0** (the user's decision, 2026-11-21): 2.0 is the completed Go rewrite. Work merges
   into `main` as each phase is done; nothing is cut or tagged until then, except the 1.4.2 security fix.
-- **Up next:** 1. Security: links in the data repo (below, "Bug: a link committed to the data repo"), fixed
-  on `main` for 2.0 (the user chose not to hold 1.4.2 for it)
-- **Then:** 2. Go port, Phase 1: the small commands · 3. Phase 2: the sync core around one worker per machine,
-  knowledge files only (settings no longer backed up) · 4. Phase 3: encryption with age built in · 5. Phase 4:
-  background updates · 6. Phase 5: the last bash versions removed · 7. Release 2.0
+- **Up next:** 1. Go port, Phase 1: the small commands
+- **Then:** 2. Phase 2: the sync core around one worker per machine, knowledge files only (settings no
+  longer backed up), never following a link from the data repo · 3. Phase 3: encryption with age built in ·
+  4. Phase 4: background updates · 5. Phase 5: the last bash versions removed · 6. Release 2.0
 - **The user's, any time:** submit 1.4.2 in the Anthropic portal (below, "Anthropic directory submission")
 - **Later:** 0. Review text gaps (below, under "Review text gaps") · 0. Injection docs: threat model in the README, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
@@ -77,7 +76,8 @@ command against its bash version until that version is deleted):
 - **Phase 1, the small commands:** `git`, `risk`, `scan`, `check`, `memories`, `update-check`, `github`,
   `init`; `status`'s bash version removed once these pass parity on all three OSes.
 - **Phase 2, the sync core:** `snapshot`, `apply`, `hook-edit`, `restore`, `cleanup`, and the settings
-  backup removed (above). The data integrity rules hold unchanged (checked copies, the sync record, a
+  backup removed (above). Built in: the link rule from "Bug: a link committed to the data repo" (below),
+  with its tests. The data integrity rules hold unchanged (checked copies, the sync record, a
   clean `main`); the full upgrade rehearsal, plain and encrypted, two devices, one on the old release.
 - **Phase 3, encryption:** `crypt` (git's filter, run once per file: Go's start time helps most here),
   `encrypt`, the key stores; `age` built in, so users no longer install age and its plugin.
@@ -96,14 +96,15 @@ to the data repo commits `home/CLAUDE.md` as a symbolic link (say `../../.ssh/id
 `~/jeeves-data/home`). `jeeves-apply` follows it (`[ -f ]`, `hash_of` and the copy all follow links) and
 installs that file's content as `~/.claude/CLAUDE.md` with no prompt (CLAUDE.md is not held); the next
 snapshot commits it and `/jeeves:update` pushes it (`jeeves-scan` catches only secret patterns). A
-committed folder link (`home/commands -> /elsewhere`) makes the snapshot write through it. Fix to build on
-`main`: Jeeves never follows a link from the data repo: every command that syncs (and `status`, in bash and
-Go alike) refuses while `home/` or `hosts/` holds one (`git ls-files -s` mode 120000, or a link on disk
+committed folder link (`home/commands -> /elsewhere`) makes the snapshot write through it. Not fixed in bash (the
+user's decision, 2026-11-21: the rewrite replaces that code, and no release comes before 2.0); the Go sync
+core (Phase 2) is built to it from the start: Jeeves never follows a link from the data repo: every command that syncs (and `status`)
+refuses while `home/` or `hosts/` holds one (`git ls-files -s` mode 120000, or a link on disk
 under them), naming the path to remove; Jeeves itself never commits links (its copies follow the disk side's
 links). Tests: a committed file link and a folder link, seen failing first. Also: `jeeves-restore`'s
 `find` under a memory folder has the line-break pattern (one folder up at most, only when the user
 restores): read its paths through `inside`. The user chose (2026-11-21) to ship 1.4.2 without these; 2.0
-carries them.
+carries them, in Go.
 
 ## Release 1.4.2 (the user's decision, 2026-11-21)
 
