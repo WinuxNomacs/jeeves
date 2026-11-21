@@ -230,13 +230,8 @@ func (s *run) noLinks() bool {
 // onlyOwnLeftovers: the uncommitted changes are only what an earlier snapshot left (it failed or was
 // stopped between copying and committing): home/ files that match ~/.claude, and this device's own backup.
 func (s *run) onlyOwnLeftovers() bool {
-	out, _ := s.r.Out("-c", "core.quotepath=false", "status", "--porcelain", "--untracked-files=all")
 	host := s.e.Host
-	for _, line := range strings.Split(out, "\n") {
-		if len(line) < 4 {
-			continue
-		}
-		p := line[3:]
+	for _, p := range s.changed() {
 		switch {
 		case strings.HasPrefix(p, "hosts/"+host+"/"), strings.HasPrefix(p, "memory/"+host+"/"), p == "hosts/.memory-review":
 		case strings.HasPrefix(p, "home/"):
@@ -296,7 +291,9 @@ func (s *run) pullOrigin() {
 	case r.GitQuiet("merge-base", "HEAD", "origin/main") != nil && r.CleanedRoot("origin/main"):
 		s.switchToCleanedHistory(lastOrigin)
 	case r.GitQuiet("merge-base", "--is-ancestor", "HEAD", "origin/main") == nil:
-		r.Git("merge", "-q", "--ff-only", "origin/main")
+		if _, err := r.Git("merge", "-q", "--ff-only", "origin/main"); err != nil {
+			s.say("could not take origin/main (git could not check out its files here; a name this OS cannot hold?); recording locally")
+		}
 	case r.GitQuiet("merge-base", "--is-ancestor", "origin/main", "HEAD") != nil:
 		s.say("main and origin/main have diverged; recording locally, merge them before pushing")
 	}
@@ -413,7 +410,33 @@ func filesInDir(root, dir string) []string {
 	return out
 }
 
-func (s *run) undo() { s.r.GitQuiet("reset", "-q") }
+// changed are the paths with uncommitted changes, whole whatever their names hold (git quotes a name with a
+// space or a quote in its plain output).
+func (s *run) changed(paths ...string) []string {
+	args := append([]string{"status", "--porcelain", "-z", "--no-renames", "--untracked-files=all", "--"}, paths...)
+	out, _ := s.r.Raw(args...)
+	var res []string
+	for _, e := range strings.Split(string(out), "\x00") {
+		if len(e) > 3 {
+			res = append(res, e[3:])
+		}
+	}
+	return res
+}
+
+// undo takes back what a failed run copied into home/ and hosts/<host>/: the files as the last commit has
+// them, and none it added. Left in place, a copy that a later edit on disk no longer matches would stop
+// every snapshot (and apply) as uncommitted changes. What cannot be put back is left for the next run.
+func (s *run) undo() {
+	r := s.r
+	r.GitQuiet("reset", "-q")
+	for _, d := range []string{"home", "hosts/" + s.e.Host} {
+		if r.GitQuiet("cat-file", "-e", "HEAD:"+d) == nil {
+			r.GitQuiet("checkout", "-q", "HEAD", "--", d)
+		}
+		r.GitQuiet("clean", "-q", "-f", "-d", "--", d)
+	}
+}
 
 // record copies what changed on disk into home/, backs up this device into hosts/<host>/, commits, and
 // reports what needs attention.
@@ -450,23 +473,24 @@ func (s *run) record() int {
 
 	type taken struct{ path, hash string }
 	var took []taken
-	var pending, conflicts, refused, deleted, busy []string
+	var pending, conflicts, refused, unreadable, deleted, busy []string
 	heldCount := 0
 	// home/ copies an earlier snapshot left uncommitted: checked and recorded below like a copy of this run's.
 	left := map[string]bool{}
-	if out, _ := r.Out("-c", "core.quotepath=false", "status", "--porcelain", "--untracked-files=all", "--", "home"); out != "" {
-		for _, l := range strings.Split(out, "\n") {
-			if len(l) > 3 {
-				left[strings.TrimPrefix(l[3:], "home/")] = true
-			}
-		}
+	for _, p := range s.changed("home") {
+		left[strings.TrimPrefix(p, "home/")] = true
 	}
 	all := lib.AllTracked(e.ClaudeHome, r.HomeCopy)
 	collisions := lib.CaseCollisions(all)
 	for _, p := range all {
 		disk, repo := e.ClaudeHome+"/"+p, r.HomeCopy+"/"+p
-		d, _ := lib.HashOf(disk)
-		rh, _ := lib.HashOf(repo)
+		d, derr := lib.HashOf(disk)
+		rh, rerr := lib.HashOf(repo)
+		if derr != nil || rerr != nil {
+			// One file that cannot be read (its permissions) is reported, and the rest recorded.
+			unreadable = append(unreadable, p)
+			continue
+		}
 		state := lib.Classify(d, rh, r.BaseOf(p))
 		if state == "conflict" && o.forced(p) {
 			state = "disk"
@@ -642,6 +666,9 @@ func (s *run) record() int {
 	if len(busy) > 0 && !o.hook {
 		s.say("still being written, so left for the next snapshot: %s", strings.Join(busy, " "))
 	}
+	if len(unreadable) > 0 {
+		s.say("not taken, as it could not be read (check its permissions): %s", strings.Join(unreadable, " "))
+	}
 	if len(refused) > 0 {
 		s.say("not taken, so every device can hold it: %s; rename it in ~/.claude", strings.Join(refused, "; "))
 		status = 1
@@ -715,7 +742,11 @@ func (s *run) backup() (clash bool, ok bool) {
 		if ents, _ := os.ReadDir(dir); len(ents) == 0 {
 			continue
 		}
-		good = copyTree(dir, tmp+"/projects/"+key+"/memory") == nil
+		skipped, err := copyTree(dir, tmp+"/projects/"+key+"/memory")
+		good = err == nil
+		for _, f := range skipped {
+			s.say("not backed up: ~/.claude/projects/%s/memory/%s (its name cannot be held on every OS; rename it to back it up)", key, f)
+		}
 	}
 	// The ID goes with a backup that holds something (an empty one has nothing to overwrite).
 	if ents, _ := os.ReadDir(tmp); good && mine != "" && len(ents) > 0 {
@@ -734,13 +765,21 @@ func (s *run) backup() (clash bool, ok bool) {
 }
 
 // copyTree copies a folder's files and folders (cp -pR: modes and times kept). A link inside is not
-// followed and not copied: Jeeves never commits a link.
-func copyTree(src, dst string) error {
-	return filepath.WalkDir(src, func(p string, d fs.DirEntry, err error) error {
+// followed and not copied: Jeeves never commits a link. A file whose name another OS cannot hold is left
+// out (a checkout on that OS would fail, and the device would stop taking changes) and returned.
+func copyTree(src, dst string) (skipped []string, err error) {
+	err = filepath.WalkDir(src, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		rel, _ := filepath.Rel(src, p)
+		if rel != "." && lib.BadName(filepath.ToSlash(rel)) != "" {
+			skipped = append(skipped, filepath.ToSlash(rel))
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
 		target := filepath.Join(dst, rel)
 		switch {
 		case d.IsDir():
@@ -750,4 +789,5 @@ func copyTree(src, dst string) error {
 		}
 		return nil
 	})
+	return skipped, err
 }
