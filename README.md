@@ -258,7 +258,11 @@ The plugin's `bin/` is on the PATH of Claude's Bash tool, so Claude (or you, by 
 | `jeeves-status` | (read-only) | Lists each path out of sync (`disk`, `repo` or `conflict`) with its disk, repo and last-synced hashes, and how `main` stands against `origin/main`. |
 | `jeeves-memories list` / `record <hash> <outcome>...` | data repo | The memory files the session review has not reviewed yet (this machine's and other devices' backups), and the shared record of those it has, committed on `main`. |
 | `jeeves-auto status` / `on` / `off` / `queue` | `~/.claude` → data repo → origin | Background updates: the setting, the last runs and what waits; `queue` lists the items and set-aside changes left for `/jeeves:update` (`queue clear <id>...` once taken). The hooks run `--hook-stop` and `--session-start`; `hold` and `release` are for `/jeeves:update`. |
-| `jeeves-git <git arguments>` | data repo | Runs git in the data repo, so the skills never `cd` into it. |
+| `jeeves-git <git arguments>` | (read-only) | Runs a git command that only reads (`log`, `show`, `diff`, `status`, `cat-file`, `ls-files` and the like) in the data repo, so the skills never `cd` into it. Anything that would change the data repo is refused: those changes go through the four commands below. |
+| `jeeves-commit [--branch <pref\|conf\|review>/<name>] -m <message> -- <path>...` | data repo | Commits exactly the paths named, as they are on disk (a deletion included): only files under `home/`, `jeeves.conf` or the data repo's own `CLAUDE.md`, never a link; with `--branch`, on a new branch from `main`. `--fold -m <message>` folds the commits not yet pushed into one (to take a secret out of the history before a push). |
+| `jeeves-merge <branch> -m <summary>` / `origin -m <what>` / `--continue` / `--abort` | data repo | Merges a skill's branch into `main` and removes it, or merges `origin/main`: conflicts under `hosts/` are settled by rule (each device's folder is its own), and any under `home/` stop it, listing the files to settle; `--continue` checks no conflict markers are left and commits. |
+| `jeeves-revert [-m 1] <commit>` | data repo | Undoes a commit with a new one; one that conflicts is backed out, its files listed. |
+| `jeeves-push [--accept '<place>'...]` | data repo → origin | Pushes `main`, never forced, from a clean `main`, only after the secrets check (`jeeves-scan`) and the risk check (`jeeves-risk`) pass over what it sends; a finding or flag you have looked at and agreed to is named with `--accept`, as the check printed its place. |
 | `jeeves-verify` | (read-only) | Checks the plugin's files against its signed `MANIFEST` and the release key recorded at setup; lists every changed, missing or added file. `--trust` records the release key on first setup; `--hook` prints only a difference (the session-start check). |
 | `jeeves-risk` | (read-only) | Flags lines a push would add under `home/` that could make a session run outside code, gain permissions or hooks, or obey text it reads; lists file, line, commit and the kind of risk. |
 | `jeeves-scan` | (read-only) | Looks for secrets (private keys, API keys and tokens, password assignments) in each commit a push would send, so one a later commit removed is still caught; lists file, line and commit, never the value. |
@@ -281,7 +285,7 @@ How the data stays whole:
 - Jeeves never follows a link (symbolic link) in the data repo, and never commits one: while `home/` or
   `hosts/` holds one, committed or made on disk, every command that reads the data repo's files stops and
   names it, so a link pushed by someone else cannot make a sync install a file from elsewhere on your
-  machine (an SSH key, say) or write through a linked folder. Remove it with `jeeves-git rm`, then commit.
+  machine (an SSH key, say) or write through a linked folder. Delete it in the data repo, then `jeeves-commit -m "<message>" -- <its path>`.
 - A shared folder that disappears from `~/.claude` (moved, deleted, or a link to a drive that is not
   there) is not recorded as deleting its files on every device: the snapshot says so, and `/jeeves:update`
   asks you whether to delete them everywhere or put them back.
@@ -319,7 +323,7 @@ A git repo with:
   (`projects/<project>/memory/`). Only that device writes its folder. Memories are restored only for
   projects that exist on the new machine, because their folder names are absolute paths. A
   `settings.json` or `keybindings.json` there is a copy a version before 2.0 made: no longer updated, kept
-  until you delete it (`jeeves-git rm`).
+  until you delete it (delete the file, then `jeeves-commit -m "<message>" -- <its path>`).
 - Never copied: `settings.json`, `keybindings.json`, `.credentials.json`, `~/.claude.json`, history,
   transcripts, caches. `jeeves-scan` stops a push that would send a secret.
 - `hosts/.memory-review`: the memories the session review has reviewed (a hash and what came of it, one per
@@ -365,7 +369,8 @@ Anthropic itself, except through Claude Code when you turn background updates on
   - `git fetch` at each session start (the hook), and whenever a command syncs, unlocks or cleans up; a
     `git clone` in `/jeeves:setup` on a new device.
   - `git push` from `/jeeves:update` (also run by `/jeeves:setup`'s first sync), `/jeeves:review`,
-    `/jeeves:cleanup` and `/jeeves:encryption` (after a passphrase change or turning encryption on).
+    `/jeeves:cleanup` and `/jeeves:encryption` (after a passphrase change or turning encryption on), always
+    through `jeeves-push`, which runs the secrets and risk checks first and never forces.
   - From a background update, when on: `git push` of the data repo's `main` (after the secrets and risk
     checks), and the fetch and merge a refused push needs.
   - A force-push, always with a lease, from the history cleanup: by hand (`/jeeves:cleanup`, or turning

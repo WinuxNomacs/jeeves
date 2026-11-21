@@ -12,13 +12,9 @@ allowed-tools:
   - Bash(jeeves-scan)
   - Bash(jeeves-git status *)
   - Bash(jeeves-git log *)
-  - Bash(jeeves-git switch main)
-  - Bash(jeeves-git switch -c conf/*)
-  - Bash(jeeves-git add -- *)
-  - Bash(jeeves-git commit -m *)
-  - Bash(jeeves-git merge --no-ff *)
-  - Bash(jeeves-git branch -d conf/*)
-  - Bash(jeeves-git push origin main)
+  - Bash(jeeves-commit --branch conf/*)
+  - Bash(jeeves-merge conf/*)
+  - Bash(jeeves-push)
 ---
 
 # Jeeves: clean up the data repo's history
@@ -65,11 +61,10 @@ AskUserQuestion: the obvious options, the recommended one first; they can still 
 4. **`auto <every> [<keep>]`:** `<keep>` defaults to the current `keep_days`, or to `<every>` when there is
    none. Refuse if either is not a whole number of 1 or more, or `<every>` is below `<keep>`.
    **`off`:** remove the `auto_every_days` line (keep `keep_days`).
-   Change `jeeves.conf` like any data repo change: `jeeves-git switch -c conf/cleanup`, write the file
-   (`<datarepo path>/jeeves.conf`: `keep_days=<keep>` and `auto_every_days=<every>`, one per line),
-   `jeeves-git add -- jeeves.conf`, `jeeves-git commit -m "<message>"`, `jeeves-git switch main`,
-   `jeeves-git merge --no-ff conf/cleanup -m "Merge branch 'conf/cleanup': <summary>"`, `jeeves-git branch -d conf/cleanup`,
-   then `jeeves-scan` and `jeeves-git push origin main` (a rejected push: `jeeves-snapshot`, then push again once;
-   still rejected, stop and ask). Say when the first automatic cleanup will run: when the history's first
+   Change `jeeves.conf` like any data repo change: write the file (`<datarepo path>/jeeves.conf`:
+   `keep_days=<keep>` and `auto_every_days=<every>`, one per line), then
+   `jeeves-commit --branch conf/cleanup -m "<message>" -- jeeves.conf`,
+   `jeeves-merge conf/cleanup -m "<summary>"` and `jeeves-push` (it runs the secrets check first; a refused
+   push: `jeeves-snapshot`, then `jeeves-push` again once; still refused, stop and ask). Say when the first automatic cleanup will run: when the history's first
    commit (`jeeves-git log --reverse --format=%ci main | head -1`) is `<every>` days old.
 5. Never force-push yourself, and never run `jeeves-cleanup` without the user's confirmation in step 3.

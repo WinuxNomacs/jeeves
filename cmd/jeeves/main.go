@@ -25,6 +25,7 @@ import (
 	"github.com/WinuxNomacs/jeeves/internal/snapshot"
 	"github.com/WinuxNomacs/jeeves/internal/status"
 	"github.com/WinuxNomacs/jeeves/internal/updatecheck"
+	"github.com/WinuxNomacs/jeeves/internal/version"
 	"github.com/WinuxNomacs/jeeves/internal/worker"
 )
 
@@ -33,12 +34,16 @@ var commands = map[string]func(lib.Env, []string, io.Writer, io.Writer) int{
 	"apply":        apply.Run,
 	"check":        check.Run,
 	"cleanup":      cleanup.Run,
+	"commit":       version.Commit,
 	"git":          gitcmd.Run,
 	"github":       github.Run,
 	"hook-edit":    hookedit.Run,
 	"init":         initcmd.Run,
 	"memories":     memories.Run,
+	"merge":        version.Merge,
+	"push":         version.Push,
 	"restore":      restore.Run,
+	"revert":       version.Revert,
 	"risk":         risk.Run,
 	"scan":         scan.Run,
 	"snapshot":     snapshot.Run,
@@ -49,7 +54,7 @@ var commands = map[string]func(lib.Env, []string, io.Writer, io.Writer) int{
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: jeeves <command> [arguments]   (commands: apply, check, cleanup, git, github, hook-edit, init, memories, restore, risk, scan, snapshot, status, update-check, worker)")
+		fmt.Fprintln(os.Stderr, "usage: jeeves <command> [arguments]   (commands: apply, check, cleanup, commit, git, github, hook-edit, init, memories, merge, push, restore, revert, risk, scan, snapshot, status, update-check, worker)")
 		os.Exit(2)
 	}
 	if os.Getenv("JEEVES_TEST_PANIC") == "1" { // the tests' way to make the program crash

@@ -45,7 +45,9 @@ code that runs, and the release check would warn at every session start.
   (encryption on, unlock, lock, passphrase), `jeeves-crypt` (git's filter, textconv and merge driver for an
   encrypted data repo; git runs it once per file, so it sources only `lib/crypt.sh`), `jeeves-memories`
   (the memories the session review has not reviewed yet, and the shared record `hosts/.memory-review`),
-  `jeeves-git` (git in the data repo), `jeeves-update-check` (once a day from the session-start hook: a newer release
+  `jeeves-git` (git commands that only read, in the data repo), `jeeves-commit`, `jeeves-merge`, `jeeves-revert`
+  and `jeeves-push` (the data repo's history, changed on the skills' behalf: `internal/version/`; each
+  checks what it is given, and the push runs the secrets and risk checks first), `jeeves-update-check` (once a day from the session-start hook: a newer release
   than this one in the marketplace pin on GitHub's `main`, read with curl, gets a one-line notice; not the
   newest tag, which comes before its pin; tests turn it off), `jeeves-auto` (background updates, off by default, per device: the Stop hook starts
   a detached `run` when due; the run gives a headless `claude -p` only a private temp folder, under
@@ -168,11 +170,12 @@ code that runs, and the release check would warn at every session start.
 - Data integrity: check every copy (`copy_file`, `copy_settled`) and stop with nothing recorded when one
   fails; a sync record (`set_base`) holds the hash of what was copied and committed, never of the disk file
   read again later; nothing reaches `~/.claude` from a data repo that is not on a clean `main`.
-- The scripts never push, with two exceptions: `jeeves-cleanup` force-pushes the data repo's `main`, always
+- The scripts never push, with three exceptions: `jeeves-push`, which the skills run, pushes `main` (never
+  forced) after `jeeves-scan` and `jeeves-risk` pass over what it sends; `jeeves-cleanup` force-pushes the data repo's `main`, always
   with a lease (`--force-with-lease=main:<the origin/main it checked>`), after `jeeves-scan`, and puts `main`
   back if the push fails; `jeeves-auto run` (background updates, which the user turned on) pushes the commit
   it checked with `jeeves-scan` and `jeeves-risk` (`<sha>:refs/heads/main`, never forced). Otherwise they contact the remote only for `fetch` + fast-forward in `snapshot`,
-  and only the `update` and `cleanup` skills (and a background run, above) push.
+  and only the skills (through `jeeves-push`, or the cleanup's lease push) and a background run push.
 - Never copy secrets: `.credentials.json`, `~/.claude.json`, transcripts, history.
 - Encryption: a passphrase never goes through the chat or a command line (a dialog, or `--terminal` in the
   user's own terminal; to age only as `AGE_PASSPHRASE` of that one process); the key goes to stores on

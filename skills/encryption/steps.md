@@ -88,9 +88,9 @@ device pushed), say so: `/jeeves:update` syncs, and `/jeeves:encryption` then of
 
 ## Change the passphrase
 
-`jeeves-encrypt passphrase` (dialogs). It commits a new `identity.age`. Then `jeeves-scan` and
-`jeeves-git push origin main` (a rejected push: `jeeves-snapshot`, then push again once; still rejected,
-stop and ask). The key stays the same, so other devices stay unlocked; the new passphrase is needed only for
+`jeeves-encrypt passphrase` (dialogs). It commits a new `identity.age`. Then `jeeves-push` (it runs the
+secrets check first; a refused push: `jeeves-snapshot`, then `jeeves-push` again once; still refused, stop
+and ask). The key stays the same, so other devices stay unlocked; the new passphrase is needed only for
 the next unlock. The old `identity.age` stays in the history, and it still opens with the old passphrase:
 say so. When the old passphrase may be known to someone (it was written in a chat, say), offer to fold the
 history too (`jeeves-cleanup --all`, asked as in **Plain history still on GitHub**), so GitHub no longer

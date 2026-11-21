@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/WinuxNomacs/jeeves/internal/lib"
@@ -53,7 +54,7 @@ func Queue(e lib.Env) string { return e.ClaudeHome + "/jeeves/queue" }
 // Queued reports whether a command runs through the worker: those that change the data repo or ~/.claude.
 func Queued(cmd string, args []string) bool {
 	switch cmd {
-	case "snapshot", "apply", "restore", "cleanup":
+	case "snapshot", "apply", "restore", "cleanup", "commit", "merge", "revert", "push":
 		return true
 	case "memories":
 		_, rest := lib.ParseDataRepoArg(args)
@@ -62,11 +63,25 @@ func Queued(cmd string, args []string) bool {
 	return false
 }
 
+// lastNano keeps IDs from one process strictly increasing where the clock is coarse (Windows: a tick of
+// up to milliseconds), so a caller's requests sort in the order it made them.
+var lastNano atomic.Int64
+
 // newID is time-ordered (nanoseconds, zero-padded), then random, so two callers never collide.
 func newID() string {
+	n := time.Now().UnixNano()
+	for {
+		last := lastNano.Load()
+		if n <= last {
+			n = last + 1
+		}
+		if lastNano.CompareAndSwap(last, n) {
+			break
+		}
+	}
 	b := make([]byte, 4)
 	rand.Read(b)
-	return fmt.Sprintf("%020d-%s", time.Now().UnixNano(), hex.EncodeToString(b))
+	return fmt.Sprintf("%020d-%s", n, hex.EncodeToString(b))
 }
 
 // writeAtomic writes data to a temporary name in the same folder and renames it over p, so a reader never
