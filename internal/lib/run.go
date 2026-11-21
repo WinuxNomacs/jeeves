@@ -60,14 +60,15 @@ func isScript(p string) bool {
 }
 
 // Command is exec.Command for a program found by LookPath (name unchanged when none is found, so the run
-// fails as bash's would). On Windows a script is run by Git Bash's bash.
+// fails as bash's would). On Windows a script is run by Git Bash's bash, by its path with forward slashes: a
+// bin/ wrapper finds its plugin folder by splitting $0 on "/" (with backslashes it would find none).
 func Command(name string, args ...string) *exec.Cmd {
 	p := LookPath(name)
 	if p == "" {
 		return exec.Command(name, args...)
 	}
 	if runtime.GOOS == "windows" && !strings.HasSuffix(strings.ToLower(p), ".exe") {
-		return exec.Command("bash", append([]string{p}, args...)...)
+		return exec.Command("bash", append([]string{filepath.ToSlash(p)}, args...)...)
 	}
 	return exec.Command(p, args...)
 }

@@ -608,7 +608,8 @@ t_without_a_go_build_a_command_names_the_machines_jeeves_runs_on() {
 t_a_go_build_that_cannot_start_says_so() {
   snap >/dev/null; plugin_copy
   mkdir -p "$W/plugin/dist"; f=$W/plugin/dist/$(go_build_name)
-  printf '\177ELF garbage' > "$f"; chmod +x "$f"
+  # NUL bytes, as every real build has: bash 3.2 runs a file without one as a shell script.
+  printf '\177ELF\0\0\0 garbage' > "$f"; chmod +x "$f"
   out=$("$W/plugin/bin/jeeves-status" 2>&1); rc=$?
   check "a build of the wrong format: exit status 1, and why" bash -c '[ $1 = 1 ] && grep -q "^jeeves-status: the Go build dist/.* did not start; Jeeves runs on" <<< "$2"' _ $rc "$out"
   case "$OSTYPE" in msys*|cygwin*) ;; *)
@@ -647,8 +648,9 @@ t_the_launcher_finds_the_plugin_folder_however_it_is_called() {
   check "and by its bare name from the PATH, never a launcher relative to the current folder" grep -qxF "$want" <<< "$(cd "$W/x/y" && PATH="$W/plugin/bin:$PATH" bash jeeves-snapshot --hook 2>&1)"
   # Git for Windows starts a filter by the path in its config, which may be in Windows form (D:/...).
   case "$OSTYPE" in msys*|cygwin*)
-    p="$(cygpath -m "$W/plugin")/bin/jeeves-snapshot"
-    check "by a Windows path: $p" grep -qxF "$want" <<< "$(bash "$p" --hook 2>&1)" ;;
+    for p in "$(cygpath -m "$W/plugin")/bin/jeeves-snapshot" "$(cygpath -w "$W/plugin")/bin/jeeves-snapshot"; do
+      check "by a Windows path: $p" grep -qxF "$want" <<< "$(bash "$p" --hook 2>&1)"
+    done ;;
   esac
   unset JEEVES_NO_WORKER
 }
@@ -2011,7 +2013,9 @@ t_the_background_child_is_confined_and_gets_no_session_variables() {
   for gone in CLAUDE_CODE_MESSAGING_TOKEN CLAUDE_CODE_SESSION_ID JEEVES_AGE_KEY CLAUDE_HOME JEEVES_DATA CLAUDE_CODE_PLUGIN_DIRS; do
     check "the child does not get $gone" bash -c '! grep -q "^$1=" <<< "$2"' _ "$gone" "$e"
   done
-  check "the child keeps what its sign-in or platform needs" grep -qx "CLAUDE_CODE_GIT_BASH_PATH=/bin/bash" <<< "$e"
+  # On Windows Git Bash gives a native program a path-like value in Windows form (right for Claude Code).
+  gbp=/bin/bash; case "$OSTYPE" in msys*|cygwin*) gbp=$(cygpath -m /bin)/bash ;; esac
+  check "the child keeps what its sign-in or platform needs" grep -qxF "CLAUDE_CODE_GIT_BASH_PATH=$gbp" <<< "$e"
   check "the settings' env is carried over" grep -qx "MY_SETTING=x y" <<< "$e"
   check "but never sits in the folder the child can read" bash -c '! grep -q settings-env "$1"' _ "$FAKE_LOG.files"
   check "and is removed" [ ! -e "$CLAUDE_HOME/jeeves/auto/settings-env" ]
