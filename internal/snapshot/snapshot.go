@@ -287,6 +287,8 @@ func (s *run) pullOrigin() {
 	}
 	switch {
 	case r.RevParse("HEAD") == r.RevParse("origin/main"):
+	case r.TreeProblem("origin/main") != "":
+		s.say("origin/main is not taken: %s; remove them there (git rm, then commit and push from that device), then sync again", r.TreeProblem("origin/main"))
 	case r.EncryptedAt("origin/main") && !r.Unlocked():
 		s.say("another device encrypted the data repo; this device is locked, so its changes are not taken: run /jeeves:encryption")
 	case r.EncryptedAt("origin/main") && !e.LoadKey(r):

@@ -534,6 +534,49 @@ commit_link() { # commit_link <path in the data repo> <target>: a committed link
   git -C "$R" -c core.autocrlf=false checkout -q -- "$1" 2>/dev/null
 }
 
+t_another_devices_link_to_this_devices_record_is_never_taken() {
+  snap >/dev/null; git -C "$R" push -q origin main 2>/dev/null
+  rec=$(cat "$R/.sync-state/hashes")
+  [ -d "$W/other" ] || git clone -q "$W/remote.git" "$W/other" 2>/dev/null
+  mkdir -p "$W/outside"
+  blob=$(printf '%s' "$W/outside" | git -C "$W/other" hash-object -w --stdin)
+  git -C "$W/other" update-index --add --cacheinfo "120000,$blob,.sync-state"
+  git -C "$W/other" -c core.autocrlf=false commit -qm plant && git -C "$W/other" push -q origin main 2>/dev/null
+  out=$(snap); rc=$?
+  check "the snapshot says why origin/main is not taken" grep -q "origin/main is not taken: it holds a link or files in .sync-state/.*: .sync-state" <<< "$out"
+  check "main is not moved" [ "$(git -C "$R" rev-parse main)" != "$(git -C "$R" rev-parse origin/main)" ]
+  check "this device's record is still a folder, as it was" bash -c '[ -d "$1/.sync-state" ] && [ ! -L "$1/.sync-state" ] && [ "$(cat "$1/.sync-state/hashes")" = "$2" ]' _ "$R" "$rec"
+  check "nothing written outside" [ -z "$(ls -A "$W/outside")" ]
+  out=$("$SRC/bin/jeeves-merge" origin -m "other device"); rc=$?
+  check "jeeves-merge origin refuses it too" bash -c '[ $1 = 1 ] && grep -q "origin/main is not merged" <<< "$2"' _ $rc "$out"
+}
+
+t_a_link_or_record_anywhere_in_the_data_repo_is_refused() {
+  snap >/dev/null
+  echo "cleanup_days=1" > "$W/conf.txt"
+  rm -f "$R/jeeves.conf"; commit_link jeeves.conf "$W/conf.txt"
+  check "a committed link outside home/ and hosts/ is refused" grep -q "holds a link, which Jeeves never follows: jeeves.conf" <<< "$(apply 2>&1)"
+  git -C "$R" rm -q --cached jeeves.conf && rm -f "$R/jeeves.conf" && git -C "$R" commit -qm "no link"
+  mkdir -p "$R/.sync-state" && echo x > "$R/.sync-state/planted"; git -C "$R" add -f .sync-state/planted && git -C "$R" commit -qm planted
+  check "tracked files in .sync-state/ are refused" grep -q "tracks files in .sync-state/" <<< "$(snap 2>&1)"
+}
+
+t_a_data_repo_folder_inside_another_repo_is_refused() {
+  mkdir -p "$W/outer/inner" && git init -q "$W/outer"
+  out=$(JEEVES_DATA="$W/outer/inner" "$SRC/bin/jeeves-status" 2>&1); rc=$?
+  check "says it is a folder inside another repository" bash -c '[ $1 != 0 ] && grep -q "is a folder inside another git repository" <<< "$2"' _ $rc "$out"
+}
+
+t_restore_takes_only_a_clean_main() {
+  snap >/dev/null
+  git -C "$R" -c core.autocrlf=false switch -q -c elsewhere
+  out=$(restore testhost); rc=$?
+  check "on another branch: refused" bash -c '[ $1 = 1 ] && grep -q "not main; nothing restored" <<< "$2"' _ $rc "$out"
+  git -C "$R" -c core.autocrlf=false switch -q main
+  out=$(restore '..\x'); rc=$?
+  check "a host name with a backslash is refused" bash -c '[ $1 = 2 ] && grep -q "not a host name" <<< "$2"' _ $rc "$out"
+}
+
 t_a_committed_link_is_refused_and_never_followed() {
   snap >/dev/null
   echo "secret key" > "$W/outside.txt"
@@ -3080,6 +3123,10 @@ run_test "a path with a backslash keeps its sync record" t_a_path_with_a_backsla
 run_test "hashes do not depend on the current folder" t_hashes_do_not_depend_on_the_current_folder
 run_test "memories record shares the data repo's lock with the bash scripts" t_memories_record_shares_the_lock_with_the_bash_scripts
 run_test "scan and risk name each line right" t_scan_and_risk_name_each_line_right
+run_test "another device's link in place of this device's record is never taken" t_another_devices_link_to_this_devices_record_is_never_taken
+run_test "a link or a tracked record anywhere in the data repo is refused" t_a_link_or_record_anywhere_in_the_data_repo_is_refused
+run_test "a data repo folder inside another repository is refused" t_a_data_repo_folder_inside_another_repo_is_refused
+run_test "restore takes only a clean main" t_restore_takes_only_a_clean_main
 run_test "a committed link is refused and never followed" t_a_committed_link_is_refused_and_never_followed
 run_test "a committed folder link is refused and never written through" t_a_committed_folder_link_is_refused_and_never_written_through
 run_test "a link made in the data repo on disk is refused and never committed" t_a_link_made_in_the_data_repo_on_disk_is_refused_and_never_committed
