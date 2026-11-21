@@ -2,11 +2,11 @@
 
 ## Phases (current and upcoming)
 
-- **Up next:** 1. Go spike (below, "Go rewrite: spike"): settle size, Gatekeeper, Defender and
-  reproducibility before deciding on a full port
-- **Held:** 1.5.0 stays untagged, so installs keep 1.4.1 (the user's decision, 2026-11-20): the Go spike's
-  outcome decides what is released next
-- **Then:** nothing planned
+- **Up next:** 1. Go port, Phase 0: distribution (below, "Go port"): the shared launcher, committed builds
+  in the signed release, the release steps; released as 1.5.0 with background updates
+- **Then:** 2. Go port, Phase 1: the small commands · 3. Phase 2: the sync core, knowledge files only (settings
+  no longer backed up) · 4. Phase 3: encryption with age built in · 5. Phase 4: background updates · 6. Phase
+  5: the last bash versions removed
 - **The user's, any time:** submit 1.4.1 in the Anthropic portal (below, "Anthropic directory submission")
 - **Later:** 0. Review text gaps (below, under "Review text gaps") · 0. Injection docs: threat model in the README, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
@@ -28,6 +28,48 @@ fine (it is not user-only).
 Also seen (development loads only): with the plugin loaded inline, `${user_config.data_repo}` is not
 filled in, and inside double quotes bash rejects it before the script runs ("Parse error"); the model
 retried with single quotes. Installed copies get the real path. Not fixed.
+
+## Go port (decided and planned with the user, 2026-11-20)
+
+The spike (below) met every go/no-go criterion; the user chose "go". Decided with the user (2026-11-20):
+- **Builds are committed:** `dist/` holds the five builds in each release, covered by the signed `MANIFEST`,
+  so `jeeves-verify` checks them as it checks every file. About 10 MB more history per release that changes
+  Go code. Not checked: whether Claude Code's install clones only the release (shallow).
+- **Bash goes:** a command's bash version stays as the fallback for one release after its Go version
+  ships, then is deleted. Machines with no build (other OSes or processors) then cannot run Jeeves.
+- **1.5.0 is folded into the first Go release:** installs stay on 1.4.1 until Phase 0 ships; that release
+  (still numbered 1.5.0, never published) carries background updates and the Go `status`, re-signed.
+- **Knowledge files only** (the user's decision, 2026-11-20): Jeeves syncs CLAUDE.md, `skills/`, `agents/`
+  and `commands/`, and backs up each device's memories. `settings.json` and `keybindings.json` are no
+  longer backed up or restored; `backup_settings` goes. Copies already in data repos
+  (`hosts/<host>/settings.json`, `keybindings.json`) stop being updated and stay until the user deletes
+  them or runs `/jeeves:cleanup`: nothing is removed silently. Built in Phase 2 (README, skills and
+  disclosure updated with it).
+- **Design:** `jeeves-verify` stays a short bash script, never ported: it checks that the builds are the
+  signed ones, so it cannot be one of them, and users can read it.
+
+Phases (each ships only when the suite passes on all three OSes, with the parity test covering every ported
+command against its bash version until that version is deleted):
+- **Phase 0, distribution:** one launcher (`lib/launch.sh`) that every `bin/jeeves-*` wrapper calls with
+  its command name; `dist/` committed (out of `.gitignore`), the release skill builds it with
+  `build-go.sh --record`, checks it, and writes `MANIFEST` after it; CI keeps `--check`. The upgrade
+  rehearsal from 1.4.1 covers a machine with no build for it (the bash fallback). README: the builds, what
+  they are, how to check them against the source (`build-go.sh --check`), Go in "Working on Jeeves".
+  Released as 1.5.0.
+- **Phase 1, the small commands:** `git`, `risk`, `scan`, `check`, `memories`, `update-check`, `github`,
+  `init`; `status`'s bash version removed (one release after 1.5.0).
+- **Phase 2, the sync core:** `snapshot`, `apply`, `hook-edit`, `restore`, `cleanup`, and the settings
+  backup removed (above). The data integrity rules hold unchanged (checked copies, the sync record, a
+  clean `main`); the full upgrade rehearsal, plain and encrypted, two devices, one on the old release.
+- **Phase 3, encryption:** `crypt` (git's filter, run once per file: Go's start time helps most here),
+  `encrypt`, the key stores; `age` built in, so users no longer install age and its plugin.
+  `filippo.io/age` is vetted first (primary sources, dated, recorded here), and must read and write the
+  format today's repos hold; key stores through the same system tools as now (`security`, PowerShell,
+  `secret-tool`) unless a vetted alternative needs no cgo.
+- **Phase 4, background updates:** `jeeves-auto`, reading JSON with the standard library (perl no longer
+  needed); its eight safeguards and failure list carried over with their tests.
+- **Phase 5:** the last bash versions and the launcher's fallback removed; `bin/` holds only the wrappers
+  and `jeeves-verify`.
 
 ## Go rewrite: spike (requested and planned 2026-11-20)
 
@@ -832,6 +874,12 @@ Suite 105 passed (2026-11-19).
   Security line, removed or reworded rule, renamed heading, risky line, secret, another device's change
   meanwhile and on the same line, a dead remote, a held lock, odd hook input, forged markers). README
   "Background updates" and the disclosure section; repo CLAUDE.md.
+
+- Go spike (2026-11-20; "Go rewrite: spike" above, its results, and the user's "go"): `go.mod`,
+  `cmd/jeeves/`, `internal/lib/`, `internal/status/`, `bin/jeeves-status` (launcher) and `lib/status.sh`
+  (bash version), `.claude/skills/release/build-go.sh`, `go-builds.sha256`, `time-status.sh`; CI's Go
+  step; tests: Go unit tests, and the suite's parity and launcher-fallback tests. Also fixed: the locale
+  order of tracked paths in bash, and CI's Windows time limit (45 minutes).
 
 ## Review text gaps (found by the 2026-11-19 dry run; older text, not this phase's)
 
