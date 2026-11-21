@@ -2287,7 +2287,7 @@ t_a_killed_supervisors_child_is_stopped_by_its_watchdog() {
   check "the watchdog stops the child" wait_for 20 bash -c '! kill -0 "$(cat "$1")" 2>/dev/null' _ "$FAKE_LOG.pid"
   # On Windows the Go build's child dies with its supervisor (a job object) and no watchdog is left to clean
   # up: the next session start does.
-  case "$OSTYPE" in msys*|cygwin*) [ -f "$SRC/lib/auto.sh" ] && [ "$JEEVES_NO_GO" = 1 ] || autobin --session-start >/dev/null ;; esac
+  case "$OSTYPE" in msys*|cygwin*) autobin --session-start >/dev/null ;; esac
   check "and removes the run folder" wait_for 5 bash -c '! grep -rqs UNIQUE-SESSION-TEXT "$XDG_RUNTIME_DIR"/jeeves-auto.*'
   check "and the child record" wait_for 5 test ! -e "$CLAUDE_HOME/jeeves/auto/child"
   check "no watchdog is left" wait_for 5 bash -c '! ps -o args= -A 2>/dev/null | grep -v grep | grep -qE "jeeves-auto run sess1|auto --watch "'
