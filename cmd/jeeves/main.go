@@ -10,34 +10,44 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/WinuxNomacs/jeeves/internal/apply"
 	"github.com/WinuxNomacs/jeeves/internal/check"
+	"github.com/WinuxNomacs/jeeves/internal/cleanup"
 	"github.com/WinuxNomacs/jeeves/internal/gitcmd"
 	"github.com/WinuxNomacs/jeeves/internal/github"
+	"github.com/WinuxNomacs/jeeves/internal/hookedit"
 	"github.com/WinuxNomacs/jeeves/internal/initcmd"
 	"github.com/WinuxNomacs/jeeves/internal/lib"
 	"github.com/WinuxNomacs/jeeves/internal/memories"
+	"github.com/WinuxNomacs/jeeves/internal/restore"
 	"github.com/WinuxNomacs/jeeves/internal/risk"
 	"github.com/WinuxNomacs/jeeves/internal/scan"
+	"github.com/WinuxNomacs/jeeves/internal/snapshot"
 	"github.com/WinuxNomacs/jeeves/internal/status"
 	"github.com/WinuxNomacs/jeeves/internal/updatecheck"
 )
 
 // commands maps each subcommand to its Run.
 var commands = map[string]func(lib.Env, []string, io.Writer, io.Writer) int{
+	"apply":        apply.Run,
 	"check":        check.Run,
+	"cleanup":      cleanup.Run,
 	"git":          gitcmd.Run,
 	"github":       github.Run,
+	"hook-edit":    hookedit.Run,
 	"init":         initcmd.Run,
 	"memories":     memories.Run,
+	"restore":      restore.Run,
 	"risk":         risk.Run,
 	"scan":         scan.Run,
+	"snapshot":     snapshot.Run,
 	"status":       status.Run,
 	"update-check": updatecheck.Run,
 }
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: jeeves <command> [arguments]   (commands: check, git, github, init, memories, risk, scan, status, update-check)")
+		fmt.Fprintln(os.Stderr, "usage: jeeves <command> [arguments]   (commands: apply, check, cleanup, git, github, hook-edit, init, memories, restore, risk, scan, snapshot, status, update-check)")
 		os.Exit(2)
 	}
 	if os.Getenv("JEEVES_TEST_PANIC") == "1" { // the tests' way to make the program crash

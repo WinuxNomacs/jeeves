@@ -1,6 +1,8 @@
 package lib
 
 import (
+	"os"
+	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
@@ -127,4 +129,36 @@ func RiskFlags(lines []Flag) []Flag {
 		}
 	}
 	return res
+}
+
+// AddedLines lists the lines newFile adds over oldFile (all of them when oldFile is not a file), as
+// lib.sh's added_lines: each as a Flag-ready line, Where "line <n>".
+func AddedLines(oldFile, newFile string) []Flag {
+	if fi, err := os.Stat(oldFile); err != nil || !fi.Mode().IsRegular() {
+		oldFile = "/dev/null"
+	}
+	out, _ := exec.Command("git", "-c", "core.autocrlf=false", "-c", "core.quotepath=false", "diff", "--no-index",
+		"--no-color", "--no-ext-diff", "--no-textconv", "-U0", "--", oldFile, newFile).Output()
+	var res []Flag
+	hunk, n := false, 0
+	for _, l := range strings.Split(strings.TrimSuffix(string(out), "\n"), "\n") {
+		switch {
+		case strings.HasPrefix(l, "@@"):
+			n, hunk = hunkStart(l), true
+		case !hunk || strings.HasPrefix(l, `\`):
+		case strings.HasPrefix(l, "+"):
+			res = append(res, Flag{Where: "line " + strconv.Itoa(n), Text: l[1:]})
+			n++
+		}
+	}
+	return res
+}
+
+// FlagLines are RiskFlags as the scripts print them: "<where>: <kind>", one per flag.
+func FlagLines(lines []Flag) []string {
+	var out []string
+	for _, f := range RiskFlags(lines) {
+		out = append(out, f.Where+": "+f.Kind)
+	}
+	return out
 }

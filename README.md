@@ -332,9 +332,11 @@ project or a `JEEVES_DATA=` prefix, so commands written that way would each ask 
 
 Everything Jeeves does runs from the commands in `bin/` and from the skills' instructions to Claude. The
 commands are bash scripts, except those already ported to Go (so far `jeeves-status`, `jeeves-git`,
-`jeeves-scan`, `jeeves-risk`, `jeeves-check`, `jeeves-memories`, `jeeves-update-check`, `jeeves-github` and
-`jeeves-init`), whose `bin/` script runs the compiled program for your system from `dist/`: macOS and Linux
-on Intel/AMD or ARM, and Windows on Intel/AMD (elsewhere they stop and say so).
+`jeeves-scan`, `jeeves-risk`, `jeeves-check`, `jeeves-memories`, `jeeves-update-check`, `jeeves-github`,
+`jeeves-init`, `jeeves-snapshot`, `jeeves-apply`, `jeeves-hook-edit`, `jeeves-restore` and
+`jeeves-cleanup`), whose `bin/` script runs the compiled program for your system from `dist/`: macOS and
+Linux on Intel/AMD or ARM, and Windows on Intel/AMD (elsewhere they stop and say so, or, while a command's
+bash version is still in `lib/`, run that).
 The programs are built from `cmd/` and `internal/` in this repo with the Go standard library only, and the
 build is reproducible: anyone with the Go version `go.mod` names gets the same bytes, which
 `bash .claude/skills/release/build-go.sh --check` confirms (CI checks it on Linux, macOS and Windows for each
