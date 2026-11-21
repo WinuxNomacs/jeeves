@@ -903,8 +903,9 @@ risk() { "$SRC/bin/jeeves-risk" "$@"; }
 
 # A file committed straight into the index (a name this OS's file system may not hold).
 commit_blob() { # commit_blob <path> <content>
-  git -C "$R" update-index --add --cacheinfo "100644,$(printf '%s' "$2" | git -C "$R" hash-object -w --stdin),$1"
-  git -C "$R" commit -qm "add $1"
+  # Git for Windows refuses such a name in its index unless told not to (core.protectNTFS).
+  git -C "$R" -c core.protectNTFS=false update-index --add --cacheinfo "100644,$(printf '%s' "$2" | git -C "$R" hash-object -w --stdin),$1"
+  git -C "$R" -c core.protectNTFS=false commit -qm "add $1"
 }
 utf16le() { local s=$1 i; for ((i = 0; i < ${#s}; i++)); do printf '%s\0' "${s:i:1}"; done; }
 
