@@ -681,7 +681,7 @@ t_the_other_small_commands_go_builds_match_the_bash_versions() {
   JEEVES_AGE=$W/bin/old-age both_versions check_cmd; same "check, an old age"
   HOME=$W JEEVES_DATA='~/jeeves-data' both_versions check_cmd; same "check, the data repo missing"
   both_versions "$SRC/bin/jeeves-check" extra; same "check, an extra argument"
-  FAKE_GH_LIST='octocat/a\thttps://github.com/octocat/a\noctocat/a\thttps://github.com/octocat/a' FAKE_GH_NAMED='octocat/jeeves-data\thttps://github.com/octocat/jeeves-data' \
+  FAKE_GH_LIST=$'octocat/a\thttps://github.com/octocat/a\noctocat/a\thttps://github.com/octocat/a' FAKE_GH_NAMED=$'octocat/jeeves-data\thttps://github.com/octocat/jeeves-data' \
     both_versions ghcmd find; same "github find"
   FAKE_GH_LIST_FAIL=1 both_versions ghcmd find; same "github find, GitHub not reached"
   FAKE_GH_PROTOCOL=ssh both_versions ghcmd create my-data; same "github create"
@@ -1416,6 +1416,8 @@ t_automatic_cleanup_runs_only_when_due_and_configured() {
 }
 
 # Guided setup. Stand-ins for gh and ssh in $W/bin answer as the FAKE_* variables say, and log their arguments.
+# Their answers hold real tabs and line breaks, not \t escapes: Git Bash turns backslashes in the environment
+# into slashes when a native Windows program (the Go build) starts a script.
 fake_tools() {
   mkdir -p "$W/bin"; export FAKE_LOG=$W/fake.log; : > "$FAKE_LOG"
   cat > "$W/bin/gh" <<'F'
@@ -1520,8 +1522,8 @@ t_deadline_stops_a_hung_command() {
 
 t_github_finds_data_repos() {
   fake_tools
-  out=$(FAKE_GH_LIST='octocat/prefs\thttps://github.com/octocat/prefs\noctocat/jeeves-data\thttps://github.com/octocat/jeeves-data' \
-        FAKE_GH_NAMED='octocat/jeeves-data\thttps://github.com/octocat/jeeves-data' ghcmd find)
+  out=$(FAKE_GH_LIST=$'octocat/prefs\thttps://github.com/octocat/prefs\noctocat/jeeves-data\thttps://github.com/octocat/jeeves-data' \
+        FAKE_GH_NAMED=$'octocat/jeeves-data\thttps://github.com/octocat/jeeves-data' ghcmd find)
   check "both repos, each once" [ "$(printf '%s\n' "$out" | cut -f1 | tr '\n' ' ')" = "octocat/prefs octocat/jeeves-data " ]
   check "looks for the jeeves-data topic" grep -q "repo list --topic jeeves-data" "$FAKE_LOG"
   check "none: no output" [ -z "$(ghcmd find)" ]

@@ -34,8 +34,9 @@ func LookPath(name string) string {
 
 func runnable(p string) string {
 	if runtime.GOOS == "windows" {
+		// Lstat, not Stat: an app alias (winget.exe in WindowsApps) is a reparse point Stat cannot open.
 		for _, c := range []string{p, p + ".exe"} {
-			if fi, err := os.Stat(c); err == nil && fi.Mode().IsRegular() && (strings.HasSuffix(strings.ToLower(c), ".exe") || isScript(c)) {
+			if fi, err := os.Lstat(c); err == nil && !fi.IsDir() && (strings.HasSuffix(strings.ToLower(c), ".exe") || isScript(c)) {
 				return c
 			}
 		}
