@@ -13,7 +13,7 @@ jeeves_cmd=$1; shift
 # The plugin folder as `cd <bin>/.. && pwd` gives it (logical: . and .. removed by name, symlinks kept), so a
 # path the Go build records (git's filter settings) reads the same as the bash version's.
 jeeves_root() {
-  local p=$jeeves_bin seg IFS=/ out=() d
+  local p=${jeeves_bin//\\//} seg IFS=/ out=() d
   case "$p" in
     /*) p=$p/.. ;;
     # A Windows path (git starts a filter by the path in its config, which a bash script's git config call
@@ -70,6 +70,15 @@ fi
 # a subshell would cost as much as the program on Windows.
 if [ ! -x "$jeeves_exe" ]; then
   jeeves_fallback "the Go build dist/${jeeves_exe##*/} is not executable"; jeeves_bash "$@"
+fi
+# A supervisor (jeeves-auto: its wrapper sets jeeves_exec=1) replaces this shell, so a signal sent to the PID
+# its caller knows (a SIGTERM to the run) reaches the program, and its lock PID is the program's own; Git
+# Bash keeps a stand-in process with that PID for as long as the program runs. A build that cannot start
+# falls through to the checks below (execfail).
+if [ "$jeeves_exec" = 1 ]; then
+  shopt -s execfail
+  JEEVES_ROOT=$JEEVES_ROOT JEEVES_LOCK_PID=$$ exec "$jeeves_exe" "$jeeves_cmd" "$@"
+  shopt -u execfail
 fi
 # JEEVES_LOCK_PID: this shell's $$, which the program writes into the data repo's lock: the bash scripts
 # check a holder with kill -0, which in Git Bash knows no Windows PID (this shell lives as long as the program).

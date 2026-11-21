@@ -94,7 +94,12 @@ code that runs, and the release check would warn at every session start.
   bash), and once the parity tests pass on all three OSes that bash version is deleted (the user's rule):
   done for `status`, `git`, `scan`, `risk`, `check`, `memories`, `update-check`, `github`, `init`,
   `snapshot`, `apply`, `hook-edit`, `restore`, `cleanup` and `encrypt`, whose launcher, with no build for the machine,
-  says where Jeeves runs and exits 1. The tests inject copy failures through `JEEVES_TEST_COPY_HOOK` (a program run instead of each copy, with
+  says where Jeeves runs and exits 1; `auto` (`internal/auto/`, Phase 4) is ported with its bash version
+  still in `lib/auto.sh`, and every background test runs against both (the "(bash version)" pass). The
+  `jeeves-auto` wrapper sets `jeeves_exec=1`, so the launcher `exec`s the build: a run is a supervisor, and
+  a signal sent to its PID must reach it. `internal/proc/` starts and stops supervised processes (the
+  worker, its children, a run's child in its own process group or, on Windows, a kill-on-close job object).
+  The tests inject copy failures through `JEEVES_TEST_COPY_HOOK` (a program run instead of each copy, with
   `cp -p`'s arguments; the tests' fake `cp`). `memories record` shares the data repo's
   lock with the bash scripts: the launcher passes its `$$` (`JEEVES_LOCK_PID`) for the lock file, since Git
   Bash's `kill -0` knows no Windows PID. Each

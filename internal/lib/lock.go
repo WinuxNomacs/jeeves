@@ -83,3 +83,10 @@ func (l *Lock) Release() {
 		l.held = false
 	}
 }
+
+// LockPID is the PID this process writes into a lock file, as the data repo's lock does (on Windows the
+// launcher's $$, which Git Bash's kill -0 can check).
+func LockPID() string { return lockPID() }
+
+// Alive reports whether a PID read from a lock file is a running process, as the data repo's lock checks.
+func Alive(pid string) bool { return alive(pid) }
