@@ -6,7 +6,8 @@
   into `main` as each phase is done; nothing is cut or tagged until then, except the 1.4.2 security fix.
 - **Up next:** 1. Go port, Phase 3: encryption with age built in (below, "Go port, Phase 3"; built on
   `feat/go-3`, merged once its parity test passes on three OSes and the bash version is removed)
-- **Then:** 2. Phase 4: background updates · 3. Phase 5: the last bash versions removed · 4. Release 2.0
+- **Then:** 2. Phase 4: background updates in Go (below, "Go port, Phase 4") · 3. Phase 5: the last bash
+  versions removed · 4. Release 2.0
 - **The user's, any time:** submit 1.4.2 in the Anthropic portal (below, "Anthropic directory submission")
 - **Later:** 0. Review text gaps (below, under "Review text gaps") · 0. Injection docs: threat model in the README, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
@@ -216,6 +217,61 @@ against scratch folders (the repo's CLAUDE.md, "Working on the plugin") before t
 
 Docs with each step: README (commands, the worker, "What Jeeves runs, sends and changes": the worker
 process, its queue folder), `.claude/CLAUDE.md` layout, CHANGELOG 2.0.0.
+
+## Go port, Phase 4: background updates in Go (planned 2026-11-21)
+
+`jeeves-auto` (796 lines of bash, with perl for JSON) in Go, as `internal/auto`: the same subcommands,
+files under `~/.claude/jeeves/auto/` (`auto.conf`, `run.lock`, `child`, `run-dir`, `in-progress`,
+`sessions/`, `notices/`, `queue/`, `set-aside/`, `log`, `backoff`), messages, exit statuses and safeguards,
+so a device keeps its state across the upgrade. perl is no longer needed: `on` stops checking for it and
+the README's requirement and disclosure drop it. Built in three steps, each merged when its suite and CI on
+three OSes pass:
+
+**4a. `internal/proc`:** the worker's process helpers (start detached, stop with a grace period then by
+force, the Windows process tree) move into a package of their own, unchanged in behaviour, so the worker
+and the background run share one tested implementation. Windows gains a job object (kill on close): a
+child put in it dies with its supervisor however that ends, which the bash version could not do there.
+
+**4b. The port.** The bash version moves to `lib/auto.sh` (the launcher's fallback); the wrapper becomes a
+launcher. Design, where it is more than a translation:
+- **Reading JSON with `encoding/json`:** the hook's input, the child's result, the settings' model and env,
+  and the transcript. The transcript is read line by line with no line-length limit (`bufio.Reader`, not a
+  `Scanner`); only complete lines; a line that is not valid UTF-8 or not JSON is skipped (perl's decode
+  fails on both; Go's would replace bad bytes); tool results are skipped before decoding, and pasted image
+  data dropped, as now. Character counts and the 300-character tool-call cut are in characters (runes),
+  offsets in bytes, as perl's. A tool call's input is encoded with sorted keys and no HTML escaping, as
+  JSON::PP's canonical output. Checked against transcripts captured from the pinned Claude Code version
+  (the global rule: another program's output is parsed only against samples of it), kept as test fixtures.
+- **The edit check** (`check_edit`, the perl `CHECK_PL`): the same rules in Go (Security sections, headings,
+  firm rules and their blocks, no hunk removing more than it adds, at most 12 lines replaced, no HTML
+  comment, invisible or direction-changing characters, no flagged line), with the hunks still from
+  `git diff --no-index -U0`, and `lib.RiskFlags` / `lib.AddedLines` for the flags.
+- **The data repo:** the run still changes it in its own process under the data repo's lock, which the
+  worker's children share (writing `home/CLAUDE.md` and committing it must not be split across two
+  requests, or a snapshot could run between them); the snapshot, apply and `memories record` it runs go
+  through the worker as any caller's. The push reuses `scan.Findings`, `risk.Flags` and `RemoteGit`.
+- **The child:** started with its own process group (Unix) or in the job object (Windows); the deadline
+  stops it by `proc`; the watchdog for a supervisor killed outright is a small detached process on Unix
+  (`jeeves auto --watch`, hidden), as the bash subshell is now; on Windows the job object does that job.
+  A leftover child is stopped only when its command line still names its run folder (`ps`; on Windows
+  none is left to stop, the job object having ended it).
+- **Locks:** `run.lock` keeps its format (`<pid> <start> <owner> [count]`), written with `O_EXCL`; PIDs as
+  the data repo lock writes them (on Windows the launcher's `$$`), so both versions read each other's.
+- **Parity:** every background test runs against both versions while the bash one exists (a second pass
+  with `JEEVES_NO_GO=1`), and the outputs that are fixed (`status`, `on`, `off`, `queue`, the session
+  start, refusals) are compared byte for byte. Go unit tests cover the extract and the edit check case by
+  case.
+
+**4c.** Once 4b's parity passes on three OSes: `lib/auto.sh` deleted, its parity pass and perl's mentions
+removed (the CLAUDE.md script rules, the README, the disclosure, `jeeves-check`'s perl line if any).
+
+Failure list: the one in "Background auto-update" below carries over unchanged, each with its existing
+test; added for the port: a transcript line longer than any buffer (read whole), a line of invalid UTF-8 or
+JSON (skipped, the offset moves past it), a result file that is empty, truncated or not JSON (the run
+counts as failed: backoff, notice), a settings.json that does not parse (no model, no env carried over),
+the supervisor killed outright on Windows (the job object ends the child; test on Windows), the watchdog
+unable to start (the run does not start the child: it logs and backs off, since an unwatched child is
+not allowed).
 
 ## Go port, Phase 3: encryption with age built in (planned 2026-11-21)
 
