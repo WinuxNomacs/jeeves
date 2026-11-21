@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # jeeves-apply: the data repo's home/ copies installed into ~/.claude.
-# lib/launch.sh runs the Go build from dist/ (the code: internal/apply/), or the bash version
-# (lib/apply.sh) where there is none.
+# lib/launch.sh runs the Go build from dist/ (the code: internal/apply/).
 # Its folder: from the path it was run by, or for a bare name (`bash jeeves-apply`), the file bash ran: here,
 # or found on the PATH. Never a folder relative to wherever the caller stands.
 case "$0" in

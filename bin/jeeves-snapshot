@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # jeeves-snapshot: the ~/.claude preferences recorded in the data repo and committed on its main.
-# lib/launch.sh runs the Go build from dist/ (the code: internal/snapshot/), or the bash version
-# (lib/snapshot.sh) where there is none.
+# lib/launch.sh runs the Go build from dist/ (the code: internal/snapshot/).
 # Its folder: from the path it was run by, or for a bare name (`bash jeeves-snapshot`), the file bash ran: here,
 # or found on the PATH. Never a folder relative to wherever the caller stands.
 case "$0" in
