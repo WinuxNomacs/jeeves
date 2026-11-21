@@ -4,8 +4,8 @@
 
 - **Up next:** 1. Go port, Phase 0: distribution (below, "Go port"): the shared launcher, committed builds
   in the signed release, the release steps; released as 1.5.0 with background updates
-- **Then:** 2. Go port, Phase 1: the small commands · 3. Phase 2: the sync core, knowledge files only (settings
-  no longer backed up) · 4. Phase 3: encryption with age built in · 5. Phase 4: background updates · 6. Phase
+- **Then:** 2. Go port, Phase 1: the small commands · 3. Phase 2: the sync core around one worker per machine,
+  knowledge files only (settings no longer backed up) · 4. Phase 3: encryption with age built in · 5. Phase 4: background updates · 6. Phase
   5: the last bash versions removed
 - **The user's, any time:** submit 1.4.1 in the Anthropic portal (below, "Anthropic directory submission")
 - **Later:** 0. Review text gaps (below, under "Review text gaps") · 0. Injection docs: threat model in the README, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
@@ -47,6 +47,25 @@ The spike (below) met every go/no-go criterion; the user chose "go". Decided wit
   disclosure updated with it).
 - **Design:** `jeeves-verify` stays a short bash script, never ported: it checks that the builds are the
   signed ones, so it cannot be one of them, and users can read it.
+
+**One Jeeves worker per machine** (the user's request and decisions, 2026-11-20): instead of each session's
+hooks, background runs and skill commands changing the data repo themselves (serialized today only per
+script call by `take_lock`, per run by the run lock), every machine has one worker that alone commits,
+merges, pulls and pushes: the skill manages the content, the worker manages the versions.
+- **Per machine:** all sessions on a device use that device's worker, which owns its data repo folder;
+  devices still sync through GitHub.
+- **A queue folder, on demand:** hooks and commands write a request into `~/.claude/jeeves/queue/` (a temp
+  file, then a rename, so a half-written request is never read); whoever finds no live worker starts one
+  (the noclobber lock, PID and start time); it works through the queue in order and exits when idle. No
+  socket, no listener, no process left running; a crash loses no request.
+- **When:** built with Phase 2 (the sync core is ported around it from the start, and the update skill's git
+  steps are rewritten to hand versioning to it); Phase 4 moves background updates onto it. Nothing is
+  ported twice.
+- To settle when Phase 2 is planned: how a caller waits for its result (the session-start hook and the skill
+  need an answer, with a deadline), where the skill writes its text (a worktree the worker gives it, or
+  `home/` under the worker's lock), and the failure list (the worker killed mid-request, two starters at
+  once, a stale lock, a request from an older or newer plugin version, a hung git, a refused push, a full
+  disk, a queue that grows).
 
 Phases (each ships only when the suite passes on all three OSes, with the parity test covering every ported
 command against its bash version until that version is deleted):
