@@ -2,6 +2,7 @@ package lib
 
 import (
 	"encoding/base64"
+	"errors"
 	"os"
 	"os/exec"
 	"regexp"
@@ -31,7 +32,7 @@ func AgeVersion() string {
 	return ""
 }
 
-// VersionAtLeast compares dotted versions part by part, as crypt.sh's version_at_least (a part that is not
+// VersionAtLeast compares dotted versions part by part, as keys.sh's version_at_least (a part that is not
 // a number decides nothing).
 func VersionAtLeast(v, min string) bool {
 	a, b := strings.Split(v, "."), strings.Split(min, ".")
@@ -99,7 +100,7 @@ func (e Env) keyDir() string {
 	return e.Home + "/.config/jeeves/keys"
 }
 
-// wincredPS is crypt.sh's WINCRED_PS: Windows Credential Manager through PowerShell's Add-Type.
+// wincredPS is keys.sh's WINCRED_PS: Windows Credential Manager through PowerShell's Add-Type.
 const wincredPS = `$ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 Add-Type -TypeDefinition @"
@@ -136,7 +137,7 @@ func powershell(script string) (string, error) {
 	return strings.ReplaceAll(string(out), "\r", ""), err
 }
 
-// StoreGet reads the private key for recipient from this device's store, as crypt.sh's store_get; "" when
+// StoreGet reads the private key for recipient from this device's store, as keys.sh's store_get; "" when
 // there is none.
 func (e Env) StoreGet(kind, recipient string) string {
 	if !ValidRecipient(recipient) {
@@ -188,4 +189,73 @@ func (r *Repo) OutgoingRange() string {
 func (r *Repo) GitQuiet(args ...string) error {
 	return exec.Command("git", append([]string{"-C", r.Dir, "-c", "core.autocrlf=false",
 		"-c", "core.safecrlf=false", "-c", "core.excludesFile="}, args...)...).Run()
+}
+
+// powershellIn is powershell with input on stdin (a secret never goes on the command line), interactive
+// when a window must show (the credential prompt).
+func powershellIn(script, stdin string, interactive bool) (string, error) {
+	u := utf16.Encode([]rune("$ProgressPreference = \"SilentlyContinue\"\n" + script))
+	b := make([]byte, 2*len(u))
+	for i, c := range u {
+		b[2*i], b[2*i+1] = byte(c), byte(c>>8)
+	}
+	args := []string{"-NoProfile", "-NoLogo"}
+	if !interactive {
+		args = append(args, "-NonInteractive")
+	}
+	cmd := Command("powershell.exe", append(args, "-EncodedCommand", base64.StdEncoding.EncodeToString(b))...)
+	cmd.Stdin = strings.NewReader(stdin)
+	out, err := cmd.Output()
+	return strings.ReplaceAll(string(out), "\r", ""), err
+}
+
+// StorePut keeps the private key for recipient in this device's store, as keys.sh's store_set: the key goes
+// in on stdin, never on a command line.
+func (e Env) StorePut(kind, recipient, key string) error {
+	if !ValidRecipient(recipient) || !strings.HasPrefix(key, "AGE-SECRET-KEY-") || strings.ContainsAny(key, " \t\n\"'") {
+		return errors.New("not a recipient and key")
+	}
+	switch kind {
+	case "keychain":
+		// security -i reads the command from stdin, so the key never shows in the process list.
+		cmd := Command("security", "-i")
+		cmd.Stdin = strings.NewReader("add-generic-password -U -s jeeves -a " + recipient + " -l Jeeves -w " + key + "\n")
+		return cmd.Run()
+	case "secret-service":
+		cmd := Command("secret-tool", "store", "--label=Jeeves data repo key", "service", "jeeves", "account", recipient)
+		cmd.Stdin = strings.NewReader(key)
+		return cmd.Run()
+	case "wincred":
+		_, err := powershellIn(wincredPS+`$s = [Console]::In.ReadLine(); if (-not [JeevesCred]::Write("jeeves:`+recipient+`", $s)) { exit 1 }`, key+"\n", false)
+		return err
+	case "file":
+		dir := e.keyDir()
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return err
+		}
+		tmp := dir + "/" + recipient + ".tmp"
+		if err := os.WriteFile(tmp, []byte(key+"\n"), 0o600); err != nil {
+			os.Remove(tmp)
+			return err
+		}
+		return os.Rename(tmp, dir+"/"+recipient)
+	}
+	return errors.New("no key store")
+}
+
+// StoreDelete removes the key for recipient from this device's store.
+func (e Env) StoreDelete(kind, recipient string) {
+	if !ValidRecipient(recipient) {
+		return
+	}
+	switch kind {
+	case "keychain":
+		Command("security", "delete-generic-password", "-s", "jeeves", "-a", recipient).Run()
+	case "secret-service":
+		Command("secret-tool", "clear", "service", "jeeves", "account", recipient).Run()
+	case "wincred":
+		powershellIn(wincredPS+`[void][JeevesCred]::Delete("jeeves:`+recipient+`")`, "", false)
+	case "file":
+		os.Remove(e.keyDir() + "/" + recipient)
+	}
 }

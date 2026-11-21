@@ -1662,23 +1662,21 @@ t_a_key_missing_from_the_store_stops_the_pull_and_says_so() {
 
 t_a_failing_encryption_never_commits_plain_text() {
   crypt_env; snap >/dev/null; encrypt on >/dev/null; n=$(commits)
-  printf '#!/bin/sh\n[ "$1" = --version ] && echo v1.3.2\nexit 1\n' > "$W/broken-age"; chmod +x "$W/broken-age"
   echo "rules v2" > "$W/claude/CLAUDE.md"
-  out=$(JEEVES_AGE=$W/broken-age snap); rc=$?
+  out=$(JEEVES_TEST_CRYPT_FAIL='*' snap); rc=$?
   check "says it could not record" grep -q "could not record" <<< "$out"
   check "exit 1" [ $rc = 1 ]
   check "no commit" [ "$(commits)" = "$n" ]
   check "no plain text in any commit" bash -c '! git -C "$1" log -p --no-textconv --all | grep -q "rules v2"' _ "$R"
-  out=$(JEEVES_AGE=/nonexistent/age snap)
-  check "without age, snapshot says so before copying anything" grep -q "age is not installed" <<< "$out"
+  out=$(PATH=$(dirname "$(command -v git)"):/usr/bin:/bin JEEVES_AGE=/nonexistent/age snap); rc=$?
+  check "age is built in: no age command is needed" bash -c '[ $2 = 0 ] && grep -q "committed CLAUDE.md" <<< "$1"' _ "$out" $rc
 }
 
 t_a_failed_record_is_taken_by_the_next_snapshot() {
   crypt_env; snap >/dev/null; encrypt on >/dev/null; n=$(commits)
-  printf '#!/bin/sh\n[ "$1" = --version ] && echo v1.3.2\nexit 1\n' > "$W/broken-age"; chmod +x "$W/broken-age"
   echo "rules v2" > "$W/claude/CLAUDE.md"
-  JEEVES_AGE=$W/broken-age snap >/dev/null
-  check "nothing recorded while age fails" [ "$(commits)" = "$n" ]
+  JEEVES_TEST_CRYPT_FAIL='*' snap >/dev/null
+  check "nothing recorded while encryption fails" [ "$(commits)" = "$n" ]
   out=$(snap); rc=$?
   check "the next snapshot records it" [ "$(commits)" = $((n + 1)) ] && [ $rc = 0 ]
   check "stored encrypted" is_encrypted_blob "$R" HEAD:home/CLAUDE.md
@@ -1695,11 +1693,8 @@ t_a_failed_encrypt_on_leaves_nothing_behind_and_a_retry_works() {
   check "no recipient, clean, no commit" bash -c '[ ! -e "$1/recipient" ] && [ -z "$(git -C "$1" status --porcelain)" ]' _ "$R"
   check "status says off" grep -q "^encryption	off" <<< "$(encrypt status)"
   rm "$R/.git/hooks/pre-commit"
-  # An age that fails on one file, after encrypting the others (and caching their ciphertext).
-  real=$(command -v age)
-  printf '#!/bin/sh\nfor a; do last=$a; done\nif [ -f "$last" ] && grep -q "agent v1" "$last"; then exit 1; fi\nexec "%s" "$@"\n' "$real" > "$W/flaky-age"
-  chmod +x "$W/flaky-age"
-  JEEVES_AGE=$W/flaky-age encrypt on >/dev/null
+  # Encryption that fails on one file, after encrypting the others (and caching their ciphertext).
+  JEEVES_TEST_CRYPT_FAIL="agent v1" encrypt on >/dev/null
   check "the flaky run changed nothing" [ ! -e "$R/recipient" ]
   encrypt on >/dev/null
   check "the retry encrypts" [ -s "$R/recipient" ] && [ "$(commits)" = $((n + 1)) ]
@@ -1726,10 +1721,13 @@ t_merges_of_encrypted_files_combine_both_sides_and_show_conflicts_in_plain_text(
   git -C "$R" merge --abort
 }
 
+# Stage a file past the encryption filter, as a git without it would.
+stage_unfiltered() { git -C "$R" update-index --add --cacheinfo "100644,$(git -C "$R" hash-object -w --no-filters "$1"),$1"; }
+
 t_scan_refuses_a_file_that_would_be_pushed_unencrypted() {
   crypt_env; snap >/dev/null; encrypt on >/dev/null; git -C "$R" push -q origin main 2>/dev/null
   echo plain > "$R/home/agents/p.md"
-  git -C "$R" -c filter.jeeves.clean=cat add home/agents/p.md; git -C "$R" commit -qm plain
+  stage_unfiltered home/agents/p.md; git -C "$R" commit -qm plain
   out=$("$SRC/bin/jeeves-scan"); rc=$?
   check "names the file" grep -q "not encrypted: home/agents/p.md" <<< "$out"
   check "exit 1" [ $rc = 1 ]
@@ -1738,7 +1736,7 @@ t_scan_refuses_a_file_that_would_be_pushed_unencrypted() {
 t_scan_refuses_plain_text_in_an_earlier_outgoing_commit() {
   crypt_env; snap >/dev/null; encrypt on >/dev/null; git -C "$R" push -q origin main 2>/dev/null
   echo plain > "$R/home/agents/p.md"
-  git -C "$R" -c filter.jeeves.clean=cat add home/agents/p.md; git -C "$R" commit -qm plain
+  stage_unfiltered home/agents/p.md; git -C "$R" commit -qm plain
   c=$(git -C "$R" rev-parse --short HEAD)
   git -C "$R" rm -qf home/agents/p.md; git -C "$R" commit -qm "removed again"
   out=$("$SRC/bin/jeeves-scan"); rc=$?

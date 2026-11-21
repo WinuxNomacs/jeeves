@@ -2,7 +2,7 @@
 # Portable bash: works on bash 3.2 (macOS), Git Bash (Windows) and Linux. No GNU-only flags,
 # no associative arrays, no `set -u` (empty arrays break it on bash < 4.4).
 
-. "$(dirname "${BASH_SOURCE[0]}")/crypt.sh"
+. "$(dirname "${BASH_SOURCE[0]}")/keys.sh"
 
 # Claude Code's own folder: CLAUDE_CONFIG_DIR when the user has moved it.
 CLAUDE_HOME=${CLAUDE_HOME:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}}
@@ -109,7 +109,7 @@ remember_data_repo() {
   return $rc
 }
 
-# ---- Encryption (lib/crypt.sh has the rest) ----
+# ---- Encryption (lib/keys.sh has the rest) ----
 
 # The data repo's working tree is encrypted (has a recipient).
 encrypted() { [ -s "$REPO/recipient" ]; }
@@ -139,7 +139,8 @@ load_key() {
 crypt_setup() {
   local bin want have
   bin=$(cd "$(dirname "${BASH_SOURCE[0]}")/../bin" && pwd)/jeeves-crypt
-  want="filter.jeeves.clean \"$bin\" clean %f
+  want="filter.jeeves.process \"$bin\" process
+filter.jeeves.clean \"$bin\" clean %f
 filter.jeeves.smudge \"$bin\" smudge %f
 filter.jeeves.required true
 diff.jeeves.textconv \"$bin\" textconv
