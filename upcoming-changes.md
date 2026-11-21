@@ -223,7 +223,11 @@ process, its queue folder), `.claude/CLAUDE.md` layout, CHANGELOG 2.0.0.
 `jeeves-encrypt` (`status`, `on`, `unlock`, `lock`, `passphrase`) and `jeeves-crypt` (git's clean and
 smudge filter, textconv and merge driver) in Go, with age built in: users no longer install `age` or
 `age-plugin-batchpass`. Parity tests against the bash versions over each case, then the bash versions and
-the parts of `lib/crypt.sh` only they use are deleted once green on three OSes.
+the parts of `lib/crypt.sh` only they use are deleted once green on three OSes. As built: `jeeves-crypt`
+never had a bash version (a filter must not fall back); `lib/crypt.sh` became `lib/keys.sh`, which keeps
+only `store_get` for `jeeves-auto`; `lib/encrypt.sh` was deleted after its parity test passed on three OSes
+(CI run 44945877107), and the parity steps became a Go-only test of each step and misstep
+(`t_encrypt_answers_each_step_and_misstep`); the key store's name check has a Go test.
 - **The library, vetted 2026-11-21 from primary sources** (GitHub API): `filippo.io/age` v1.3.2
   (2026-08-29; releases yearly, v1.3.0 2025-12, v1.2.1 2024-12); BSD-3-Clause; one main maintainer
   (Filippo Valsorda, 333 commits; others under 10), issues answered this month; one advisory,

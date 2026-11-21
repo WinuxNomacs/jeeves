@@ -115,17 +115,6 @@ remember_data_repo() {
 encrypted() { [ -s "$REPO/recipient" ]; }
 # This device holds the key (the marker names the recipient, or encryption is coming from origin).
 unlocked() { [ -s "$CRYPT_DIR/unlocked" ] && { ! encrypted || [ "$(cat "$CRYPT_DIR/unlocked")" = "$(cat "$REPO/recipient")" ]; }; }
-# The given commit holds an encrypted data repo.
-encrypted_at() { git_repo cat-file -e "$1:recipient" 2>/dev/null; }
-# The given encrypted commit's history still holds home/ or hosts/ files from before encryption (the fold
-# after turning it on did not reach origin).
-plain_history_at() {
-  local first
-  first=$(git_repo rev-list --reverse "$1" -- recipient 2>/dev/null | head -1)
-  [ -n "$first" ] && git_repo rev-parse -q --verify "$first^" >/dev/null &&
-    [ -n "$(git_repo log -1 --format=%H "$first^" -- home hosts)" ]
-}
-PLAIN_HISTORY_MSG="the data repo's history on GitHub still holds the plain files from before encryption: run /jeeves:encryption to remove it"
 # Read the key once for this script and the git commands it runs; 1 when the store has none.
 load_key() {
   [ -n "$JEEVES_AGE_KEY" ] && return 0

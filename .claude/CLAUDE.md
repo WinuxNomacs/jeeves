@@ -83,8 +83,9 @@ code that runs, and the release check would warn at every session start.
   `internal/lib/tracked.go`. Knowledge files only (the user's decision, 2026-11-20): settings and
   keybindings are not backed up; copies a version before 2.0 left in `hosts/<host>/` are kept as they are.
 - `lib/lib.sh` — shared code: finding the data repo, tracked paths list, hashes, three-way classification.
-  `lib/keys.sh` (was `lib/crypt.sh`; renamed so the launcher can never take it for `jeeves-crypt`'s bash version) — encryption: the key stores (Keychain, Windows Credential Manager through PowerShell,
-  `secret-tool`, a key file), the passphrase dialogs, age helpers.
+  `lib/keys.sh` (was `lib/crypt.sh`; renamed so the launcher can never take it for `jeeves-crypt`'s bash
+  version) — the key store read (`store_get`) that `jeeves-auto`'s git commands need until Phase 4;
+  encryption itself is Go (`internal/encrypt/`, `internal/lib/crypt.go`, `agecrypt.go`, `passphrase.go`).
 - `tests/run.sh` — tests; each runs against a scratch `~/.claude`, data repo and bare remote.
 - Go port (in progress, `upcoming-changes.md` "Go port"): `go.mod`, `cmd/jeeves/` (one program, a
   subcommand per script), `internal/lib/` (the port of `lib/lib.sh`), `internal/<command>/`. A ported
@@ -92,7 +93,7 @@ code that runs, and the release check would warn at every session start.
   command is being ported it falls back to its bash version in `lib/<command>.sh` (`JEEVES_NO_GO=1` forces
   bash), and once the parity tests pass on all three OSes that bash version is deleted (the user's rule):
   done for `status`, `git`, `scan`, `risk`, `check`, `memories`, `update-check`, `github`, `init`,
-  `snapshot`, `apply`, `hook-edit`, `restore` and `cleanup`, whose launcher, with no build for the machine,
+  `snapshot`, `apply`, `hook-edit`, `restore`, `cleanup` and `encrypt`, whose launcher, with no build for the machine,
   says where Jeeves runs and exits 1. The tests inject copy failures through `JEEVES_TEST_COPY_HOOK` (a program run instead of each copy, with
   `cp -p`'s arguments; the tests' fake `cp`). `memories record` shares the data repo's
   lock with the bash scripts: the launcher passes its `$$` (`JEEVES_LOCK_PID`) for the lock file, since Git
