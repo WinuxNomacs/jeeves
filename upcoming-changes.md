@@ -5,7 +5,8 @@
 - **No release before 2.0** (the user's decision, 2026-11-21): 2.0 is the completed Go rewrite. Work merges
   into `main` as each phase is done; nothing is cut or tagged until then, except the 1.4.2 security fix.
 - **Up next:** 1. Release 1.4.2: the path fix only, from the 1.4.1 tag (below, "Release 1.4.2") · 2. Go
-  port, Phase 0 (built; merged once CI is green)
+  port, Phase 0 (built; merged once CI is green) · 3. Security: links in the data repo (below, "Bug: a
+  link committed to the data repo"), fixed on `main` for 2.0 (the user chose not to hold 1.4.2 for it)
 - **Then:** 3. Go port, Phase 1: the small commands · 4. Phase 2: the sync core around one worker per machine,
   knowledge files only (settings no longer backed up) · 5. Phase 3: encryption with age built in · 6. Phase 4:
   background updates · 7. Phase 5: the last bash versions removed · 8. Release 2.0
@@ -88,6 +89,22 @@ command against its bash version until that version is deleted):
   needed); its eight safeguards and failure list carried over with their tests.
 - **Phase 5:** the last bash versions and the launcher's fallback removed; `bin/` holds only the wrappers
   and `jeeves-verify`.
+
+## Bug: a link committed to the data repo (found by the 1.4.2 review, 2026-11-21)
+
+Reproduced on 1.4.1 and 1.4.2 (Linux; Windows Git does not make links by default): someone who can push
+to the data repo commits `home/CLAUDE.md` as a symbolic link (say `../../.ssh/id_ed25519` from
+`~/jeeves-data/home`). `jeeves-apply` follows it (`[ -f ]`, `hash_of` and the copy all follow links) and
+installs that file's content as `~/.claude/CLAUDE.md` with no prompt (CLAUDE.md is not held); the next
+snapshot commits it and `/jeeves:update` pushes it (`jeeves-scan` catches only secret patterns). A
+committed folder link (`home/commands -> /elsewhere`) makes the snapshot write through it. Fix to build on
+`main`: Jeeves never follows a link from the data repo: every command that syncs (and `status`, in bash and
+Go alike) refuses while `home/` or `hosts/` holds one (`git ls-files -s` mode 120000, or a link on disk
+under them), naming the path to remove; Jeeves itself never commits links (its copies follow the disk side's
+links). Tests: a committed file link and a folder link, seen failing first. Also: `jeeves-restore`'s
+`find` under a memory folder has the line-break pattern (one folder up at most, only when the user
+restores): read its paths through `inside`. The user chose (2026-11-21) to ship 1.4.2 without these; 2.0
+carries them.
 
 ## Release 1.4.2 (the user's decision, 2026-11-21)
 
