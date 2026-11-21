@@ -58,7 +58,7 @@ func Run(e lib.Env, args []string, stdout, stderr io.Writer) int {
 		say("this host: %s; backups: %s", e.Host, backups)
 		return 0
 	}
-	if strings.Contains(host, "/") || host == "." || host == ".." {
+	if strings.ContainsAny(host, `/\:`) || strings.HasPrefix(host, ".") {
 		say("not a host name: %s", host)
 		return 2
 	}
@@ -73,6 +73,23 @@ func Run(e lib.Env, args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	defer lock.Release()
+	// Nothing reaches ~/.claude from a data repo that is not on a clean main: another branch, or a merge
+	// under way (its files may hold conflict markers).
+	if b := r.Branch(); b != "main" {
+		if b == "" {
+			b = "detached HEAD"
+		}
+		say("%s is on '%s', not main; nothing restored (merge it into main first)", r.ShellDir, b)
+		return 1
+	}
+	if u, _ := r.Out("diff", "--name-only", "--diff-filter=U"); r.Merging() || u != "" {
+		say("%s is in the middle of a merge; nothing restored (finish or abort it first)", r.ShellDir)
+		return 1
+	}
+	if st, _ := r.Out("-c", "core.quotepath=false", "status", "--porcelain", "--untracked-files=all", "--", "hosts/"+host); st != "" {
+		say("%s has uncommitted changes under hosts/%s; nothing restored (commit them, or run jeeves-snapshot)", r.ShellDir, host)
+		return 1
+	}
 
 	stamp := time.Now().Format("20060102-150405")
 	savedDir := r.StateDir + "/overwritten/" + stamp

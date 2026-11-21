@@ -809,7 +809,7 @@ func (u *runner) pushScanned() string {
 		mark := u.dir + "/in-progress"
 		os.WriteFile(mark, []byte("merge\n"), 0o600)
 		st, _ := u.r.Git("status", "--porcelain")
-		if u.r.Branch() == "main" && st == "" &&
+		if u.r.Branch() == "main" && st == "" && u.r.TreeProblem("origin/main") == "" &&
 			u.git("merge", "-q", "--no-ff", "-m", "Merge origin/main (background update on "+u.e.Host+")", "origin/main") {
 			os.Remove(mark)
 			u.releaseData()

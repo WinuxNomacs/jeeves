@@ -116,6 +116,10 @@ func (s *session) mergeOrigin(what string) int {
 		s.say("main already holds origin/main; nothing to merge")
 		return 0
 	}
+	if why := s.r.TreeProblem(origin); why != "" {
+		s.say("origin/main is not merged: %s; remove them there (git rm, then commit and push from that device); nothing merged", why)
+		return 1
+	}
 	rc, out := s.git("merge", "-q", "--no-ff", "-m", "Merge origin/main: "+what, origin)
 	if rc == 0 {
 		s.say("merged origin/main into main (%s)", s.short("HEAD"))

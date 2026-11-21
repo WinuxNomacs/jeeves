@@ -100,6 +100,14 @@ func FindDataRepo(e Env, a DataRepoArg, stderr io.Writer) (*Repo, error) {
 	if exec.Command("git", "-C", candidate, "rev-parse", "--git-dir").Run() != nil {
 		return nil, &Problem{fmt.Sprintf("the data repo %s is not a git repository: to clone or create it, run /jeeves:setup", ShellPath(candidate))}
 	}
+	// A folder inside another repository passes the check above, and git would then work on that one.
+	if top, err := exec.Command("git", "-C", candidate, "rev-parse", "--show-toplevel").Output(); err == nil {
+		a, aerr := os.Stat(candidate)
+		b, berr := os.Stat(NativePath(strings.TrimSpace(string(top))))
+		if aerr == nil && berr == nil && !os.SameFile(a, b) {
+			return nil, &Problem{fmt.Sprintf("the data repo %s is a folder inside another git repository (%s), not one of its own: to clone or create it, run /jeeves:setup", ShellPath(candidate), strings.TrimSpace(string(top)))}
+		}
+	}
 	// hosts/<host>/ is replaced whole at each snapshot: a missing or odd name must never point elsewhere.
 	// A name starting with a dot is refused too: hosts/.memory-review is the shared review record.
 	if e.Host == "" || strings.HasPrefix(e.Host, ".") || strings.ContainsAny(e.Host, `/\`) {
