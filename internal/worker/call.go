@@ -116,7 +116,7 @@ func spawn(exe, q string) error {
 	if fi, err := os.Stat(logPath); err == nil && fi.Size() > 1<<20 {
 		os.Remove(logPath)
 	}
-	log, err := os.OpenFile(logPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600)
+	log, err := openLog(logPath)
 	if err != nil {
 		return err
 	}

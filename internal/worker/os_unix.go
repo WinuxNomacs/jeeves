@@ -52,3 +52,6 @@ func stop(cmd *exec.Cmd, done <-chan error, grace time.Duration) {
 		<-done
 	}
 }
+
+// openLog opens the worker's log for appending.
+func openLog(p string) (*os.File, error) { return os.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600) }

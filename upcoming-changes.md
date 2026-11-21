@@ -231,8 +231,8 @@ the parts of `lib/crypt.sh` only they use are deleted once green on three OSes.
   code, which Jeeves does not use. It pulls in `golang.org/x/crypto`, `x/sys`, `x/term` and the author's
   `edwards25519`, `hpke` and `nistec`. Size measured: +545 KB on the linux/amd64 build (3.88 to 4.43 MB,
   the release flags). Building our own age is not an option (cryptography); keeping the CLI keeps the
-  install step this phase removes. The README's "standard library only" becomes "the standard library and
-  age". Pinned exactly in `go.mod`; `go.sum` committed; the reproducible build check covers it.
+  install step this phase removes. The README's list of what the programs are built with gains age (2d
+  added the Go team's `golang.org/x/sys`, for Windows' `LockFileEx`: the same module age pulls in). Pinned exactly in `go.mod`; `go.sum` committed; the reproducible build check covers it.
 - **Formats unchanged:** the data repo key is an X25519 identity; `identity.age` holds it encrypted with
   the passphrase as a standard scrypt stanza, armored (checked: `age -e -j batchpass -a` writes
   `-> scrypt <salt> 18`), which the library reads and writes; files are age v1. A data repo encrypted by

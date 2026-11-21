@@ -63,9 +63,12 @@ func Push(e lib.Env, args []string, stdout, stderr io.Writer) int {
 		s.say("nothing pushed: a secret is taken out where it lives, then the commits not yet pushed are folded (jeeves-commit --fold); a finding the user confirms is not a secret is pushed with --accept '<its place>'")
 		return 1
 	}
+	// A flag counts only while its line is still in what main would bring every device: a line added and
+	// taken out again in commits not yet pushed never reaches one.
+	net := s.netAdded(origin)
 	var flags []lib.Flag
 	for _, f := range risk.Flags(s.r, rng) {
-		if !accepted[f.Where] {
+		if !accepted[f.Where] && net[flagFile(f.Where)+"\x00"+f.Text] {
 			flags = append(flags, f)
 		}
 	}
@@ -91,4 +94,37 @@ func Push(e lib.Env, args []string, stdout, stderr io.Writer) int {
 	s.git("update-ref", "refs/remotes/origin/main", sha)
 	s.say("pushed main (%s commits) to origin", n)
 	return 0
+}
+
+// flagFile is the file of a place printed as "<file>:<line> (commit <c>)".
+func flagFile(where string) string {
+	w, _, _ := strings.Cut(where, " (commit ")
+	if i := strings.LastIndex(w, ":"); i >= 0 {
+		return w[:i]
+	}
+	return w
+}
+
+// netAdded lists the lines under home/ that main adds over origin (over nothing before the first push),
+// as file NUL text: the change every device would install, decrypted when the data repo is encrypted.
+func (s *session) netAdded(origin string) map[string]bool {
+	base := origin
+	if base == "" {
+		base = s.out("hash-object", "-t", "tree", "--stdin") // git's empty tree
+		if base == "" {
+			base = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+		}
+	}
+	out := s.out("-c", "core.quotepath=false", "diff", "--no-color", "--textconv", "-U0", "--no-renames", base, "main", "--", "home")
+	set := map[string]bool{}
+	file := ""
+	for _, l := range strings.Split(out, "\n") {
+		switch {
+		case strings.HasPrefix(l, "+++ "):
+			file = strings.TrimSuffix(strings.TrimPrefix(strings.TrimPrefix(l, "+++ "), "b/"), "\t")
+		case strings.HasPrefix(l, "+"):
+			set[file+"\x00"+l[1:]] = true
+		}
+	}
+	return set
 }
