@@ -662,6 +662,14 @@ t_the_launcher_finds_the_plugin_folder_however_it_is_called() {
   mkdir -p "$W/x/y" "$W/x/lib"; printf 'echo planted; exit 0\n' > "$W/x/lib/launch.sh"
   out=$(cd "$W/x/y" && PATH="$W/plugin/bin:$PATH" JEEVES_NO_GO=1 bash jeeves-status 2>&1)
   check "and by its bare name from the PATH, never a launcher relative to the current folder" [ "$out" = "bash version of status" ]
+  # Git for Windows starts a filter by the path in its config, which a bash script's git config call wrote
+  # in Windows form (D:/...: Git Bash converts a POSIX path passed to a native program).
+  case "$OSTYPE" in msys*|cygwin*)
+    for p in "$(cygpath -m "$W/plugin")/bin/jeeves-status"; do
+      out=$(JEEVES_NO_GO=1 bash "$p" 2>&1)
+      check "by a Windows path: $p" [ "$out" = "bash version of status" ]
+    done ;;
+  esac
 }
 
 t_a_name_with_a_line_break_never_points_outside_the_tracked_folders() {
@@ -1359,18 +1367,8 @@ t_check_reports_a_signed_in_machine() {
   check "never adds GitHub's host key itself" grep -q "StrictHostKeyChecking=yes" "$FAKE_LOG"
   check "the data repo is there" [ "$(field datarepo <<< "$out")" = "$R	repo" ]
   check "an install line" grep -q "^gh-install	" <<< "$out"
-  check "age and its install line reported" bash -c 'grep -q "^age	" <<< "$1" && grep -q "^age-install	" <<< "$1"' _ "$out"
+  check "age is built in: no age or install line" bash -c '! grep -q "^age" <<< "$1"' _ "$out"
   check "the key store reported" grep -Eq "^keystore	(keychain|wincred|secret-service|none)$" <<< "$out"
-}
-
-t_check_reports_age_as_missing_old_or_ok() {
-  fake_tools
-  printf '#!/bin/sh\necho v1.2.1\n' > "$W/bin/old-age"; chmod +x "$W/bin/old-age"
-  check "age missing" [ "$(JEEVES_AGE=$W/bin/no-age check_cmd | field age)" = missing ]
-  check "age 1.2 is too old" [ "$(JEEVES_AGE=$W/bin/old-age check_cmd | field age)" = "old	1.2.1" ]
-  printf '#!/bin/sh\necho v1.3.2\n' > "$W/bin/new-age"; chmod +x "$W/bin/new-age"
-  printf '#!/bin/sh\n' > "$W/bin/age-plugin-batchpass"; chmod +x "$W/bin/age-plugin-batchpass"
-  check "age 1.3.2 with batchpass is ok" [ "$(PATH=$W/bin:$PATH JEEVES_AGE=$W/bin/new-age check_cmd | field age)" = "ok	1.3.2" ]
 }
 
 t_check_reports_what_is_missing_or_failing() {
@@ -1553,7 +1551,7 @@ t_plugin_files() {
   done
 }
 
-# ---- Encryption (needs age 1.3 or later with age-plugin-batchpass on the PATH; skipped without it) ----
+# ---- Encryption (age built in; the age command line, where installed, cross-checks the files) ----
 
 PASS="correct horse battery staple"
 # This device encrypts: a key file store, and a dialog stand-in that answers $PASS (or what $W/answers says,
@@ -1570,6 +1568,70 @@ END
   chmod +x "$W/askpass"
 }
 encrypt() { "$SRC/bin/jeeves-encrypt" "$@"; }
+
+t_a_corrupted_cache_entry_is_dropped_never_served() {
+  crypt_env; snap >/dev/null; encrypt on >/dev/null
+  for c in "$R"/.git/jeeves/clean/*; do echo "not ciphertext" > "$c"; done
+  key=$(cat "$W/keys/$(cat "$R/recipient")")
+  touch "$R/home/CLAUDE.md"; git -C "$R" update-index --really-refresh >/dev/null 2>&1
+  JEEVES_AGE_KEY=$key git -C "$R" add --renormalize home/CLAUDE.md
+  check "the staged file is real ciphertext" bash -c 'git -C "$1" cat-file blob :home/CLAUDE.md | head -c 21 | grep -q age-encryption.org/v1' _ "$R"
+  check "and opens to the plain text" grep -qx "rules v1" <<< "$(git -C "$R" cat-file --textconv :home/CLAUDE.md 2>/dev/null || JEEVES_AGE_KEY=$key "$SRC/bin/jeeves-crypt" textconv <(git -C "$R" cat-file blob :home/CLAUDE.md))"
+}
+
+t_a_key_store_that_refuses_and_a_mismatched_identity_change_nothing() {
+  crypt_env; snap >/dev/null; n=$(commits)
+  case "$OSTYPE" in msys*|cygwin*) ;; *)
+    mkdir -p "$W/keys"; chmod 500 "$W/keys"
+    if ! ( : > "$W/keys/probe" ) 2>/dev/null; then
+      out=$(encrypt on); rc=$?
+      check "a store that refuses: said, exit 1" bash -c '[ $2 = 1 ] && grep -q "could not keep the key" <<< "$1"' _ "$out" $rc
+      check "and nothing changed" bash -c '[ ! -e "$1/recipient" ] && [ ! -e "$1/identity.age" ] && [ "$(git -C "$1" rev-list --count HEAD)" = "$2" ]' _ "$R" "$n"
+    fi
+    chmod 700 "$W/keys" ;;
+  esac
+  encrypt on >/dev/null; encrypt lock >/dev/null
+  git -C "$R" show HEAD:identity.age > "$W/identity.saved"
+  # identity.age for another key, sealed with the same passphrase.
+  printf '%s\n%s\n' "$PASS" "$PASS" > "$W/answers"
+  ( export JEEVES_DATA=$W/other-repo; git init -q -b main "$W/other-repo"; cd "$W/other-repo" && git commit -q --allow-empty -m x && "$SRC/bin/jeeves-encrypt" on >/dev/null 2>&1 )
+  cp "$W/other-repo/identity.age" "$R/identity.age"
+  out=$(encrypt unlock); rc=$?
+  check "an identity.age for another key is refused" bash -c '[ $2 = 1 ] && grep -q "does not match the recipient file" <<< "$1"' _ "$out" $rc
+  check "the device stays locked" grep -q "^encryption	locked" <<< "$(encrypt status)"
+  cp "$W/identity.saved" "$R/identity.age"
+}
+
+# jeeves-encrypt's parity while its bash version exists: the same steps on two fresh copies of the world,
+# Go then bash; output and exit statuses compared, the random parts (keys, recipients, the scratch path)
+# and status's age line (built in, so the Go build has none) set aside.
+encrypt_steps() {
+  {
+    encrypt_run status; encrypt_run passphrase; encrypt_run lock
+    printf 'short\n' > "$W/answers"; encrypt_run on
+    printf 'cancel\n' > "$W/answers"; encrypt_run on
+    printf 'nodialog\n' > "$W/answers"; encrypt_run on
+    printf '%s\n%s\n' "$PASS" "another passphrase" > "$W/answers"; encrypt_run on
+    rm -f "$W/answers"; encrypt_run on; encrypt_run status; encrypt_run on
+    encrypt_run lock; encrypt_run status; encrypt_run passphrase
+    printf 'wrong passphrase\n' > "$W/answers"; encrypt_run unlock
+    rm -f "$W/answers"; encrypt_run unlock; encrypt_run unlock; encrypt_run status
+    printf 'a new passphrase here\na new passphrase here\n' > "$W/answers"; encrypt_run passphrase
+    encrypt_run bogus
+  } 2>&1 | sed -e 's/age1[0-9a-z]*/<recipient>/g' -e "s#$SCRATCH/[^/ \"]*#<scratch>#g" -e '/^age	/d'
+}
+encrypt_run() { "$SRC/bin/jeeves-encrypt" "$@"; echo "rc=$?"; }
+t_encrypt_go_and_bash_say_the_same() {
+  crypt_env; snap >/dev/null
+  rm -rf "${W:?}/saved"; mkdir -p "$W/saved"; cp -R "$W/claude" "$W/repo" "$W/remote.git" "$W/saved/"
+  go=$(encrypt_steps)
+  rm -rf "${W:?}/claude" "${W:?}/repo" "${W:?}/remote.git" "${W:?}/keys"
+  cp -R "$W/saved/claude" "$W/saved/repo" "$W/saved/remote.git" "$W/"
+  bash=$(JEEVES_NO_GO=1 encrypt_steps)
+  check "the same messages and exit statuses" [ "$go" = "$bash" ]
+  [ "$go" = "$bash" ] || diff <(printf '%s\n' "$go") <(printf '%s\n' "$bash")
+  check "the steps ran (a passphrase changed)" grep -q "new passphrase set and committed" <<< "$go"
+}
 is_encrypted_blob() { [ "$(git -C "$1" cat-file -p "$2" | head -c 21)" = "age-encryption.org/v1" ]; }
 # Device B: its own ~/.claude, key store and a clone of the remote. Run a command as B with: as_b <cmd>.
 as_b() { JEEVES_HOST=hostb CLAUDE_HOME=$W/claudeB JEEVES_DATA=$W/repoB JEEVES_KEY_DIR=$W/keysB "$@"; }
@@ -1662,23 +1724,21 @@ t_a_key_missing_from_the_store_stops_the_pull_and_says_so() {
 
 t_a_failing_encryption_never_commits_plain_text() {
   crypt_env; snap >/dev/null; encrypt on >/dev/null; n=$(commits)
-  printf '#!/bin/sh\n[ "$1" = --version ] && echo v1.3.2\nexit 1\n' > "$W/broken-age"; chmod +x "$W/broken-age"
   echo "rules v2" > "$W/claude/CLAUDE.md"
-  out=$(JEEVES_AGE=$W/broken-age snap); rc=$?
+  out=$(JEEVES_TEST_CRYPT_FAIL='*' snap); rc=$?
   check "says it could not record" grep -q "could not record" <<< "$out"
   check "exit 1" [ $rc = 1 ]
   check "no commit" [ "$(commits)" = "$n" ]
   check "no plain text in any commit" bash -c '! git -C "$1" log -p --no-textconv --all | grep -q "rules v2"' _ "$R"
-  out=$(JEEVES_AGE=/nonexistent/age snap)
-  check "without age, snapshot says so before copying anything" grep -q "age is not installed" <<< "$out"
+  out=$(PATH=$(dirname "$(command -v git)"):/usr/bin:/bin JEEVES_AGE=/nonexistent/age snap); rc=$?
+  check "age is built in: no age command is needed" bash -c '[ $2 = 0 ] && grep -q "committed CLAUDE.md" <<< "$1"' _ "$out" $rc
 }
 
 t_a_failed_record_is_taken_by_the_next_snapshot() {
   crypt_env; snap >/dev/null; encrypt on >/dev/null; n=$(commits)
-  printf '#!/bin/sh\n[ "$1" = --version ] && echo v1.3.2\nexit 1\n' > "$W/broken-age"; chmod +x "$W/broken-age"
   echo "rules v2" > "$W/claude/CLAUDE.md"
-  JEEVES_AGE=$W/broken-age snap >/dev/null
-  check "nothing recorded while age fails" [ "$(commits)" = "$n" ]
+  JEEVES_TEST_CRYPT_FAIL='*' snap >/dev/null
+  check "nothing recorded while encryption fails" [ "$(commits)" = "$n" ]
   out=$(snap); rc=$?
   check "the next snapshot records it" [ "$(commits)" = $((n + 1)) ] && [ $rc = 0 ]
   check "stored encrypted" is_encrypted_blob "$R" HEAD:home/CLAUDE.md
@@ -1695,18 +1755,15 @@ t_a_failed_encrypt_on_leaves_nothing_behind_and_a_retry_works() {
   check "no recipient, clean, no commit" bash -c '[ ! -e "$1/recipient" ] && [ -z "$(git -C "$1" status --porcelain)" ]' _ "$R"
   check "status says off" grep -q "^encryption	off" <<< "$(encrypt status)"
   rm "$R/.git/hooks/pre-commit"
-  # An age that fails on one file, after encrypting the others (and caching their ciphertext).
-  real=$(command -v age)
-  printf '#!/bin/sh\nfor a; do last=$a; done\nif [ -f "$last" ] && grep -q "agent v1" "$last"; then exit 1; fi\nexec "%s" "$@"\n' "$real" > "$W/flaky-age"
-  chmod +x "$W/flaky-age"
-  JEEVES_AGE=$W/flaky-age encrypt on >/dev/null
+  # Encryption that fails on one file, after encrypting the others (and caching their ciphertext).
+  JEEVES_TEST_CRYPT_FAIL="agent v1" encrypt on >/dev/null
   check "the flaky run changed nothing" [ ! -e "$R/recipient" ]
   encrypt on >/dev/null
   check "the retry encrypts" [ -s "$R/recipient" ] && [ "$(commits)" = $((n + 1)) ]
   # The key file itself (a Windows age cannot open a <(...) path).
   keyfile=$W/keys/$(cat "$R/recipient")
   for f in home/CLAUDE.md home/agents/a.md hosts/testhost/settings.json; do
-    check "$f opens with the key now in the store" bash -c 'git -C "$1" cat-file blob "HEAD:$2" | age -d -i "$3" >/dev/null' _ "$R" "$f" "$keyfile"
+    age_cli && check "$f opens with the key now in the store" bash -c 'git -C "$1" cat-file blob "HEAD:$2" | age -d -i "$3" >/dev/null' _ "$R" "$f" "$keyfile"
   done
 }
 
@@ -1726,10 +1783,13 @@ t_merges_of_encrypted_files_combine_both_sides_and_show_conflicts_in_plain_text(
   git -C "$R" merge --abort
 }
 
+# Stage a file past the encryption filter, as a git without it would.
+stage_unfiltered() { git -C "$R" update-index --add --cacheinfo "100644,$(git -C "$R" hash-object -w --no-filters "$1"),$1"; }
+
 t_scan_refuses_a_file_that_would_be_pushed_unencrypted() {
   crypt_env; snap >/dev/null; encrypt on >/dev/null; git -C "$R" push -q origin main 2>/dev/null
   echo plain > "$R/home/agents/p.md"
-  git -C "$R" -c filter.jeeves.clean=cat add home/agents/p.md; git -C "$R" commit -qm plain
+  stage_unfiltered home/agents/p.md; git -C "$R" commit -qm plain
   out=$("$SRC/bin/jeeves-scan"); rc=$?
   check "names the file" grep -q "not encrypted: home/agents/p.md" <<< "$out"
   check "exit 1" [ $rc = 1 ]
@@ -1738,7 +1798,7 @@ t_scan_refuses_a_file_that_would_be_pushed_unencrypted() {
 t_scan_refuses_plain_text_in_an_earlier_outgoing_commit() {
   crypt_env; snap >/dev/null; encrypt on >/dev/null; git -C "$R" push -q origin main 2>/dev/null
   echo plain > "$R/home/agents/p.md"
-  git -C "$R" -c filter.jeeves.clean=cat add home/agents/p.md; git -C "$R" commit -qm plain
+  stage_unfiltered home/agents/p.md; git -C "$R" commit -qm plain
   c=$(git -C "$R" rev-parse --short HEAD)
   git -C "$R" rm -qf home/agents/p.md; git -C "$R" commit -qm "removed again"
   out=$("$SRC/bin/jeeves-scan"); rc=$?
@@ -1781,8 +1841,10 @@ t_a_new_passphrase_opens_the_key_and_the_old_one_no_longer_does() {
   printf '%s\n' "$NEW" "$NEW" > "$W/answers"
   check "says set" grep -q "new passphrase set" <<< "$(encrypt passphrase)"
   check "the recipient is unchanged" [ "$(cat "$R/recipient")" = "$rec" ]
-  check "the new passphrase opens identity.age" bash -c 'AGE_PASSPHRASE=$1 age -d -j batchpass "$2" | grep -q AGE-SECRET-KEY' _ "$NEW" "$R/identity.age"
-  check "the old one no longer does" bash -c '! AGE_PASSPHRASE=$1 age -d -j batchpass "$2" >/dev/null 2>&1' _ "$PASS" "$R/identity.age"
+  if age_cli; then
+    check "the new passphrase opens identity.age" bash -c 'AGE_PASSPHRASE=$1 age -d -j batchpass "$2" | grep -q AGE-SECRET-KEY' _ "$NEW" "$R/identity.age"
+    check "the old one no longer does" bash -c '! AGE_PASSPHRASE=$1 age -d -j batchpass "$2" >/dev/null 2>&1' _ "$PASS" "$R/identity.age"
+  fi
 }
 
 t_lock_removes_the_key_and_the_scripts_then_refuse() {
@@ -3017,7 +3079,6 @@ run_test "the automatic cleanup runs only when jeeves.conf turns it on and it is
 run_test "check reports a signed-in machine: git, gh, GitHub login, protocol, SSH key, data repo" t_check_reports_a_signed_in_machine
 run_test "check reports a missing gh, a signed-out gh, no SSH key and an unknown host key" t_check_reports_what_is_missing_or_failing
 run_test "check reports the data repo folder as missing, empty or other, with ~/ expanded and ~/jeeves-data by default" t_check_reports_each_data_repo_state
-run_test "check reports age as missing, too old or ok" t_check_reports_age_as_missing_old_or_ok
 run_test "the key store takes only an age recipient" t_the_key_store_takes_only_an_age_recipient
 run_test "a deadline stops a hung command by its PID" t_deadline_stops_a_hung_command
 run_test "github find lists the user's data repos once each, and fails cleanly" t_github_finds_data_repos
@@ -3081,8 +3142,14 @@ run_test "a background run killed mid-commit is put right by the next" t_a_run_k
 run_test "a background run that cannot start backs off and says why" t_a_run_that_cannot_start_backs_off_and_says_why
 run_test "the background log keeps the last 50 runs" t_the_background_log_keeps_the_last_50_runs
 
-# Encryption tests need age 1.3+ with age-plugin-batchpass.
-if v=$(age --version 2>/dev/null) && command -v age-plugin-batchpass >/dev/null 2>&1; then
+# age is built in. The checks that read Jeeves's files with the age command line, and the bash version's
+# parity test, need age 1.3+ with age-plugin-batchpass; without them they are skipped and said so.
+age_cli() { age --version >/dev/null 2>&1 && command -v age-plugin-batchpass >/dev/null 2>&1; }
+age_cli || echo "skip age command line checks: age 1.3 or later with age-plugin-batchpass is not on the PATH"
+if true; then
+  age_cli && run_test "jeeves-encrypt: the Go build and the bash version say the same" t_encrypt_go_and_bash_say_the_same
+  run_test "a corrupted cache entry is dropped, never served" t_a_corrupted_cache_entry_is_dropped_never_served
+  run_test "a key store that refuses, and a mismatched identity, change nothing" t_a_key_store_that_refuses_and_a_mismatched_identity_change_nothing
   run_test "encrypt on keeps files encrypted in git and plain in the working tree" t_encrypt_on_keeps_files_encrypted_in_git_and_plain_in_the_working_tree
   run_test "encrypt on refuses a short or mismatched passphrase, a cancel, and no dialog" t_encrypt_on_refuses_a_short_or_mismatched_passphrase_or_a_cancel
   run_test "a locked clone refuses to sync until unlocked" t_a_locked_clone_refuses_to_sync_until_unlocked
@@ -3105,7 +3172,7 @@ if v=$(age --version 2>/dev/null) && command -v age-plugin-batchpass >/dev/null 
   run_test "the memory review record is stored encrypted" t_the_memory_review_record_is_stored_encrypted
   run_test "a background run on an encrypted data repo" t_a_background_run_on_an_encrypted_data_repo
 else
-  echo "skip encryption tests: age 1.3 or later with age-plugin-batchpass is not on the PATH"
+  :
 fi
 
 echo "$passed passed, $failed failed"

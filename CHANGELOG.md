@@ -23,6 +23,9 @@ Built so far (prepared as 1.5.0, never published):
   anything is pushed; a refused edit is kept for you, never pushed. No worker is left behind: a watchdog
   stops a stranded session, and each session start cleans up after a run that crashed.
 - Background updates need `perl` with JSON::PP (standard on macOS, Linux and Git for Windows).
+- **age is built in:** encryption no longer needs age or age-plugin-batchpass installed. Data repos
+  encrypted by earlier versions open unchanged, and the files stay readable with the age command line.
+  git's filter runs as one process per checkout instead of one per file.
 - **The skills change the data repo only through commands that check what they are given:**
   `jeeves-commit` (only files under `home/`, `jeeves.conf` or the data repo's `CLAUDE.md`, never a link),
   `jeeves-merge` (a skill's branch, or `origin/main` with conflicts under `hosts/` settled by rule),

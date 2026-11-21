@@ -115,7 +115,7 @@ func FindDataRepo(e Env, a DataRepoArg, stderr io.Writer) (*Repo, error) {
 		fmt.Fprintf(stderr, "jeeves: could not record the data repo in %s: later commands without --data-repo may not find it\n", ShellPath(e.pointerFile()))
 	}
 	if r.Encrypted() || r.Unlocked() {
-		r.cryptSetup(e)
+		r.CryptSetup(e)
 	}
 	if r.Encrypted() && !r.Unlocked() && os.Getenv("ALLOW_LOCKED") != "1" {
 		return nil, &Problem{"the data repo is encrypted and this device is locked: run /jeeves:encryption"}
@@ -185,11 +185,12 @@ func (r *Repo) Unlocked() bool {
 	return nonEmpty(m) && (!r.Encrypted() || catTrim(m) == catTrim(r.Dir+"/recipient"))
 }
 
-// cryptSetup points git at this plugin's jeeves-crypt (the path changes with each plugin version), as
+// CryptSetup points git at this plugin's jeeves-crypt (the path changes with each plugin version), as
 // lib.sh's crypt_setup does, writing the settings only when they differ.
-func (r *Repo) cryptSetup(e Env) {
+func (r *Repo) CryptSetup(e Env) {
 	bin := e.Root() + "/bin/jeeves-crypt"
 	want := []string{
+		`filter.jeeves.process "` + bin + `" process`,
 		`filter.jeeves.clean "` + bin + `" clean %f`,
 		`filter.jeeves.smudge "` + bin + `" smudge %f`,
 		`filter.jeeves.required true`,

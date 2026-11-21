@@ -116,14 +116,13 @@ The folder on this machine is the `datarepo` path.
   steps ("First: the state", then "Turn on") with these changes: no sync first, no question again, and no
   `jeeves-cleanup --all` (there is no history to remove yet). First run
   `jeeves-status --data-repo "<datarepo path>"`: it records the data repo, so the commands find it bare.
-  Where those steps stop or the user turns something down (age not installed, a credential store to set up
-  first, a cancelled dialog not retried), only the encryption ends: say the data repo is not encrypted yet
+  Where those steps stop or the user turns something down (a credential store to set up first, a cancelled
+  dialog not retried), only the encryption ends: say the data repo is not encrypted yet
   and that `/jeeves:encryption` turns it on later, then go on with step 4.
 - **Unlock** (after a clone): `jeeves-status --data-repo "<datarepo path>"` (it records the data repo),
   then `jeeves-encrypt status`. With `encryption locked`, the
   repo is encrypted: follow the encryption steps ("First: the state", then the first step of "Unlock")
-  before going on. Where those steps stop (age not installed, a credential store to set up first, no
-  passphrase), setup cannot go on without the key: say what is missing, and that once it is in place,
+  before going on. Where those steps stop (a credential store to set up first, no passphrase), setup cannot go on without the key: say what is missing, and that once it is in place,
   `/jeeves:encryption` unlocks this device and `/jeeves:setup` run again then finishes (it finds the data
   repo already cloned and goes on from step 4); stop.
 

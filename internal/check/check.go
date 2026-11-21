@@ -36,8 +36,6 @@ func firstWord(s string) string {
 //	gh-protocol  https | ssh | skip                      how gh clones (its git_protocol setting)
 //	ssh-github   ok <login> | fail <why> | skip          an SSH key GitHub accepts
 //	gh-install   <command> | none                        how to install gh here (run only after the user agrees)
-//	age          ok <version> | old <version> | missing  age, for encryption (1.3.0 or later, with age-plugin-batchpass)
-//	age-install  <command> | none                        how to install age here (none: the release download)
 //	keystore     keychain | wincred | secret-service | none  where an encryption key would be kept
 //	datarepo     <path> repo | empty | missing | other
 //
@@ -140,24 +138,6 @@ func Run(e lib.Env, args []string, stdout, stderr io.Writer) int {
 	}
 	line("gh-install", install)
 
-	switch v := lib.AgeVersion(); {
-	case v == "":
-		line("age", "missing")
-	case lib.VersionAtLeast(v, lib.AgeMinVersion) && has("age-plugin-batchpass"):
-		line("age", "ok", v)
-	default:
-		line("age", "old", v)
-	}
-	// Linux packages are often older than 1.3 (Ubuntu 24.04 apt: 1.2.1), so only Homebrew is offered there.
-	install = "none"
-	if osName == "windows" {
-		if winget {
-			install = "winget install --id FiloSottile.age -e"
-		}
-	} else if has("brew") {
-		install = "brew install age"
-	}
-	line("age-install", install)
 	line("keystore", lib.KeystoreKind(""))
 
 	dir := a.JeevesData

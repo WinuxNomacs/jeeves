@@ -194,10 +194,6 @@ func (s *run) main(a lib.DataRepoArg) int {
 		s.say("skipped, %s has uncommitted changes; ~/.claude changes are not recorded yet", r.ShellDir)
 		return 1
 	}
-	if r.Encrypted() && lib.AgeVersion() == "" {
-		s.say("skipped, the data repo is encrypted and age is not installed here (/jeeves:setup offers to install it)")
-		return 1
-	}
 
 	s.pullOrigin()
 	// What the pull brought in is checked too.

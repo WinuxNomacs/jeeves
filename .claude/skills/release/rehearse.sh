@@ -6,7 +6,7 @@
 # Prints ok/FAIL per check and REHEARSAL OK at the end. Touches only the scratch folder (and a git worktree
 # of the tag, removed at the end). The notice check expects plugin.json to still hold the old version
 # (run it before the release branch's version bump) or names the next one. Exits 1 when a check failed.
-# The scratch path must not hold spaces (lib/crypt.sh runs JEEVES_ASKPASS unquoted).
+# The scratch path must not hold spaces (lib/keys.sh runs JEEVES_ASKPASS unquoted).
 [ $# = 2 ] && [ -n "$1" ] && [ -n "$2" ] || { echo "usage: rehearse.sh <scratch folder> <last release tag>" >&2; exit 2; }
 case "$1" in *' '*) echo "rehearse.sh: the scratch path must not contain spaces" >&2; exit 2 ;; esac
 mkdir -p "$1" && S=$(cd "$1" && pwd -P) || exit 2

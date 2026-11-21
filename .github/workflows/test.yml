@@ -28,7 +28,7 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/bash32" && ln -sf /bin/bash "$RUNNER_TEMP/bash32/bash"
           echo "$RUNNER_TEMP/bash32" >> "$GITHUB_PATH"
-      # age 1.3.2 for the encryption tests, pinned by the SHA-256 of each release archive (checked
+      # age 1.3.2 for the age command line checks (age itself is built into Jeeves), pinned by the SHA-256 of each release archive (checked
       # 2026-11-17 against GitHub's asset digests). Its archives include age-plugin-batchpass.
       - name: Install age
         shell: bash
@@ -81,7 +81,7 @@ jobs:
           echo "age: $(command -v age) $(age --version)"
           bash tests/run.sh 2>&1 | tee "$RUNNER_TEMP/tests.log"
           rc=${PIPESTATUS[0]}
-          if grep -q "^skip encryption tests" "$RUNNER_TEMP/tests.log"; then
-            echo "::error::the encryption tests were skipped"; exit 1
+          if grep -q "^skip age command line checks" "$RUNNER_TEMP/tests.log"; then
+            echo "::error::the age command line checks were skipped"; exit 1
           fi
           exit "$rc"

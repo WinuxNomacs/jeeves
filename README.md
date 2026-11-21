@@ -212,8 +212,8 @@ file changes, on disk or in the repo.
 
 ### Encryption
 
-`/jeeves:encryption` encrypts everything under `home/` and `hosts/` with [age](https://age-encryption.org)
-(1.3.0 or later), so a leaked GitHub token or a repo made public by mistake shows only encrypted files. The
+`/jeeves:encryption` encrypts everything under `home/` and `hosts/` with [age](https://age-encryption.org),
+built into Jeeves (nothing to install), so a leaked GitHub token or a repo made public by mistake shows only encrypted files. The
 data repo's folder and `~/.claude` on each device stay plain, as they must for Claude Code to read them.
 Still visible on GitHub: file names (including the project paths of memories), sizes and commit messages.
 
@@ -251,7 +251,7 @@ The plugin's `bin/` is on the PATH of Claude's Bash tool, so Claude (or you, by 
 | `jeeves-apply` | data repo → `~/.claude` | Installs shared files that changed in the data repo since this device last synced, from `main` only (not mid-merge, not with uncommitted files under `home/`). Never overwrites a file a session edited since then. `--force [<path>...]` installs the repo copy (of the named files, whatever their state), saving the disk copy first. A skill, agent or command in a version this device never had is held until `--accept <hash>:<path>` names that version; `--show` prints every incoming change with its diff and risk flags and installs nothing. |
 | `jeeves-restore [<host> [--memories]]` | data repo → `~/.claude` | Copies a device's backup onto this machine, saving replaced files under `.sync-state/overwritten/`. Without a host, prints this machine's host name and the hosts with a backup. |
 | `jeeves-cleanup <days>` | data repo → origin | Folds the history older than `<days>` days into one root commit (same files) and force-pushes `main` with a lease; `--dry-run <days>` only says what it would do; `--all` folds all of it (after encrypting); `--auto` is what the session-start hook runs. |
-| `jeeves-check` | (read-only) | What setup needs to know: OS, git, the GitHub CLI and sign-in, an SSH key GitHub accepts, how to install the CLI and age here, the key store, the data repo folder's state. |
+| `jeeves-check` | (read-only) | What setup needs to know: OS, git, the GitHub CLI and sign-in, an SSH key GitHub accepts, how to install the CLI here, the key store, the data repo folder's state. |
 | `jeeves-encrypt status` / `on` / `unlock` / `lock` / `passphrase` | data repo, key store | Encryption: its state on this device; turn it on; put the key in this device's credential store, or remove it; set a new passphrase. Asks for the passphrase in a dialog (`--terminal` in your own terminal). |
 | `jeeves-github find` / `create <name>` | GitHub | Lists your data repos on GitHub (topic `jeeves-data`, or named `jeeves-data`), or creates a private one with that topic, through the GitHub CLI. |
 | `jeeves-init <folder> [<url>]` | (new repo) | Creates an empty data repo (`.gitignore`, `.gitattributes`, README), optionally with a remote. |
@@ -355,8 +355,9 @@ commands are bash scripts, except those already ported to Go (so far `jeeves-sta
 `jeeves-init`, `jeeves-snapshot`, `jeeves-apply`, `jeeves-hook-edit`, `jeeves-restore` and
 `jeeves-cleanup`), whose `bin/` script runs the compiled program for your system from `dist/`: macOS and
 Linux on Intel/AMD or ARM, and Windows on Intel/AMD (elsewhere they stop and say so).
-The programs are built from `cmd/` and `internal/` in this repo with the Go standard library and the Go team's `golang.org/x/sys` (Windows' file lock),
-pinned in `go.mod` and checked against `go.sum`, and the
+The programs are built from `cmd/` and `internal/` in this repo with the Go standard library, [age](https://github.com/FiloSottile/age) (`filippo.io/age`, for
+encryption) and the Go team's `golang.org/x/sys` and `x/term` (Windows' file lock, a passphrase typed with no
+echo), pinned in `go.mod` and checked against `go.sum`, and the
 build is reproducible: anyone with the Go version `go.mod` names gets the same bytes, which
 `bash .claude/skills/release/build-go.sh --check` confirms (CI checks it on Linux, macOS and Windows for each
 release, and the signed manifest holds their hashes). They are not signed by Apple or Microsoft; they arrive
@@ -391,8 +392,8 @@ Anthropic itself, except through Claude Code when you turn background updates on
   private data repo and tags it with a topic; `ssh -T git@github.com` checks whether your SSH key is
   accepted (it never adds GitHub's host key for you).
 
-**Software it may install.** None by itself. When `gh` or `age` is missing, `/jeeves:setup` and
-`/jeeves:encryption` show your system's install command (such as `brew install gh` or `sudo apt install gh`)
+**Software it may install.** None by itself. When `gh` is missing, `/jeeves:setup` shows your
+system's install command (such as `brew install gh` or `sudo apt install gh`)
 and run it only after you agree. Setup may also offer `gh auth setup-git`, which changes your global git
 config, again only on a yes.
 
@@ -493,8 +494,8 @@ stop loading the clone.
 A clone loaded this way gets no plugin options; Jeeves then uses the data repo this device recorded at
 setup. Hook scripts run from the clone as soon as a file is saved, in every session on that machine: keep
 the loaded clone on a working `main`, and try changes in a `git worktree`. Edits to skills take effect on
-`/reload-plugins`. The tests (`bash tests/run.sh`) need age 1.3 or later for the encryption tests (on
-macOS, `brew install age`). Changing the Go code needs the Go version `go.mod` names: rebuild `dist/` with
+`/reload-plugins`. The tests (`bash tests/run.sh`) cross-check the encrypted files with the age command
+line when age 1.3 or later is installed (on macOS, `brew install age`), and skip only those checks without it. Changing the Go code needs the Go version `go.mod` names: rebuild `dist/` with
 `bash .claude/skills/release/build-go.sh` and commit the builds with the change (CI fails on builds that do
 not match the source). To install or try the published plugin on that machine while the setting is on,
 run `claude` without it (`env -u CLAUDE_CODE_PLUGIN_DIRS claude ...`): an install made with it set has
@@ -557,8 +558,8 @@ folder and its copy on GitHub: delete those yourself if you no longer want the b
 ## Tests
 
 `tests/run.sh` (or `tests/run.sh <part of a test name>`). Each test uses a scratch `~/.claude`, data repo and
-bare remote, so nothing real is touched. The encryption tests need age 1.3.0 or later on the PATH and are
-skipped without it. The Go code has its own tests (`go test ./...`); while a command is being ported, the
+bare remote, so nothing real is touched. With age 1.3.0 or later on the PATH, the encryption tests also
+read Jeeves's files with the age command line (skipped without it). The Go code has its own tests (`go test ./...`); while a command is being ported, the
 suite's parity tests run its Go build and bash version on the same state and compare them byte for byte,
 and its bash version is removed once they pass on Linux, macOS and Windows.
 

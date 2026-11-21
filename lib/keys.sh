@@ -1,5 +1,7 @@
-# Encryption of the data repo with age. Sourced by lib/lib.sh and by bin/jeeves-crypt (git's filter, which
-# runs once per file, so nothing here runs a command when sourced).
+# Encryption of the data repo with age: the key stores and passphrase dialogs of the bash scripts. Sourced by
+# lib/lib.sh (nothing here runs a command when sourced). Named keys.sh, not crypt.sh: lib/<command>.sh is a
+# ported command's bash version to the launcher, and git's filter (jeeves-crypt) must never fall back to
+# a file that would print nothing and succeed.
 #
 # An encrypted data repo holds at its top `recipient` (the age public key, plain: encrypting needs only it),
 # `identity.age` (the private key, encrypted with the user's passphrase) and a .gitattributes that gives
