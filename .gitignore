@@ -3,4 +3,5 @@
 # Untracked inbox for new requests, and personal Claude Code settings for this repo.
 new.md
 .claude/settings.local.json
-ignored/
+ignored/# Go builds (the spike: not committed; .claude/skills/release/build-go.sh writes them).
+dist/

@@ -215,9 +215,10 @@ machine_id() {
 }
 HOST_MARK=.jeeves-machine
 
-# Union of tracked paths on disk and in the repo copy.
+# Union of tracked paths on disk and in the repo copy, in byte order on every machine (a locale's order
+# differs: Git Bash's put CLAUDE.md after agents/, seen 2026-11-20).
 all_tracked() {
-  { tracked_under "$CLAUDE_HOME"; tracked_under "$HOME_COPY"; } | sort -u
+  { tracked_under "$CLAUDE_HOME"; tracked_under "$HOME_COPY"; } | LC_ALL=C sort -u
 }
 
 # Git blob hash of a file, or "-" when it does not exist.

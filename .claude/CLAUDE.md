@@ -82,6 +82,14 @@ code that runs, and the release check would warn at every session start.
   `lib/crypt.sh` — encryption: the key stores (Keychain, Windows Credential Manager through PowerShell,
   `secret-tool`, a key file), the passphrase dialogs, age helpers.
 - `tests/run.sh` — tests; each runs against a scratch `~/.claude`, data repo and bare remote.
+- Go port (in progress, `upcoming-changes.md` "Go port"): `go.mod`, `cmd/jeeves/` (one program, a
+  subcommand per script), `internal/lib/` (the port of `lib/lib.sh`), `internal/<command>/`. A ported
+  command's `bin/` script is a launcher that runs `dist/jeeves-<os>-<arch>[.exe] <command>` and falls back
+  to its bash version in `lib/<command>.sh` (`JEEVES_NO_GO=1` forces bash); so far only `status`. Build
+  with `bash .claude/skills/release/build-go.sh` (needs the Go version `go.mod` names; `--record` after a
+  Go change, `--check` as CI runs it); `go test ./...` and the suite's parity test, which compares both
+  versions byte for byte. Go and bash must agree; a difference is a bug in one of them. `jeeves-verify`
+  stays bash.
 - `.claude/skills/release/` — the release procedure (a skill for working on the repo, not shipped as one).
 - This file is `.claude/CLAUDE.md`, for working on the repo; Claude Code loads it here as project context.
   At the root it would be shipped with the plugin to no effect, and `claude plugin validate --strict` fails.
