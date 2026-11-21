@@ -14,6 +14,7 @@ import (
 
 	"github.com/WinuxNomacs/jeeves/internal/lib"
 	"github.com/WinuxNomacs/jeeves/internal/snapshot"
+	"github.com/WinuxNomacs/jeeves/internal/worker"
 )
 
 // Stdin is where the hook's JSON is read from (the tests' seam).
@@ -97,7 +98,7 @@ func Run(e lib.Env, args []string, stdout, stderr io.Writer) int {
 		return 0
 	}
 	var out bytes.Buffer
-	snapshot.Run(e, []string{"--hook", "--no-pull"}, &out, &out)
+	worker.Run(e, "snapshot", []string{"--hook", "--no-pull"}, &out, &out, snapshot.Run)
 	text := strings.TrimRight(out.String(), "\n")
 	if text == "" {
 		return 0

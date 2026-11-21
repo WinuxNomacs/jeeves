@@ -25,6 +25,7 @@ import (
 	"github.com/WinuxNomacs/jeeves/internal/snapshot"
 	"github.com/WinuxNomacs/jeeves/internal/status"
 	"github.com/WinuxNomacs/jeeves/internal/updatecheck"
+	"github.com/WinuxNomacs/jeeves/internal/worker"
 )
 
 // commands maps each subcommand to its Run.
@@ -43,11 +44,12 @@ var commands = map[string]func(lib.Env, []string, io.Writer, io.Writer) int{
 	"snapshot":     snapshot.Run,
 	"status":       status.Run,
 	"update-check": updatecheck.Run,
+	"worker":       worker.Serve,
 }
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: jeeves <command> [arguments]   (commands: apply, check, cleanup, git, github, hook-edit, init, memories, restore, risk, scan, snapshot, status, update-check)")
+		fmt.Fprintln(os.Stderr, "usage: jeeves <command> [arguments]   (commands: apply, check, cleanup, git, github, hook-edit, init, memories, restore, risk, scan, snapshot, status, update-check, worker)")
 		os.Exit(2)
 	}
 	if os.Getenv("JEEVES_TEST_PANIC") == "1" { // the tests' way to make the program crash
@@ -59,7 +61,12 @@ func main() {
 		fmt.Fprintf(os.Stderr, "jeeves: unknown command %s\n", os.Args[1])
 		os.Exit(2)
 	}
-	os.Exit(run(e, os.Args[2:], os.Stdout, os.Stderr))
+	var stdout, stderr io.Writer = os.Stdout, os.Stderr
+	if o, x, ok := worker.ChildOutput(); ok { // this process runs a queued request
+		stdout, stderr = o, x
+	}
+	// The commands that change the data repo or ~/.claude go through the machine's worker, one at a time.
+	os.Exit(worker.Run(e, os.Args[1], os.Args[2:], stdout, stderr, run))
 }
 
 // pluginRoot is the plugin folder in the scripts' form (worked out once, on first use): JEEVES_ROOT from the launcher (bash's own

@@ -99,6 +99,9 @@ code that runs, and the release check would warn at every session start.
   Git Bash). `dist/` is committed: after any Go change, rebuild it with
   `bash .claude/skills/release/build-go.sh` (needs the Go version `go.mod` names) and commit the builds
   with the change; `--check` (CI, release step 4) fails when `dist/` is not a build of the source.
+  `internal/worker/` is the machine's worker (2d): `cmd/jeeves` sends the commands that change the data
+  repo or `~/.claude` (`worker.Queued`) through it, and a child it runs (`JEEVES_IN_WORKER=1`) runs them
+  directly; the tests set `JEEVES_WORKER_IDLE=1`, and `JEEVES_NO_WORKER=1` runs a command in the caller.
   `go test ./...`, and for a command being ported, parity tests that compare both versions byte for byte
   (the `both_versions` helper; Phase 1's are in the history of `tests/run.sh`). Go and bash must agree; a
   difference is a bug in one of them. `jeeves-verify` stays bash. On Windows, Git Bash hands the

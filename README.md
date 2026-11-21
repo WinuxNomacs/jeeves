@@ -290,6 +290,17 @@ How the data stays whole:
   `JEEVES_HOST` to give it a name of its own).
 - One Jeeves run at a time per data repo (a lock in `.git/jeeves/`), and one background update or
   `/jeeves:update` at a time per device (`~/.claude/jeeves/auto/run.lock`).
+- The commands that change the data repo or `~/.claude` (`jeeves-snapshot`, `jeeves-apply`,
+  `jeeves-restore`, `jeeves-cleanup`, `jeeves-memories record`) run one at a time on each machine, through
+  its worker: the command writes a request into `~/.claude/jeeves/queue/` and waits; the worker, a
+  background copy of the same program started by the first command that finds none, runs each request in
+  order as a process of its own and hands back its output and exit status, then exits after 10 idle
+  seconds. A session-start or edit hook waits at most 20 seconds and then leaves its request to finish, so
+  an edit is recorded even when another run was at work; a command waits up to 2 minutes for its turn. A
+  worker killed mid-request leaves it queued and the next one runs it again; a request that runs over 10
+  minutes is stopped. A request carries the folders, the device name and the settings git and ssh need,
+  never a secret (the encryption key stays in the key store). `JEEVES_NO_WORKER=1` runs a command in the
+  caller instead.
 
 `jeeves-snapshot` only commits onto a clean `main`. While the data repo is on another branch or has
 uncommitted changes (other than its own copies from a run that failed or was stopped), it skips and says so.
@@ -344,7 +355,9 @@ The programs are built from `cmd/` and `internal/` in this repo with the Go stan
 build is reproducible: anyone with the Go version `go.mod` names gets the same bytes, which
 `bash .claude/skills/release/build-go.sh --check` confirms (CI checks it on Linux, macOS and Windows for each
 release, and the signed manifest holds their hashes). They are not signed by Apple or Microsoft; they arrive
-through git as the plugin's other files do. In full:
+through git as the plugin's other files do. The commands that change the data repo or `~/.claude` run
+through a short-lived background process of the same program, one per machine (the worker, under "How the
+data stays whole"), which opens no network port. In full:
 
 **Network.** Jeeves sends nothing to the plugin's author and collects no usage data. It sends nothing to
 Anthropic itself, except through Claude Code when you turn background updates on (below).
@@ -385,8 +398,10 @@ config, again only on a yes.
   - Project memories: `/jeeves:update` may save new ones, as Claude Code saves memories.
   - `jeeves/`: Jeeves's own state on this device (the data repo's path, the trusted release key, the last
     verified manifest, the daily check's time, development checkouts, `go-fallback`: why the bash version of a
-    command last ran instead of its compiled one, so it is said once), and with background updates the
-    setting (`auto.conf`), the log, notices, the queue of items for you and set-aside changes (`auto/`).
+    command last ran instead of its compiled one, so it is said once), the worker's queue (`queue/`: each
+    request until it is answered, an answer nobody collected for up to a day, requests it could not run in
+    `rejected/`, and `worker.log`), and with background updates the setting (`auto.conf`), the log,
+    notices, the queue of items for you and set-aside changes (`auto/`).
   - Memories: only by `/jeeves:restore`, which you start, from the backup of a device you pick, for the
     projects that exist here; every file replaced is kept under the data repo's `.sync-state/overwritten/`.
   - **Permission settings:** besides a restore, only when you say yes at the end of `/jeeves:setup`, which
