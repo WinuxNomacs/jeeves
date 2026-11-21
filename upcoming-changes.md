@@ -4,13 +4,12 @@
 
 - **No release before 2.0** (the user's decision, 2026-11-21): 2.0 is the completed Go rewrite. Work merges
   into `main` as each phase is done; nothing is cut or tagged until then, except the 1.4.2 security fix.
-- **Up next:** 1. Release 1.4.2: the path fix only, from the 1.4.1 tag (below, "Release 1.4.2") · 2. Go
-  port, Phase 0 (built; merged once CI is green) · 3. Security: links in the data repo (below, "Bug: a
-  link committed to the data repo"), fixed on `main` for 2.0 (the user chose not to hold 1.4.2 for it)
-- **Then:** 3. Go port, Phase 1: the small commands · 4. Phase 2: the sync core around one worker per machine,
-  knowledge files only (settings no longer backed up) · 5. Phase 3: encryption with age built in · 6. Phase 4:
-  background updates · 7. Phase 5: the last bash versions removed · 8. Release 2.0
-- **The user's, any time:** submit 1.4.2 (once tagged) in the Anthropic portal (below, "Anthropic directory submission")
+- **Up next:** 1. Security: links in the data repo (below, "Bug: a link committed to the data repo"), fixed
+  on `main` for 2.0 (the user chose not to hold 1.4.2 for it)
+- **Then:** 2. Go port, Phase 1: the small commands · 3. Phase 2: the sync core around one worker per machine,
+  knowledge files only (settings no longer backed up) · 4. Phase 3: encryption with age built in · 5. Phase 4:
+  background updates · 6. Phase 5: the last bash versions removed · 7. Release 2.0
+- **The user's, any time:** submit 1.4.2 in the Anthropic portal (below, "Anthropic directory submission")
 - **Later:** 0. Review text gaps (below, under "Review text gaps") · 0. Injection docs: threat model in the README, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
   must differ per host)
@@ -1012,6 +1011,15 @@ Suite 105 passed (2026-11-19).
   (bash version), `.claude/skills/release/build-go.sh`, `go-builds.sha256`, `time-status.sh`; CI's Go
   step; tests: Go unit tests, and the suite's parity and launcher-fallback tests. Also fixed: the locale
   order of tracked paths in bash, and CI's Windows time limit (45 minutes).
+
+- Release 1.4.2 (2026-11-21; "Release 1.4.2" above): the line-break path fix only, from `v1.4.1`; review
+  (it found the link hole, recorded above), suite 121 passed, REHEARSAL OK, CI green on three OSes; tagged
+  `v1.4.2` on 91ef89f by Claude (the user's authorization for this release), merged into `main` keeping
+  `main`'s files, marketplace pinned; a fresh scratch install gets 1.4.2 and `jeeves-verify` passes.
+- Go port Phase 0 (2026-11-21; "Go port, Phase 0" above): `lib/launch.sh`, the wrapper in
+  `bin/jeeves-status`, `dist/` committed, `build-go.sh --check`, release steps and rehearsal checks, README
+  and CHANGELOG; tests in `tests/run.sh` (parity, fallback, crash, the launcher's folder) and `go test`.
+  Full suite 150 passed on all three OSes in CI. Not released (2.0 is).
 
 ## Review text gaps (found by the 2026-11-19 dry run; older text, not this phase's)
 
