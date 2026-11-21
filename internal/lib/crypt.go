@@ -14,8 +14,7 @@ import (
 // AgeMagic starts every age file.
 const AgeMagic = "age-encryption.org/v1"
 
-// VersionAtLeast compares dotted versions part by part, as keys.sh's version_at_least (a part that is not
-// a number decides nothing).
+// VersionAtLeast compares dotted versions part by part (a part that is not a number decides nothing).
 func VersionAtLeast(v, min string) bool {
 	a, b := strings.Split(v, "."), strings.Split(min, ".")
 	part := func(s []string, i int) string {
@@ -191,7 +190,7 @@ func powershellIn(script, stdin string, interactive bool) (string, error) {
 	return strings.ReplaceAll(string(out), "\r", ""), err
 }
 
-// StorePut keeps the private key for recipient in this device's store, as keys.sh's store_set: the key goes
+// StorePut keeps the private key for recipient in this device's store: the key goes
 // in on stdin, never on a command line.
 func (e Env) StorePut(kind, recipient, key string) error {
 	if !ValidRecipient(recipient) || !strings.HasPrefix(key, "AGE-SECRET-KEY-") || strings.ContainsAny(key, " \t\n\"'") {

@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -82,5 +83,42 @@ func TestTheAgeCommandLineAndJeevesReadEachOthersFiles(t *testing.T) {
 	theirFile, _ := cmd.Output()
 	if plain, err := DecryptWith(key, theirFile); err != nil || string(plain) != "theirs\n" {
 		t.Errorf("Jeeves could not decrypt age's file: %q %v", plain, err)
+	}
+}
+
+func TestTheKeyStoreTakesOnlyAnAgeRecipient(t *testing.T) {
+	w := t.TempDir()
+	keys := filepath.Join(w, "keys")
+	os.MkdirAll(keys, 0o700)
+	t.Setenv("JEEVES_KEY_DIR", keys)
+	e := Env{Home: w}
+	victim := filepath.Join(w, "victim")
+	os.WriteFile(victim, []byte("AGE-SECRET-KEY-1VICTIM\n"), 0o600)
+
+	e.StoreDelete("file", "../victim")
+	if _, err := os.Stat(victim); err != nil {
+		t.Fatal("a recipient with ../ deleted a file outside the key folder")
+	}
+	if got := e.StoreGet("file", "../victim"); got != "" {
+		t.Fatalf("a key was read through ../: %q", got)
+	}
+	for _, r := range []string{"../victim", "age1x y", "age1X", "age1/../../victim", "age1"} {
+		if e.StorePut("file", r, "AGE-SECRET-KEY-1TEST") == nil {
+			t.Fatalf("a key was written under %q", r)
+		}
+	}
+	rec := "age1qyqszqgpqyqszqgpqyqszqgpqyqszqgp"
+	if e.StorePut("file", rec, "AGE-SECRET-KEY-1TEST injected") == nil {
+		t.Fatal("a key with a space was written")
+	}
+	if err := e.StorePut("file", rec, "AGE-SECRET-KEY-1TEST"); err != nil || e.StoreGet("file", rec) != "AGE-SECRET-KEY-1TEST" {
+		t.Fatalf("a real recipient: %v %q", err, e.StoreGet("file", rec))
+	}
+	if fi, err := os.Stat(filepath.Join(keys, rec)); err != nil || (fi.Mode().Perm()&0o077 != 0 && runtime.GOOS != "windows") {
+		t.Fatalf("the key file is not private: %v %v", fi, err)
+	}
+	e.StoreDelete("file", rec)
+	if e.StoreGet("file", rec) != "" {
+		t.Fatal("the key was not deleted")
 	}
 }

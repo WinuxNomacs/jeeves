@@ -1394,15 +1394,11 @@ t_check_reports_each_data_repo_state() {
 }
 
 t_the_key_store_takes_only_an_age_recipient() {
-  . "$SRC/lib/lib.sh"
-  JEEVES_KEYSTORE=file KEY_DIR=$W/keys
-  mkdir -p "$W/keys" && echo victim > "$W/victim"
-  store_delete "../victim"
-  check "a recipient with ../ deletes nothing outside the key folder" [ -f "$W/victim" ]
-  check "nor is a key read through it" bash -c '. "$1/lib/lib.sh"; JEEVES_KEYSTORE=file KEY_DIR=$2/keys; ! store_get ../victim' _ "$SRC" "$W"
-  check "nor written" bash -c '. "$1/lib/lib.sh"; JEEVES_KEYSTORE=file KEY_DIR=$2/keys; ! echo k | store_set "age1x y"' _ "$SRC" "$W"
-  echo AGE-SECRET-KEY-1TEST | store_set age1qyqszqgpqyqszqgpqyqszqgpqyqszqgp
-  check "a real recipient still works" [ "$(store_get age1qyqszqgpqyqszqgpqyqszqgpqyqszqgp)" = AGE-SECRET-KEY-1TEST ]
+  # The bash read left for jeeves-auto; the Go store's own test is internal/lib's TestTheKeyStoreTakesOnlyAnAgeRecipient.
+  mkdir -p "$W/keys" && echo AGE-SECRET-KEY-1VICTIM > "$W/victim"
+  check "no key is read through ../" bash -c '. "$1/lib/lib.sh"; JEEVES_KEYSTORE=file KEY_DIR=$2/keys; ! store_get ../victim' _ "$SRC" "$W"
+  echo AGE-SECRET-KEY-1TEST > "$W/keys/age1qyqszqgpqyqszqgpqyqszqgpqyqszqgp"
+  check "a real recipient's key is read" [ "$(bash -c '. "$1/lib/lib.sh"; JEEVES_KEYSTORE=file KEY_DIR=$2/keys; store_get age1qyqszqgpqyqszqgpqyqszqgpqyqszqgp' _ "$SRC" "$W")" = AGE-SECRET-KEY-1TEST ]
 }
 
 t_deadline_stops_a_hung_command() {
@@ -1602,9 +1598,9 @@ t_a_key_store_that_refuses_and_a_mismatched_identity_change_nothing() {
   cp "$W/identity.saved" "$R/identity.age"
 }
 
-# jeeves-encrypt's parity while its bash version exists: the same steps on two fresh copies of the world,
-# Go then bash; output and exit statuses compared, the random parts (keys, recipients, the scratch path)
-# and status's age line (built in, so the Go build has none) set aside.
+# jeeves-encrypt through each step and misstep in turn (a short passphrase, a cancel, no dialog, two
+# passphrases that differ, a repeat, a wrong passphrase, an unknown subcommand): every message and exit
+# status, the random parts (recipients) and the paths set aside.
 encrypt_steps() {
   {
     encrypt_run status; encrypt_run passphrase; encrypt_run lock
@@ -1618,19 +1614,58 @@ encrypt_steps() {
     rm -f "$W/answers"; encrypt_run unlock; encrypt_run unlock; encrypt_run status
     printf 'a new passphrase here\na new passphrase here\n' > "$W/answers"; encrypt_run passphrase
     encrypt_run bogus
-  } 2>&1 | sed -e 's/age1[0-9a-z]*/<recipient>/g' -e "s#$SCRATCH/[^/ \"]*#<scratch>#g" -e '/^age	/d'
+  } 2>&1 | sed -e 's/age1[0-9a-z]*/<recipient>/g' -e 's/^\(jeeves encrypt:   JEEVES_DATA=\).*/\1.../' \
+    -e 's/^\(jeeves encrypt: locked: .*key store\) (the files in .*/\1/'
 }
 encrypt_run() { "$SRC/bin/jeeves-encrypt" "$@"; echo "rc=$?"; }
-t_encrypt_go_and_bash_say_the_same() {
+t_encrypt_answers_each_step_and_misstep() {
   crypt_env; snap >/dev/null
-  rm -rf "${W:?}/saved"; mkdir -p "$W/saved"; cp -R "$W/claude" "$W/repo" "$W/remote.git" "$W/saved/"
-  go=$(encrypt_steps)
-  rm -rf "${W:?}/claude" "${W:?}/repo" "${W:?}/remote.git" "${W:?}/keys"
-  cp -R "$W/saved/claude" "$W/saved/repo" "$W/saved/remote.git" "$W/"
-  bash=$(JEEVES_NO_GO=1 encrypt_steps)
-  check "the same messages and exit statuses" [ "$go" = "$bash" ]
-  [ "$go" = "$bash" ] || diff <(printf '%s\n' "$go") <(printf '%s\n' "$bash")
-  check "the steps ran (a passphrase changed)" grep -q "new passphrase set and committed" <<< "$go"
+  want='encryption	off
+keystore	file
+rc=0
+jeeves encrypt: the data repo is not encrypted
+rc=1
+jeeves encrypt: the data repo is not encrypted
+rc=1
+jeeves encrypt: the passphrase is shorter than 12 characters; nothing changed
+rc=1
+jeeves encrypt: cancelled; nothing changed
+rc=1
+jeeves encrypt: no password dialog can be shown here; in your own terminal, run:
+jeeves encrypt:   JEEVES_DATA=...
+rc=3
+jeeves encrypt: the two passphrases differ; nothing changed
+rc=1
+jeeves encrypt: encrypted 4 files and committed; this device is unlocked (key in its file store)
+rc=0
+encryption	unlocked
+keystore	file
+rc=0
+jeeves encrypt: the data repo is already encrypted
+rc=1
+jeeves encrypt: locked: the key is no longer in this device'"'"'s key store
+rc=0
+encryption	locked
+keystore	file
+rc=0
+jeeves encrypt: this device is locked: run /jeeves:encryption first
+rc=1
+jeeves encrypt: wrong passphrase; nothing changed
+rc=1
+jeeves encrypt: unlocked: the key is in this device'"'"'s file store
+rc=0
+jeeves encrypt: this device is already unlocked
+rc=0
+encryption	unlocked
+keystore	file
+rc=0
+jeeves encrypt: new passphrase set and committed; the key is unchanged, so other devices stay unlocked
+rc=0
+usage: jeeves-encrypt status | on | unlock | lock | passphrase [--terminal] [--key-file]
+rc=2'
+  got=$(encrypt_steps)
+  check "each step says what happened, with its exit status" [ "$got" = "$want" ]
+  [ "$got" = "$want" ] || diff <(printf '%s\n' "$want") <(printf '%s\n' "$got")
 }
 is_encrypted_blob() { [ "$(git -C "$1" cat-file -p "$2" | head -c 21)" = "age-encryption.org/v1" ]; }
 # Device B: its own ~/.claude, key store and a clone of the remote. Run a command as B with: as_b <cmd>.
@@ -3147,7 +3182,7 @@ run_test "the background log keeps the last 50 runs" t_the_background_log_keeps_
 age_cli() { age --version >/dev/null 2>&1 && command -v age-plugin-batchpass >/dev/null 2>&1; }
 age_cli || echo "skip age command line checks: age 1.3 or later with age-plugin-batchpass is not on the PATH"
 if true; then
-  age_cli && run_test "jeeves-encrypt: the Go build and the bash version say the same" t_encrypt_go_and_bash_say_the_same
+  run_test "jeeves-encrypt answers each step and misstep" t_encrypt_answers_each_step_and_misstep
   run_test "a corrupted cache entry is dropped, never served" t_a_corrupted_cache_entry_is_dropped_never_served
   run_test "a key store that refuses, and a mismatched identity, change nothing" t_a_key_store_that_refuses_and_a_mismatched_identity_change_nothing
   run_test "encrypt on keeps files encrypted in git and plain in the working tree" t_encrypt_on_keeps_files_encrypted_in_git_and_plain_in_the_working_tree
