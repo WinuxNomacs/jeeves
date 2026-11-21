@@ -111,6 +111,11 @@ func (r *repo) clean(plain []byte) ([]byte, error) {
 	if rec == "" {
 		return nil, errors.New("no recipient file at the top of the data repo")
 	}
+	// A recipient another device (or anyone who can push) changed is not this device's key: the files
+	// would go to a key it never unlocked, perhaps someone else's.
+	if unl := trimmed(r.cryptDir + "/unlocked"); unl != "" && unl != rec {
+		return nil, errors.New("the data repo's recipient file differs from the key this device unlocked; nothing encrypted: run /jeeves:encryption")
+	}
 	enc, err := lib.EncryptTo(rec, plain)
 	if err != nil {
 		return nil, err

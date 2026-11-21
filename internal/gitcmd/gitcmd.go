@@ -132,7 +132,7 @@ func Run(e lib.Env, args []string, stdout, stderr io.Writer) int {
 	}
 	// The same options as the scripts' git_repo, so jeeves git and jeeves status agree on what is dirty.
 	cmd := exec.Command("git", append([]string{"-C", r.Dir, "-c", "core.autocrlf=false", "-c", "core.safecrlf=false",
-		"-c", "core.excludesFile="}, args...)...)
+		"-c", "core.excludesFile=", "-c", "core.hooksPath=" + r.NoHooksDir(), "-c", "core.fsmonitor=false"}, args...)...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, stdout, stderr
 	signal.Ignore(os.Interrupt) // git gets the terminal's Ctrl+C itself; this waits for it to end
 	return lib.ExitCode(cmd.Run())

@@ -631,6 +631,7 @@ t_memories_record_shares_the_lock_with_the_bash_scripts() {
   wait
   # While the record commits, kill -0 in a shell must see the lock's holder alive (on Windows the PID must
   # be one Git Bash knows).
+  export JEEVES_TEST_HOOKS=$R/.git/hooks
   printf '#!/bin/sh\npid=$(cat .git/jeeves/lock)\nkill -0 "$pid" 2>/dev/null && echo alive > "%s"\nexit 0\n' "$W/seen" > "$R/.git/hooks/pre-commit"
   chmod +x "$R/.git/hooks/pre-commit"
   mem record "$h" three >/dev/null
@@ -1274,12 +1275,13 @@ t_cleanup_keeps_a_merge_across_the_cutoff() {
 }
 
 # A pre-push hook in the data repo: another device pushes just before this push, or the push fails.
-pre_push() { printf '#!/bin/sh\n%s\n' "$1" > "$R/.git/hooks/pre-push"; chmod +x "$R/.git/hooks/pre-push"; }
+# Jeeves runs no hook of its own accord: JEEVES_TEST_HOOKS points it at this one.
+pre_push() { printf '#!/bin/sh\n%s\n' "$1" > "$R/.git/hooks/pre-push"; chmod +x "$R/.git/hooks/pre-push"; export JEEVES_TEST_HOOKS=$R/.git/hooks; }
 
 t_cleanup_lease_refuses_another_devices_push() {
   old_history; git -C "$R" push -q origin main 2>/dev/null
   git clone -q "$W/remote.git" "$W/other" 2>/dev/null
-  pre_push "unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE; git -C '$W/other' commit -q --allow-empty -m other && git -C '$W/other' push -q origin main 2>/dev/null"
+  pre_push "unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_CONFIG_PARAMETERS GIT_CONFIG_COUNT; git -C '$W/other' commit -q --allow-empty -m other && git -C '$W/other' push -q origin main 2>/dev/null"
   head=$(git -C "$R" rev-parse main)
   out=$(cleanup 1); rc=$?
   check "says the push was refused" grep -q "push refused or failed, so main was put back" <<< "$out"
@@ -1693,7 +1695,7 @@ keystore	file
 rc=0
 jeeves encrypt: new passphrase set and committed; the key is unchanged, so other devices stay unlocked
 rc=0
-usage: jeeves-encrypt status | on | unlock | lock | passphrase [--terminal] [--key-file]
+usage: jeeves-encrypt status | lock | on | unlock | passphrase [--terminal]; on and unlock also take --key-file
 rc=2'
   got=$(encrypt_steps)
   check "each step says what happened, with its exit status" [ "$got" = "$want" ]
@@ -1737,7 +1739,7 @@ t_encrypt_on_refuses_a_short_or_mismatched_passphrase_or_a_cancel() {
   echo nodialog > "$W/answers"
   out=$(encrypt on 2>&1); rc=$?
   check "no dialog: exit 3" [ $rc = 3 ]
-  check "no dialog: says what to run in a terminal" grep -q "jeeves-encrypt\" on --terminal" <<< "$out"
+  check "no dialog: says what to run in a terminal" grep -q "jeeves-encrypt' on --terminal" <<< "$out"
   check "no commit" [ "$(commits)" = "$n" ]
   check "no recipient" [ ! -e "$R/recipient" ]
   check "no key stored" [ -z "$(ls "$W/keys" 2>/dev/null)" ]
@@ -1814,10 +1816,52 @@ t_a_failed_record_is_taken_by_the_next_snapshot() {
   check "a change that is not its own still stops it" grep -q "uncommitted changes" <<< "$(snap)"
 }
 
+t_key_file_changes_the_store_only_once_the_key_is_kept() {
+  crypt_env; snap >/dev/null
+  printf 'cancel\n' > "$W/answers"; encrypt on --key-file >/dev/null
+  check "a cancelled on --key-file leaves no store choice behind" [ ! -e "$R/.git/jeeves/keystore" ]
+  echo secret-service > "$R/.git/jeeves/keystore"
+  printf 'cancel\n' > "$W/answers"; encrypt on --key-file >/dev/null
+  check "nor changes the one there was" grep -qx secret-service "$R/.git/jeeves/keystore"
+  rm -f "$R/.git/jeeves/keystore" "$W/answers"
+  out=$(encrypt passphrase --key-file 2>&1); rc=$?
+  check "passphrase takes no --key-file" bash -c '[ $1 = 2 ] && grep -q usage <<< "$2"' _ $rc "$out"
+  check "and changes nothing" [ ! -e "$R/.git/jeeves/keystore" ]
+  encrypt on --key-file >/dev/null
+  check "a successful on --key-file keeps the file store" grep -qx file "$R/.git/jeeves/keystore"
+}
+
+t_a_changed_recipient_gets_nothing_encrypted_to_it() {
+  crypt_env; snap >/dev/null; encrypt on >/dev/null; git -C "$R" push -q origin main 2>/dev/null
+  # Another device (or anyone who can push) puts a recipient of their own in place.
+  git clone -q --no-checkout "$W/remote.git" "$W/other" 2>/dev/null
+  rec=age1724xyqje594ksae9l2y54frpmg62vaw3uj8clxsdes8pdr4rgukqjy5k2m # a throwaway key's recipient (its key was not kept)
+  blob=$(printf '%s\n' "$rec" | git -C "$W/other" hash-object -w --stdin)
+  git -C "$W/other" read-tree origin/main 2>/dev/null || git -C "$W/other" read-tree HEAD
+  git -C "$W/other" update-index --cacheinfo "100644,$blob,recipient"
+  git -C "$W/other" -c core.autocrlf=false commit -qm "planted recipient" && git -C "$W/other" push -q origin main 2>/dev/null
+  echo "rules v2" > "$W/claude/CLAUDE.md"
+  out=$(snap 2>&1)
+  check "nothing of this device's is committed on top" bash -c '! git -C "$1" log --format=%s origin/main..main | grep -q .' _ "$R"
+  check "the new text is in no commit" bash -c '! git -C "$1" log -p --all --no-textconv | grep -q "rules v2"' _ "$R"
+}
+
+t_no_hook_sees_the_key() {
+  crypt_env; snap >/dev/null; encrypt on >/dev/null
+  mkdir -p "$W/globalhooks"
+  for h in "$R/.git/hooks/pre-commit" "$W/globalhooks/pre-commit" "$W/globalhooks/post-commit"; do
+    printf '#!/bin/sh\necho "ran key=${JEEVES_AGE_KEY:+set}" >> "%s"\nexit 0\n' "$W/hooklog" > "$h"; chmod +x "$h"
+  done
+  echo "rules v2" > "$W/claude/CLAUDE.md"
+  GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0="$W/globalhooks" snap >/dev/null
+  check "the snapshot committed" grep -qx "rules v2" "$R/home/CLAUDE.md"
+  check "no hook ran, neither the data repo's nor a global one" [ ! -e "$W/hooklog" ]
+}
+
 t_a_failed_encrypt_on_leaves_nothing_behind_and_a_retry_works() {
   crypt_env; snap >/dev/null; n=$(commits)
   printf '#!/bin/sh\nexit 1\n' > "$R/.git/hooks/pre-commit"; chmod +x "$R/.git/hooks/pre-commit"
-  out=$(encrypt on); rc=$?
+  out=$(JEEVES_TEST_HOOKS=$R/.git/hooks encrypt on); rc=$?
   check "a failed commit: exit 1, nothing changed" bash -c '[ $1 = 1 ] && grep -q "commit failed, so nothing changed" <<< "$2"' _ $rc "$out"
   check "no recipient, clean, no commit" bash -c '[ ! -e "$1/recipient" ] && [ -z "$(git -C "$1" status --porcelain)" ]' _ "$R"
   check "status says off" grep -q "^encryption	off" <<< "$(encrypt status)"
@@ -3291,6 +3335,9 @@ if true; then
   run_test "a key missing from the store stops the pull and says so" t_a_key_missing_from_the_store_stops_the_pull_and_says_so
   run_test "a failing encryption never commits plain text" t_a_failing_encryption_never_commits_plain_text
   run_test "a failed record is taken by the next snapshot" t_a_failed_record_is_taken_by_the_next_snapshot
+  run_test "--key-file changes the key store only once the key is kept there" t_key_file_changes_the_store_only_once_the_key_is_kept
+  run_test "a recipient this device did not unlock gets nothing encrypted to it" t_a_changed_recipient_gets_nothing_encrypted_to_it
+  run_test "no hook sees the key: Jeeves runs no hook in the data repo" t_no_hook_sees_the_key
   run_test "a failed encrypt on leaves nothing behind, and a retry works" t_a_failed_encrypt_on_leaves_nothing_behind_and_a_retry_works
   run_test "merges of encrypted files combine both sides and show conflicts in plain text" t_merges_of_encrypted_files_combine_both_sides_and_show_conflicts_in_plain_text
   run_test "scan refuses a file that would be pushed unencrypted" t_scan_refuses_a_file_that_would_be_pushed_unencrypted

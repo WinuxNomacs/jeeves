@@ -169,7 +169,7 @@ func (r *Repo) OutgoingRange() string {
 // GitQuiet runs git in the data repo for its status alone, output dropped.
 func (r *Repo) GitQuiet(args ...string) error {
 	return exec.Command("git", append([]string{"-C", r.Dir, "-c", "core.autocrlf=false",
-		"-c", "core.safecrlf=false", "-c", "core.excludesFile="}, args...)...).Run()
+		"-c", "core.safecrlf=false", "-c", "core.excludesFile=", "-c", "core.hooksPath=" + r.NoHooksDir(), "-c", "core.fsmonitor=false"}, args...)...).Run()
 }
 
 // powershellIn is powershell with input on stdin (a secret never goes on the command line), interactive

@@ -107,7 +107,7 @@ func (r *Repo) KeepBases() {
 // gitCmd is git in the data repo with the scripts' options, not yet run.
 func (r *Repo) gitCmd(args ...string) *exec.Cmd {
 	return exec.Command("git", append([]string{"-C", r.Dir, "-c", "core.autocrlf=false",
-		"-c", "core.safecrlf=false", "-c", "core.excludesFile="}, args...)...)
+		"-c", "core.safecrlf=false", "-c", "core.excludesFile=", "-c", "core.hooksPath=" + r.NoHooksDir(), "-c", "core.fsmonitor=false"}, args...)...)
 }
 
 // copyInto copies src to tmp with its mode and modification time (cp -p). JEEVES_TEST_COPY_HOOK, the

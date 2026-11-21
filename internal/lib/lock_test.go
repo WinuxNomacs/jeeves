@@ -120,6 +120,20 @@ func TestALiveHoldersLockIsWaitedFor(t *testing.T) {
 	}
 }
 
+func TestALockHeldPastTheLimitIsTakenOverEvenWithItsPIDAlive(t *testing.T) {
+	d := t.TempDir()
+	t.Setenv("JEEVES_LOCK_PID", liveBashPID(t))
+	p := filepath.Join(d, "lock")
+	os.WriteFile(p, []byte(liveBashPID(t)+"\n"), 0o600)
+	old := time.Now().Add(-3 * time.Hour)
+	os.Chtimes(p, old, old)
+	l := TakeLock(d, 2)
+	if l == nil {
+		t.Fatal("a lock left three hours ago (its PID now someone else's) was not taken over")
+	}
+	l.Release()
+}
+
 func TestADeadlineStopsAHungCommand(t *testing.T) {
 	start := time.Now()
 	if rc := RunDeadline(1, exec.Command("sleep", "30")); rc != 124 {

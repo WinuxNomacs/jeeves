@@ -16,7 +16,8 @@ import (
 // so the key stays out of them. stdout and stderr go where the caller says (nil drops them). Returns the
 // exit status, 124 past the deadline.
 func (r *Repo) RemoteGit(stdout, stderr io.Writer, args ...string) int {
-	cmd := exec.Command("git", append([]string{"-C", r.Dir, "-c", "core.autocrlf=false", "-c", "core.safecrlf=false"}, args...)...)
+	cmd := exec.Command("git", append([]string{"-C", r.Dir, "-c", "core.autocrlf=false", "-c", "core.safecrlf=false",
+		"-c", "core.hooksPath=" + r.NoHooksDir(), "-c", "core.fsmonitor=false"}, args...)...)
 	env := []string{}
 	for _, kv := range os.Environ() {
 		if !strings.HasPrefix(kv, "JEEVES_AGE_KEY=") {

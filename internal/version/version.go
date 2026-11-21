@@ -66,7 +66,7 @@ func (s *session) close() {
 // error only when it fails (quiet otherwise). Returns the exit status and the output.
 func (s *session) git(args ...string) (int, string) {
 	cmd := exec.Command("git", append([]string{"-C", s.r.Dir, "-c", "core.autocrlf=false",
-		"-c", "core.safecrlf=false", "-c", "core.excludesFile="}, args...)...)
+		"-c", "core.safecrlf=false", "-c", "core.excludesFile=", "-c", "core.hooksPath=" + s.r.NoHooksDir(), "-c", "core.fsmonitor=false"}, args...)...)
 	var out bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &out
 	rc := lib.ExitCode(cmd.Run())

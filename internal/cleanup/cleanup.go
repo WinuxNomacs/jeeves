@@ -384,7 +384,7 @@ func parents(r *lib.Repo, c string) []string {
 
 // commitTree writes a commit of tree with the given parents, message and identity variables.
 func commitTree(r *lib.Repo, tree string, ps []string, msg string, env []string) (string, error) {
-	args := []string{"-C", r.Dir, "-c", "core.autocrlf=false", "-c", "core.safecrlf=false", "-c", "core.excludesFile=", "commit-tree", tree}
+	args := []string{"-C", r.Dir, "-c", "core.autocrlf=false", "-c", "core.safecrlf=false", "-c", "core.excludesFile=", "-c", "core.hooksPath=" + r.NoHooksDir(), "-c", "core.fsmonitor=false", "commit-tree", tree}
 	for _, p := range ps {
 		args = append(args, "-p", p)
 	}
