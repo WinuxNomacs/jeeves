@@ -13,7 +13,7 @@ jeeves_cmd=$1; shift
 # The plugin folder as `cd <bin>/.. && pwd` gives it (logical: . and .. removed by name, symlinks kept), so a
 # path the Go build records (git's filter settings) reads the same as the bash version's.
 jeeves_root() {
-  local p=$jeeves_bin seg IFS=/ out=() d
+  local p=${jeeves_bin//\\//} seg IFS=/ out=() d
   case "$p" in
     /*) p=$p/.. ;;
     # A Windows path (git starts a filter by the path in its config, which a bash script's git config call
