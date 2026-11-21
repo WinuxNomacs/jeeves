@@ -12,7 +12,7 @@ allowed-tools:
   - Bash(jeeves-status *)
   - Bash(jeeves-snapshot)
   - Bash(jeeves-scan)
-  - Bash(jeeves-git push origin main)
+  - Bash(jeeves-push)
 ---
 
 # Jeeves: encryption

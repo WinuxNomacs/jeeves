@@ -4,9 +4,9 @@
 
 - **No release before 2.0** (the user's decision, 2026-11-21): 2.0 is the completed Go rewrite. Work merges
   into `main` as each phase is done; nothing is cut or tagged until then, except the 1.4.2 security fix.
-- **Up next:** 1. Go port, Phase 2 (below, "Go port, Phase 2"): 2a the sync core in Go · 2b the link rule ·
-  2c knowledge files only · 2d one worker per machine · 2e the skill manages content, the worker versions
-- **Then:** 2. Phase 3: encryption with age built in · 3. Phase 4: background updates · 4. Phase 5: the last
+- **Up next:** 1. Go port, Phase 2 (below, "Go port, Phase 2"): 2e the skill manages content, the worker
+  versions (2a-2d built, merged as each passes CI)
+- **Then:** 2. Phase 3: encryption with age built in (below, "Go port, Phase 3") · 3. Phase 4: background updates · 4. Phase 5: the last
   bash versions removed · 5. Release 2.0
 - **The user's, any time:** submit 1.4.2 in the Anthropic portal (below, "Anthropic directory submission")
 - **Later:** 0. Review text gaps (below, under "Review text gaps") · 0. Injection docs: threat model in the README, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
@@ -127,9 +127,10 @@ messages and exit statuses, byte for byte; parity tests (`both_versions`) over e
 bash versions deleted once they pass on three OSes. Shared code joins `internal/lib`: the sync record
 (`Bases`, `SetBase`, `KeepBases`, through a temp file and a rename, as now), atomic copies (`CopyFile`,
 `CopySettled`), `StagedIs`, `RemoteGit` (deadline, no prompts, the key kept out), `ConfValue`, `BadName`,
-`CaseCollisions`, `MachineID`, `CleanedRoot`, `ShrinkRepo`, `PlainHistoryAt`. Each command's engine
-returns a report (what was taken, held, skipped and why), and a separate renderer prints the bash
-version's messages, so the worker (2d) and later callers reuse the engine. The data integrity rules hold
+`CaseCollisions`, `MachineID`, `CleanedRoot`, `ShrinkRepo`, `PlainHistoryAt`. As built, each command
+prints its messages to the writers it is given, as the bash version did, with no separate report layer:
+the worker (2d) runs each request as a child process and hands back that output, so nothing else needs
+the engine's results in a structure (a later caller that does can add one then). The data integrity rules hold
 unchanged: every copy checked, the record holds what was copied and committed, nothing reaches
 `~/.claude` from a data repo not on a clean `main`, a failure leaves nothing recorded. `jeeves-verify`
 stays bash (the snapshot hook runs it as now); `jeeves-encrypt`, `jeeves-crypt` (Phase 3) and
@@ -145,7 +146,15 @@ no longer backed up or restored; `backup_settings` goes from `jeeves.conf`'s rea
 `hosts/<host>/` stay (never removed silently) until the user deletes them or runs `/jeeves:cleanup`.
 `restore` restores memories only. README, the setup, restore and update skills, and the disclosure say so.
 
-**2d. One worker per machine.** Commands that change the data repo or `~/.claude` (`snapshot`, `apply`,
+**2d. One worker per machine** (built; as built, where it differs from this plan: the worker's liveness
+is an OS lock on `queue/worker.lock` (flock; on Windows an open with no sharing), which the system
+releases when the process dies, so no PID or start time is compared; the passed variables are a fixed
+list plus every `JEEVES_*` but the age key and the caller's lock PID, and the rest are the worker's own
+(from the session that started it); a worker serves its own program's requests and leaves others' (set
+aside after a day), exiting when only those wait; on Windows each child runs under a Git Bash shell whose
+`$$` is the lock PID the bash scripts can check, and a deadline stops the whole tree with `taskkill /T`;
+the output comes back framed (standard output and error in order), with anything written outside the
+frames (a crash) after it.) Commands that change the data repo or `~/.claude` (`snapshot`, `apply`,
 `restore`, `cleanup`, `memories record`, and the versioning commands of 2e) no longer run in the caller:
 the caller writes a request into `~/.claude/jeeves/queue/` and waits for its answer; one worker per
 machine runs the requests in order.
@@ -178,16 +187,73 @@ machine runs the requests in order.
 - `JEEVES_NO_WORKER=1` runs a command in the caller, as today (tests of the commands themselves, and a
   last resort the README names).
 
-**2e. The skill manages the content, the worker the versions.** New versioning commands, run by the
-worker: `jeeves-commit <message> -- <paths>` (stage exactly those paths under `home/`, commit on the
-current branch), `jeeves-merge` (merge `origin/main`, stopping at conflicts for the skill to resolve) and
-`jeeves-push` (`jeeves-scan`, then `jeeves-risk`'s check for flags the user has not accepted, then the
-push; never forced). The `update`, `review`, `cleanup` and `encryption` skills call them instead of
-writing history through `jeeves-git`, which keeps read-only use (log, show, diff, status) and the merge
-resolution the skill does by hand. Their allow lists and the tests that read skill text follow.
+**2e. The skill manages the content, the worker the versions.** The skills edit files; every change to
+the data repo's history goes through commands the worker runs, each checking what it is given, and
+`jeeves-git` becomes read-only. Commands (one Go package, `internal/version`, a subcommand each; wrappers
+in `bin/`):
+- `jeeves-commit [--branch <kind>/<name>] -m <message> -- <path>...`: with `--branch`, from a clean `main`,
+  starts that branch (`pref/`, `conf/` or `review/` only); stages exactly the paths named, as they are on
+  disk (a deletion included), and commits on the current branch. Paths only under `home/`, or
+  `jeeves.conf` (no `hosts/`, `.sync-state/`, `.git`, `..`, links); nothing staged otherwise is
+  committed (the index must hold nothing else). Prints the commit's short hash.
+- `jeeves-commit --fold -m <message>`: the commits not yet pushed folded into one (`reset --soft
+  origin/main`, then commit), for a secret that must leave the history before a push; only on `main`.
+- `jeeves-merge <branch> -m <summary>`: from `main`, `merge --no-ff` of a `pref/`, `conf/` or `review/`
+  branch, message `Merge branch '<branch>': <summary>`, then deletes the branch.
+- `jeeves-merge origin -m <what came in>`: merges `origin/main` into `main`; on conflicts it stops and
+  lists the files (exit 3) for the skill to resolve by editing them; `jeeves-merge --continue` checks each
+  listed file has no conflict markers, stages them and commits; `jeeves-merge --abort` puts `main` back.
+- `jeeves-revert <commit>`: `revert --no-edit` on the current branch; a conflict is aborted and reported.
+- `jeeves-push`: on a clean `main` only: `jeeves-scan` and `jeeves-risk` over what it would send (a
+  finding stops it, with the scan's own report), then `push origin main`, never forced; a refused push
+  says to run `jeeves-merge origin`. `jeeves-cleanup` keeps its own lease push.
+- `jeeves-git`: only commands that change nothing (`log`, `show`, `diff`, `status`, `cat-file`,
+  `ls-files`, `rev-parse`, `branch --list`, `merge-base`, `blame`); anything else is refused, naming the
+  command to use. The README's "remove it with `jeeves-git rm`" becomes deleting the file and
+  `jeeves-commit`.
+The `update`, `review`, `cleanup`, `encryption`, `setup` and `restore` skills use them; their allow lists
+drop `jeeves-git` writes, and the tests that read skill text follow. An agent follows each changed skill
+against scratch folders (the repo's CLAUDE.md, "Working on the plugin") before the merge.
 
 Docs with each step: README (commands, the worker, "What Jeeves runs, sends and changes": the worker
 process, its queue folder), `.claude/CLAUDE.md` layout, CHANGELOG 2.0.0.
+
+## Go port, Phase 3: encryption with age built in (planned 2026-11-21)
+
+`jeeves-encrypt` (`status`, `on`, `unlock`, `lock`, `passphrase`) and `jeeves-crypt` (git's clean and
+smudge filter, textconv and merge driver) in Go, with age built in: users no longer install `age` or
+`age-plugin-batchpass`. Parity tests against the bash versions over each case, then the bash versions and
+the parts of `lib/crypt.sh` only they use are deleted once green on three OSes.
+- **The library, vetted 2026-11-21 from primary sources** (GitHub API): `filippo.io/age` v1.3.2
+  (2026-08-29; releases yearly, v1.3.0 2025-12, v1.2.1 2024-12); BSD-3-Clause; one main maintainer
+  (Filippo Valsorda, 333 commits; others under 10), issues answered this month; one advisory,
+  GHSA-32gq-x56h-299c (2024-12, plugin names running a program), fixed in 1.2.1 and only in the plugin
+  code, which Jeeves does not use. It pulls in `golang.org/x/crypto`, `x/sys`, `x/term` and the author's
+  `edwards25519`, `hpke` and `nistec`. Size measured: +545 KB on the linux/amd64 build (3.88 to 4.43 MB,
+  the release flags). Building our own age is not an option (cryptography); keeping the CLI keeps the
+  install step this phase removes. The README's list of what the programs are built with gains age (2d
+  added the Go team's `golang.org/x/sys`, for Windows' `LockFileEx`: the same module age pulls in). Pinned exactly in `go.mod`; `go.sum` committed; the reproducible build check covers it.
+- **Formats unchanged:** the data repo key is an X25519 identity; `identity.age` holds it encrypted with
+  the passphrase as a standard scrypt stanza, armored (checked: `age -e -j batchpass -a` writes
+  `-> scrypt <salt> 18`), which the library reads and writes; files are age v1. A data repo encrypted by
+  1.4.x opens unchanged, and one written by 2.0 opens with the age CLI (a test does both ways with the
+  CLI when it is on the PATH; CI installs it for that).
+- **The filter:** git's long-running filter protocol (`filter.jeeves.process`, git 2.11+), so one process
+  serves a whole checkout or add instead of one per file (a process start costs tens of milliseconds on
+  Windows); `required = true`, so a failure stops git and plain text never reaches a commit. The clean
+  side keeps the cache (plain hash to ciphertext under `.git/jeeves/clean/`) so an unchanged file cleans
+  to the same bytes; an entry that does not decrypt to its plain text is dropped, never served. The
+  textconv and merge driver stay one process per call (git's interface); the merge driver writes
+  `jeeves: not merged` and fails when the key cannot be read, as now.
+- **Passphrases:** the same dialogs (osascript, zenity or kdialog, PowerShell) and `--terminal` (read
+  with no echo through `x/term`, already in the build with age); the passphrase stays in the process's
+  memory only, never in a command line, the environment or a file; the key goes to the stores on stdin as
+  now (`lib.StoreGet`'s counterpart `StorePut`).
+- **What can fail** (each with a test): the key store missing or refusing (nothing changed, said why);
+  a wrong passphrase; a dialog cancelled; `identity.age` not matching `recipient`; the filter process
+  killed mid-checkout (git stops; the next run redoes it); a cache entry corrupted or for another key;
+  a merge with the key unreadable; a disk full while writing `identity.age` (written to a temporary file
+  and checked by decrypting before it replaces the old one, as now).
 
 ## Go port, Phase 1: the small commands (planned 2026-11-21)
 
@@ -1151,6 +1217,11 @@ Suite 105 passed (2026-11-19).
   line 0 under a heading holding a `+word`, and names with a space garbled by git's trailing tab. Tests:
   the lock shared with the bash scripts, the launcher with and without a bash version, `go test`. CI
   green on three OSes (runs 44927817230 with parity, 44927823930 after the removal). Not released.
+- Go port Phase 2a-2d (2026-11-21; "Go port, Phase 2" above): `snapshot`, `apply`, `hook-edit`,
+  `restore` and `cleanup` in Go (`internal/lib/record.go`, `remote.go`), their bash versions removed after
+  parity on three OSes; the link rule (`internal/lib/links.go`); knowledge files only (memories backed up
+  and restored; settings and keybindings no longer); one worker per machine (`internal/worker/`). Tests:
+  the link cases, the 2c rewrites, eight worker failure tests and `go test ./internal/worker`. Not released.
 
 ## Review text gaps (found by the 2026-11-19 dry run; older text, not this phase's)
 

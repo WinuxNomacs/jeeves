@@ -28,27 +28,20 @@ var kinds = []struct {
 	{"key, token, secret or password value", regexp.MustCompile(`(?i)(api[_-]?key|access[_-]?key|token|secret|passw(or)?d)["']?[[:space:]]*[:=][[:space:]]*["']?[A-Za-z0-9_./+=-]{16,}`)},
 }
 
-// Run returns 0 when nothing is found, 1 with each finding listed as file:line and its kind.
-func Run(e lib.Env, args []string, stdout, stderr io.Writer) int {
-	a, args := lib.ParseDataRepoArg(args)
-	if len(args) != 0 {
-		fmt.Fprintln(stderr, "scan: takes no options")
-		return 2
-	}
-	say := func(f string, a ...any) { fmt.Fprintf(stdout, "jeeves scan: "+f+"\n", a...) }
-	r, err := lib.FindDataRepo(e, a, stderr)
-	if err != nil {
-		say("%s", err)
-		return 1
-	}
-	rng := r.OutgoingRange()
+// Finding is one thing a push must not send: a possible secret or conflict marker at Where (file:line
+// (commit c)), or a file under home/ or hosts/ that is not encrypted in an encrypted data repo (Plain;
+// never to be accepted).
+type Finding struct {
+	Msg   string // as Run prints it, after "jeeves scan: "
+	Where string
+	Plain bool
+}
 
-	found := false
+// Findings checks what a push of main would send (the commits in rng) and how many lines they add. The key
+// must be loaded (lib.Env.LoadKey) when the data repo is encrypted.
+func Findings(r *lib.Repo, rng string) ([]Finding, int) {
+	var found []Finding
 	if r.EncryptedAt("main") {
-		if !e.LoadKey(r) {
-			say("the data repo's key is not in this device's key store: run /jeeves:encryption")
-			return 1
-		}
 		// Each blob under home/ or hosts/ in the outgoing commits, once, with the first commit that holds it.
 		commits, _ := r.Git("rev-list", "--abbrev-commit", rng)
 		seen := map[string]bool{}
@@ -63,26 +56,47 @@ func Run(e lib.Env, args []string, stdout, stderr io.Writer) int {
 				seen[m[2]] = true
 				blob, _ := r.Git("cat-file", "blob", m[2])
 				if !strings.HasPrefix(blob, lib.AgeMagic) {
-					say("not encrypted: %s (commit %s)", strings.TrimSpace(path), c)
-					found = true
+					found = append(found, Finding{Msg: fmt.Sprintf("not encrypted: %s (commit %s)", strings.TrimSpace(path), c), Plain: true})
 				}
 			}
 		}
 	}
-
 	added := r.OutgoingAdded(rng)
 	for _, k := range kinds {
 		for _, l := range added {
 			if k.re.MatchString(l.Text) {
-				say("possible %s at %s", k.kind, l.Where())
-				found = true
+				found = append(found, Finding{Msg: fmt.Sprintf("possible %s at %s", k.kind, l.Where()), Where: l.Where()})
 			}
 		}
 	}
-	if found {
+	return found, len(added)
+}
+
+// Run returns 0 when nothing is found, 1 with each finding listed as file:line and its kind.
+func Run(e lib.Env, args []string, stdout, stderr io.Writer) int {
+	a, args := lib.ParseDataRepoArg(args)
+	if len(args) != 0 {
+		fmt.Fprintln(stderr, "scan: takes no options")
+		return 2
+	}
+	say := func(f string, a ...any) { fmt.Fprintf(stdout, "jeeves scan: "+f+"\n", a...) }
+	r, err := lib.FindDataRepo(e, a, stderr)
+	if err != nil {
+		say("%s", err)
+		return 1
+	}
+	if r.EncryptedAt("main") && !e.LoadKey(r) {
+		say("the data repo's key is not in this device's key store: run /jeeves:encryption")
+		return 1
+	}
+	found, added := Findings(r, r.OutgoingRange())
+	for _, f := range found {
+		say("%s", f.Msg)
+	}
+	if len(found) > 0 {
 		say("do not push; fix the commits first (rewrite only commits not yet pushed)")
 		return 1
 	}
-	say("nothing found in %d added lines", len(added))
+	say("nothing found in %d added lines", added)
 	return 0
 }

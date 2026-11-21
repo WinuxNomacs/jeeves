@@ -17,8 +17,7 @@ allowed-tools:
   - Bash(jeeves-apply --force:*)
   - Bash(jeeves-apply --show)
   - Bash(jeeves-apply --accept:*)
-  - Bash(jeeves-git revert --no-edit *)
-  - Bash(jeeves-git revert --abort)
+  - Bash(jeeves-revert *)
   - Bash(jeeves-memories:*)
   - Bash(jeeves-scan)
   - Bash(jeeves-risk)
@@ -28,14 +27,11 @@ allowed-tools:
   - Bash(jeeves-git show *)
   - Bash(jeeves-git cat-file *)
   - Bash(jeeves-git ls-files *)
-  - Bash(jeeves-git switch main)
-  - Bash(jeeves-git switch -c pref/*)
-  - Bash(jeeves-git add -- *)
-  - Bash(jeeves-git commit -m *)
-  - Bash(jeeves-git merge --no-ff *)
-  - Bash(jeeves-git merge --abort)
-  - Bash(jeeves-git branch -d pref/*)
-  - Bash(jeeves-git push origin main)
+  - Bash(jeeves-commit -m *)
+  - Bash(jeeves-commit --branch pref/*)
+  - Bash(jeeves-merge *)
+  - Bash(jeeves-push)
+  - Bash(jeeves-push --accept *)
   - Bash(git rev-parse --show-toplevel)
   - Bash(git switch -c claude-md/*)
   - Bash(git switch -)
@@ -190,18 +186,18 @@ plainly. Put agreed text where it acts (see Security above for rules that must o
 
 ## 5. Write
 
-All in one branch of the data repo: `jeeves-git switch -c pref/review-<YYYY-MM-DD>`. Edit
+All in one branch of the data repo, `pref/review-<YYYY-MM-DD>`, which the first commit starts. Edit
 `home/CLAUDE.md` in place; never leave two rules saying the same thing. One commit per agreed rule, so each
-can be undone alone: `jeeves-git add -- home/CLAUDE.md`, then
-`jeeves-git commit -m "review: <the rule, in a few words>: <what changed and why>"`. The changes you made
-on your own go in one more commit, `curate: <what>`. Then `jeeves-git switch main`,
-`jeeves-git merge --no-ff pref/review-<date> -m "Merge branch 'pref/review-<date>': rules review"`,
-`jeeves-git branch -d pref/review-<date>`, `jeeves-apply` (it installs only CLAUDE.md here; a skill, agent
+can be undone alone: `jeeves-commit -m "review: <the rule, in a few words>: <what changed and why>" --
+home/CLAUDE.md` (the first with `--branch pref/review-<YYYY-MM-DD>`). The changes you made on your own go
+in one more commit, `curate: <what>`. Then `jeeves-merge pref/review-<date> -m "rules review"` (it checks
+out `main`, merges the branch and removes it), `jeeves-apply` (it installs only CLAUDE.md here; a skill, agent
 or command it holds came from another device and is asked about as `jeeves:update` sync step 4 says),
 `jeeves-snapshot` (it must print nothing but the notice for files the user left held; if it prints anything
-else, invoke `jeeves:update` with no args to settle it), `jeeves-scan`, `jeeves-risk` (each line it flags is
-asked about before the push, as `jeeves:update` sync step 5 says; a rule the user agreed to in this review
-counts as asked for), `jeeves-git push origin main`. A rejected push is never forced: run `jeeves-snapshot`; if
+else, invoke `jeeves:update` with no args to settle it), `jeeves-push` (it runs the secrets and risk
+checks first; each line the risk check flags is asked about, as `jeeves:update` sync step 5 says, and a
+rule the user agreed to in this review counts as asked for: push it with `--accept '<its place>'`). A
+rejected push is never forced: run `jeeves-snapshot`; if
 `main` has diverged, invoke `jeeves:update` with no args to merge, then push again; if it is still
 rejected, stop and ask.
 

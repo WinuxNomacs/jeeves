@@ -23,6 +23,11 @@ Built so far (prepared as 1.5.0, never published):
   anything is pushed; a refused edit is kept for you, never pushed. No worker is left behind: a watchdog
   stops a stranded session, and each session start cleans up after a run that crashed.
 - Background updates need `perl` with JSON::PP (standard on macOS, Linux and Git for Windows).
+- **The skills change the data repo only through commands that check what they are given:**
+  `jeeves-commit` (only files under `home/`, `jeeves.conf` or the data repo's `CLAUDE.md`, never a link),
+  `jeeves-merge` (a skill's branch, or `origin/main` with conflicts under `hosts/` settled by rule),
+  `jeeves-revert` and `jeeves-push` (never forced, only after the secrets and risk checks pass). `jeeves-git`
+  now only reads.
 - **One worker per machine:** the commands that change the data repo or `~/.claude` queue a request in
   `~/.claude/jeeves/queue/` and a short-lived background process runs them one at a time. A hook no
   longer skips its snapshot when another run is at work ("skipped, another run at work"): it waits up to
