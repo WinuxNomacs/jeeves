@@ -108,7 +108,7 @@ func TestStopPIDEndsAProcessThisOneDidNotStart(t *testing.T) {
 	done := Wait(c)
 	StopPID(c.Process.Pid, 5*time.Second)
 	select {
-	case <-done:
+	case <-done.Done():
 	case <-time.After(10 * time.Second):
 		c.Process.Kill()
 		t.Fatal("still running")

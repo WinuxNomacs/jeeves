@@ -113,13 +113,13 @@ func resumeThreads(pid uint32) error {
 
 // Stop ends every process in the child's job (Windows has no SIGTERM to send a console program from here,
 // so this is the forced stop), waiting through done up to grace.
-func (c *Contained) Stop(done <-chan error, grace time.Duration) {
+func (c *Contained) Stop(w *Waited, grace time.Duration) {
 	windows.TerminateJobObject(c.job, 1)
 	select {
-	case <-done:
+	case <-w.Done():
 	case <-time.After(grace):
 		c.cmd.Process.Kill()
-		<-done
+		<-w.Done()
 	}
 }
 

@@ -2100,6 +2100,58 @@ t_quoted_text_cannot_pose_as_the_user_in_the_extract() {
   check "the user's text beside a pasted image is kept, the image data not" bash -c 'grep -q USER-WITH-IMAGE <<< "$1" && ! grep -q AAAAAAAAAA <<< "$1"' _ "$x"
 }
 
+# jeeves-auto's parity while its bash version exists: the extract of a transcript with every kind of line
+# (and the offset reached), then the outputs that are fixed (status, queue, on, off, the session start, a
+# refused id, a bad subcommand), from the Go build and the bash version, compared byte for byte.
+t_auto_go_and_bash_say_the_same() {
+  auto_env; FAKE_CLAUDE_MODE=none
+  cat >> "$TP" <<'LINES'
+{"type":"user","message":{"content":"café   tab\there 😀 <b>&amp;</b>"}}
+{"type":"assistant","message":{"content":[{"type":"text","text":"  "},{"type":"text","text":"ok"},{"type":"tool_use","name":"Ed/it!","input":{"z":[1,2.50,1e21,1E-7,100.0,12345678901234567890,true,false,null],"a":"<x&y>\u0001\u0008\u000c\u001f\u007f   \"q\" \\ /","m":{"b":1,"a":{}}}}]}}
+{"type":"user","message":{"content":42}}
+{"type":"user","message":{"content":true}}
+{"type":"user","isCompactSummary":true,"message":{"content":"SUMMARY-TEXT"}}
+{"type":"user","isMeta":0,"message":{"content":"meta zero is kept"}}
+{"type":"user","isMeta":"0","message":{"content":"meta string zero is kept"}}
+{"type":"assistant","message":{"content":[{"type":"text","text":"quoted key \"tool_use_id\" and \"type\":\"user\" in text"}]}}
+not json at all
+["a list"]
+{"type":"user","message":{"content":[{"type":"text","text":"   <system-reminder>indented reminder</system-reminder>"},{"type":"text","text":"after it"}]}}
+LINES
+  printf '{"type":"user","message":{"content":"bad \377 byte"}}\n' >> "$TP"
+  printf '{"type":"user","message":{"content":"%s LONG-LINE-END"}}\n' "$(head -c 70000 /dev/zero | tr '\0' x)" >> "$TP"
+  for v in go bash; do
+    rm -f "$CLAUDE_HOME/jeeves/auto/sessions/sess1" "$FAKE_LOG.extract"
+    [ $v = bash ] && export JEEVES_NO_GO=1
+    auto_run
+    unset JEEVES_NO_GO
+    nonce=$(sed -n 's/^- nonce: //p' "$FAKE_LOG.brief")
+    sed "s/$nonce/NONCE/g" "$FAKE_LOG.extract" > "$W/extract.$v"
+    cut -d' ' -f1 "$CLAUDE_HOME/jeeves/auto/sessions/sess1" > "$W/offset.$v"
+  done
+  check "the same extract" cmp -s "$W/extract.go" "$W/extract.bash"
+  cmp -s "$W/extract.go" "$W/extract.bash" || diff "$W/extract.go" "$W/extract.bash" | cut -c1-200 | head -20
+  check "the same offset reached" cmp -s "$W/offset.go" "$W/offset.bash"
+  check "the long line and the unicode are in it" bash -c 'grep -q LONG-LINE-END "$1" && grep -q "caf" "$1"' _ "$W/extract.go"
+  A=$CLAUDE_HOME/jeeves/auto
+  for v in go bash; do
+    [ $v = bash ] && export JEEVES_NO_GO=1
+    rm -rf "$A/log" "$A/queue" "$A/set-aside" "$A/notices" "$A/backoff"
+    printf 'enabled=yes\nmin_new_chars=10\ninterval_minutes=0\n' > "$CLAUDE_HOME/jeeves/auto.conf"
+    mkdir -p "$A/queue" "$A/set-aside" "$A/notices"
+    printf 'session: s\n\n- an item\n' > "$A/queue/20260101-000000-s.md"
+    printf '# set aside: why\n' > "$A/set-aside/20260101-000000.patch"
+    echo "jeeves: notice one" > "$A/notices/a-one"; echo "jeeves: notice two" > "$A/notices/b-two"
+    { autobin status; echo "rc=$?"; autobin queue; echo "rc=$?"; autobin off; autobin status; autobin on; echo "rc=$?"
+      autobin --session-start; echo "rc=$?"; autobin --session-start; autobin queue clear 20260101-000000-s.md ../x .hidden 20260101-000000.patch
+      autobin queue; autobin bogus; echo "rc=$?"; autobin run only-one; echo "rc=$?"
+      rm -f "$CLAUDE_HOME/jeeves/auto.conf"; autobin status; autobin --session-start; autobin off; echo "rc=$?"; } > "$W/fixed.$v" 2>&1
+    unset JEEVES_NO_GO
+  done
+  check "the same fixed outputs" cmp -s "$W/fixed.go" "$W/fixed.bash"
+  cmp -s "$W/fixed.go" "$W/fixed.bash" || diff "$W/fixed.go" "$W/fixed.bash" | head -20
+}
+
 t_an_edit_that_removes_or_risks_is_set_aside_not_pushed() {
   auto_env
   for mode in remove-security remove-rule reword heading risky reword-many security-add security-dup firm-continuation hidden isolate firm-append firm-under firm-paragraph comment; do
@@ -2280,7 +2332,7 @@ t_a_killed_supervisors_child_is_stopped_by_its_watchdog() {
   check "the watchdog stops the child" wait_for 20 bash -c '! kill -0 "$(cat "$1")" 2>/dev/null' _ "$FAKE_LOG.pid"
   check "and removes the run folder" wait_for 5 bash -c '! grep -rqs UNIQUE-SESSION-TEXT "$XDG_RUNTIME_DIR"/jeeves-auto.*'
   check "and the child record" wait_for 5 test ! -e "$CLAUDE_HOME/jeeves/auto/child"
-  check "no watchdog is left" wait_for 5 bash -c '! ps -o args= -A 2>/dev/null | grep -v grep | grep -q "jeeves-auto run sess1"'
+  check "no watchdog is left" wait_for 5 bash -c '! ps -o args= -A 2>/dev/null | grep -v grep | grep -qE "jeeves-auto run sess1|auto --watch "'
   rm -f "$FAKE_LOG.args" "$CLAUDE_HOME/jeeves/auto/backoff"; FAKE_CLAUDE_MODE=learn auto_run
   check "the next run takes over the stale lock and works" grep -q "Run the linter" "$W/claude/CLAUDE.md"
 }
@@ -3176,6 +3228,33 @@ run_test "a leftover background child and folder are cleaned up at session start
 run_test "a background run killed mid-commit is put right by the next" t_a_run_killed_mid_commit_is_put_right_by_the_next
 run_test "a background run that cannot start backs off and says why" t_a_run_that_cannot_start_backs_off_and_says_why
 run_test "the background log keeps the last 50 runs" t_the_background_log_keeps_the_last_50_runs
+[ -f "$SRC/lib/auto.sh" ] && run_test "jeeves-auto: the Go build and the bash version say the same" t_auto_go_and_bash_say_the_same
+# While jeeves-auto's bash version exists, every background test runs against it too.
+if [ -f "$SRC/lib/auto.sh" ]; then
+  export JEEVES_NO_GO=1
+  run_test "background updates are off until the user decides (bash version)" t_background_updates_are_off_until_the_user_decides
+  run_test "a background run learns, pushes, installs and tells the user once (bash version)" t_a_background_run_learns_pushes_installs_and_tells_the_user_once
+  run_test "the background child is confined and gets no session variables (bash version)" t_the_background_child_is_confined_and_gets_no_session_variables
+  run_test "quoted text cannot pose as the user in the extract (bash version)" t_quoted_text_cannot_pose_as_the_user_in_the_extract
+  run_test "an edit that removes or risks is set aside, not pushed (bash version)" t_an_edit_that_removes_or_risks_is_set_aside_not_pushed
+  run_test "a secret in the edit is never pushed (bash version)" t_a_secret_in_the_edit_is_never_pushed
+  run_test "a secret already in the outgoing commits is not blamed on the background run (bash version)" t_a_secret_already_in_the_outgoing_commits_is_not_blamed_on_the_run
+  run_test "a hung background child is stopped at the deadline (bash version)" t_a_hung_background_child_is_stopped_at_the_deadline
+  run_test "a failed background child backs off and reviews the same text later (bash version)" t_a_failed_background_child_backs_off_and_reviews_the_same_text_later
+  run_test "one background run at a time, and the user's run comes first (bash version)" t_one_background_run_at_a_time_and_the_users_run_comes_first
+  run_test "the Stop hook starts a detached run only when due (bash version)" t_the_stop_hook_starts_a_detached_run_only_when_due
+  run_test "the Stop hook refuses odd input (bash version)" t_the_stop_hook_refuses_odd_input
+  run_test "a push that fails keeps the commit for later (bash version)" t_a_push_that_fails_keeps_the_commit_for_later
+  run_test "another device's change meanwhile is merged, or the edit set aside (bash version)" t_another_devices_change_meanwhile_is_merged_or_the_edit_set_aside
+  run_test "session hooks do nothing in a background child (bash version)" t_session_hooks_do_nothing_in_a_background_child
+  run_test "stopping a background run stops its child (bash version)" t_stopping_a_background_run_stops_its_child
+  run_test "a killed background supervisor's child is stopped by its watchdog (bash version)" t_a_killed_supervisors_child_is_stopped_by_its_watchdog
+  run_test "a leftover background child and folder are cleaned up at session start (bash version)" t_a_leftover_child_and_folder_are_cleaned_up_at_session_start
+  run_test "a background run killed mid-commit is put right by the next (bash version)" t_a_run_killed_mid_commit_is_put_right_by_the_next
+  run_test "a background run that cannot start backs off and says why (bash version)" t_a_run_that_cannot_start_backs_off_and_says_why
+  run_test "the background log keeps the last 50 runs (bash version)" t_the_background_log_keeps_the_last_50_runs
+  unset JEEVES_NO_GO
+fi
 
 # age is built in. The checks that read Jeeves's files with the age command line, and the bash version's
 # parity test, need age 1.3+ with age-plugin-batchpass; without them they are skipped and said so.

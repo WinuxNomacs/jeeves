@@ -8,13 +8,25 @@ import (
 	"time"
 )
 
-// Wait starts waiting for cmd (already started) and returns the channel its result arrives on, for Stop
-// and a caller's own deadline.
-func Wait(cmd *exec.Cmd) <-chan error {
-	done := make(chan error, 1)
-	go func() { done <- cmd.Wait() }()
-	return done
+// Waited is a started process's end, which any number of goroutines may wait for (a supervisor's deadline
+// loop and a signal's cleanup both do).
+type Waited struct {
+	done chan struct{}
+	err  error
 }
+
+// Wait starts waiting for cmd (already started).
+func Wait(cmd *exec.Cmd) *Waited {
+	w := &Waited{done: make(chan struct{})}
+	go func() { w.err = cmd.Wait(); close(w.done) }()
+	return w
+}
+
+// Done is closed when the process has ended.
+func (w *Waited) Done() <-chan struct{} { return w.done }
+
+// Err waits for the process and gives what cmd.Wait gave.
+func (w *Waited) Err() error { <-w.done; return w.err }
 
 // StopWithin stops cmd, waiting for it through done: a graceful stop where the system has one, then a
 // forced one after grace.

@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/WinuxNomacs/jeeves/internal/apply"
+	"github.com/WinuxNomacs/jeeves/internal/auto"
 	"github.com/WinuxNomacs/jeeves/internal/check"
 	"github.com/WinuxNomacs/jeeves/internal/cleanup"
 	"github.com/WinuxNomacs/jeeves/internal/crypt"
@@ -34,6 +35,7 @@ import (
 // commands maps each subcommand to its Run.
 var commands = map[string]func(lib.Env, []string, io.Writer, io.Writer) int{
 	"apply":        apply.Run,
+	"auto":         auto.Run,
 	"check":        check.Run,
 	"cleanup":      cleanup.Run,
 	"commit":       version.Commit,
@@ -58,7 +60,7 @@ var commands = map[string]func(lib.Env, []string, io.Writer, io.Writer) int{
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: jeeves <command> [arguments]   (commands: apply, check, cleanup, commit, crypt, encrypt, git, github, hook-edit, init, memories, merge, push, restore, revert, risk, scan, snapshot, status, update-check, worker)")
+		fmt.Fprintln(os.Stderr, "usage: jeeves <command> [arguments]   (commands: apply, auto, check, cleanup, commit, crypt, encrypt, git, github, hook-edit, init, memories, merge, push, restore, revert, risk, scan, snapshot, status, update-check, worker)")
 		os.Exit(2)
 	}
 	if os.Getenv("JEEVES_TEST_PANIC") == "1" { // the tests' way to make the program crash

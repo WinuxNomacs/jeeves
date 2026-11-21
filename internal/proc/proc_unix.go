@@ -28,14 +28,14 @@ func StartContained(cmd *exec.Cmd) (*Contained, error) {
 }
 
 // Stop ends the child's group: SIGTERM, then SIGKILL after grace, waiting through done.
-func (c *Contained) Stop(done <-chan error, grace time.Duration) {
+func (c *Contained) Stop(w *Waited, grace time.Duration) {
 	pg := -c.cmd.Process.Pid
 	syscall.Kill(pg, syscall.SIGTERM)
 	select {
-	case <-done:
+	case <-w.Done():
 	case <-time.After(grace):
 		syscall.Kill(pg, syscall.SIGKILL)
-		<-done
+		<-w.Done()
 	}
 }
 
