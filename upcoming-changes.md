@@ -4,9 +4,8 @@
 
 - **No release before 2.0** (the user's decision, 2026-11-21): 2.0 is the completed Go rewrite. Work merges
   into `main` as each phase is done; nothing is cut or tagged until then, except the 1.4.2 security fix.
-- **Up next:** 1. Go port, Phase 3: encryption with age built in (below, "Go port, Phase 3"; built on
-  `feat/go-3`, merged once its parity test passes on three OSes and the bash version is removed)
-- **Then:** 2. Phase 4: background updates · 3. Phase 5: the last bash versions removed · 4. Release 2.0
+- **Up next:** 1. Go port, Phase 4: background updates in Go (`feat/go-4`)
+- **Then:** 2. Phase 5: the last bash versions removed · 3. Release 2.0
 - **The user's, any time:** submit 1.4.2 in the Anthropic portal (below, "Anthropic directory submission")
 - **Later:** 0. Review text gaps (below, under "Review text gaps") · 0. Injection docs: threat model in the README, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
@@ -1227,6 +1226,13 @@ Suite 105 passed (2026-11-19).
   the link cases, the 2c rewrites, eight worker failure tests and `go test ./internal/worker`. 2e: the versioning commands `jeeves-commit`, `jeeves-merge`,
   `jeeves-revert`, `jeeves-push` (`internal/version/`), `jeeves-git` read-only, the skills rewritten to use
   them. Merged 2026-11-21 (CI run 44943357225 green on three OSes). Not released.
+- Go port Phase 3 (2026-11-21; "Go port, Phase 3" above): age built in (`filippo.io/age` v1.3.2,
+  `internal/lib/agecrypt.go`), `jeeves-crypt` as git's long-running filter process (`internal/crypt/`, no
+  bash version), `jeeves-encrypt` in Go (`internal/encrypt/`, passphrase dialogs in
+  `internal/lib/passphrase.go`), its bash version removed after parity on three OSes (CI runs 44945877107,
+  44947431241); `lib/keys.sh` keeps only the key store read `jeeves-auto` needs. Tests: the encryption
+  tests without the age command line, each step and misstep of `jeeves-encrypt`, the filter's failure
+  tests, `go test ./internal/lib ./internal/crypt`. Not released.
 
 ## Review text gaps (found by the 2026-11-19 dry run; older text, not this phase's)
 
