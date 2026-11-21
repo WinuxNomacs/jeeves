@@ -31,8 +31,11 @@ func refusal(args []string) string {
 		return fmt.Sprintf("jeeves git only reads (%s); changes go through jeeves-commit, jeeves-merge, jeeves-revert and jeeves-push", strings.Join(sortedKeys(), ", "))
 	}
 	for _, a := range args[1:] {
-		if strings.HasPrefix(a, "--output") || a == "-o" || strings.HasPrefix(a, "--ext-diff") || strings.HasPrefix(a, "--open-files-in-pager") || a == "-O" {
-			return "jeeves git does not write files or run other programs: " + a
+		if a == "--" {
+			break // paths from here on
+		}
+		if why := badOption(args[0], a); why != "" {
+			return why
 		}
 	}
 	if args[0] == "branch" {
@@ -47,6 +50,49 @@ func refusal(args []string) string {
 					return "jeeves git branch only lists branches (a name needs --list or --contains)"
 				}
 			}
+		}
+	}
+	return ""
+}
+
+// Options that write a file, run another program, or read a file outside the data repo (some print what
+// they read in an error message), as git spells them in full: git takes any unambiguous abbreviation of a
+// long option, so an option that is the start of one of these (or one of these with more after it) is
+// refused too.
+var badLong = []string{"--output", "--output-directory", "--ext-diff", "--open-files-in-pager", "--no-index",
+	"--contents", "--orderfile", "--ignore-revs-file", "--file", "--exclude-from", "--pathspec-from-file"}
+
+// Options spelled in full that start like one of those but only read the repo (git takes an exact name
+// before an abbreviation).
+var harmless = map[string]bool{"--exclude": true, "--output-indicator-new": true, "--output-indicator-old": true,
+	"--output-indicator-context": true}
+
+// Short options of the same kinds, by command, also inside a group (-iO): -O runs a program in grep and
+// reads an order file elsewhere; grep's -f, blame's -S and ls-files' -X read a file.
+var badShort = map[string]string{"grep": "Of", "blame": "OS", "ls-files": "X"}
+
+// badOption says why one argument of a jeeves git command is refused ("" when it is not).
+func badOption(cmd, a string) string {
+	refuse := "jeeves git does not write files, run other programs or read files outside the data repo: " + a
+	if strings.HasPrefix(a, "--") {
+		name, _, _ := strings.Cut(a, "=")
+		if len(name) < 3 || harmless[name] {
+			return ""
+		}
+		for _, b := range badLong {
+			if strings.HasPrefix(b, name) || strings.HasPrefix(name, b+"-") {
+				return refuse
+			}
+		}
+		return ""
+	}
+	if strings.HasPrefix(a, "-") && len(a) > 1 {
+		letters := badShort[cmd]
+		if cmd != "grep" && cmd != "blame" && cmd != "ls-files" {
+			letters = "O"
+		}
+		if strings.ContainsAny(a[1:], letters) {
+			return refuse
 		}
 	}
 	return ""
