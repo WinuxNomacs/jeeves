@@ -1,42 +1,4 @@
 #!/usr/bin/env bash
-# Report, without changing anything, what is out of sync between ~/.claude and the data repo
-# (lib/status.sh describes the output).
-#
-# Runs the Go build, dist/jeeves-<os>-<arch>[.exe] status, when dist/ holds one for this machine; otherwise,
-# or when it cannot start, the bash version, lib/status.sh, saying why once per reason (not when dist/ is
-# missing altogether: such a copy ships bash only). JEEVES_NO_GO=1 always runs the bash version.
-
-root=$(cd "$(dirname "$0")/.." && pwd) || exit 1
-
-bash_version() { exec bash "$root/lib/status.sh" "$@"; }
-# Says, once per reason, that the bash version runs instead of the Go build.
-fallback() {
-  local mark=${CLAUDE_HOME:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}}/jeeves/go-fallback
-  if [ "$(cat "$mark" 2>/dev/null)" != "$1" ]; then
-    echo "jeeves: running the bash version of status: $1" >&2
-    { mkdir -p "${mark%/*}" && printf '%s\n' "$1" > "$mark"; } 2>/dev/null
-  fi
-}
-
-[ "$JEEVES_NO_GO" = 1 ] || [ ! -d "$root/dist" ] && bash_version "$@"
-case "$(uname -s)" in
-  Darwin) os=darwin ;; Linux) os=linux ;; MINGW*|MSYS*|CYGWIN*) os=windows ;; *) os=$(uname -s) ;;
-esac
-case "$(uname -m)" in x86_64|amd64) arch=amd64 ;; arm64|aarch64) arch=arm64 ;; *) arch=$(uname -m) ;; esac
-exe=$root/dist/jeeves-$os-$arch
-[ $os = windows ] && exe=$exe.exe
-if [ ! -f "$exe" ]; then
-  fallback "no Go build for $os-$arch in dist/"; bash_version "$@"
-fi
-
-# The program's messages are held until it ends, so a failed start (126: not executable, a wrong format;
-# 127: not found) shows only the fallback's note; stdout goes straight through.
-exec 3>&1
-errors=$(JEEVES_ROOT=$root "$exe" status "$@" 2>&1 1>&3 3>&-)
-rc=$?
-exec 3>&-
-if [ $rc = 126 ] || [ $rc = 127 ]; then
-  fallback "the Go build dist/${exe##*/} did not start"; bash_version "$@"
-fi
-[ -n "$errors" ] && printf '%s\n' "$errors" >&2
-exit $rc
+# Report, without changing anything, what is out of sync between ~/.claude and the data repo (lib/status.sh
+# describes the output). lib/launch.sh runs the Go build, or the bash version where there is none.
+case "$0" in */*) . "${0%/*}/../lib/launch.sh" status "$@" ;; *) . ../lib/launch.sh status "$@" ;; esac

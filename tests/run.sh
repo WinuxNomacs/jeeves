@@ -488,8 +488,8 @@ t_status_reports_diverged_and_dirty() {
 # The Go build's name for this machine, as bin/jeeves-status picks it.
 go_build_name() {
   local os arch
-  case "$(uname -s)" in Darwin) os=darwin ;; Linux) os=linux ;; MINGW*|MSYS*|CYGWIN*) os=windows ;; *) os=other ;; esac
-  case "$(uname -m)" in x86_64|amd64) arch=amd64 ;; arm64|aarch64) arch=arm64 ;; *) arch=other ;; esac
+  case "$OSTYPE" in darwin*) os=darwin ;; linux*) os=linux ;; msys*|cygwin*) os=windows ;; *) os=other ;; esac
+  case "$HOSTTYPE" in x86_64|amd64) arch=amd64 ;; arm64|aarch64) arch=arm64 ;; *) arch=other ;; esac
   printf 'jeeves-%s-%s' "$os" "$arch"; [ $os = windows ] && printf .exe
 }
 # A copy of the plugin's scripts in $W/plugin, with no dist/ (tests add what they need).
@@ -555,13 +555,34 @@ t_status_with_a_go_build_that_cannot_start_runs_the_bash_version() {
   out=$("$W/plugin/bin/jeeves-status" 2>"$W/err"); rc=$?
   check "exit status 0" [ $rc = 0 ]
   check "the bash version's output" grep -q "^datarepo	$R$" <<< "$out"
-  check "says the build did not start, and nothing else" [ "$(cat "$W/err")" = "jeeves: running the bash version of status: the Go build dist/$(go_build_name) did not start" ]
-  case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) ;; *)
-    chmod -x "$f"; rm -f "$W/claude/jeeves/go-fallback"
+  check "says the build did not start" grep -q "^jeeves: running the bash version of status: the Go build dist/$(go_build_name) did not start$" "$W/err"
+  case "$OSTYPE" in msys*|cygwin*) ;; *)
+    chmod -x "$f"
     out=$("$W/plugin/bin/jeeves-status" 2>"$W/err")
     check "a build that is not executable: the bash version" grep -q "^datarepo	$R$" <<< "$out"
-    check "and says so" grep -q "did not start" "$W/err" ;;
+    check "and says so, and nothing else" [ "$(cat "$W/err")" = "jeeves: running the bash version of status: the Go build dist/$(go_build_name) is not executable" ] ;;
   esac
+}
+
+t_status_go_build_that_crashes_reports_it_and_does_not_fall_back() {
+  [ -x "$SRC/dist/$(go_build_name)" ] || { echo "skip: no Go build in dist/"; return; }
+  snap >/dev/null
+  out=$(JEEVES_TEST_PANIC=1 status 2>"$W/err"); rc=$?
+  check "exit status 2, as Go gives a crash" [ $rc = 2 ]
+  check "no output" [ -z "$out" ]
+  check "the crash reaches the caller" grep -q "panic: JEEVES_TEST_PANIC" "$W/err"
+  check "and the bash version did not run instead" bash -c '! grep -q "running the bash version" "$1"' _ "$W/err"
+}
+
+t_the_launcher_finds_the_plugin_folder_however_it_is_called() {
+  snap >/dev/null; plugin_copy
+  ln -s "$W/plugin" "$W/link"
+  for p in "$W/plugin/bin/jeeves-status" "$W/link/bin/../bin/jeeves-status" "$W/plugin/bin//jeeves-status"; do
+    out=$(JEEVES_NO_GO=1 "$p" 2>&1)
+    check "$p runs" grep -q "^datarepo	$R$" <<< "$out"
+  done
+  out=$(cd "$W/plugin/bin" && JEEVES_NO_GO=1 bash jeeves-status 2>&1)
+  check "and by its bare name from bin/" grep -q "^datarepo	$R$" <<< "$out"
 }
 
 t_scan_flags_secrets_without_printing_them() {
@@ -2533,6 +2554,8 @@ run_test "status reports a diverged main and a dirty data repo" t_status_reports
 run_test "status: the Go build matches the bash version, byte for byte" t_status_go_build_matches_the_bash_version
 run_test "status without a Go build for this machine runs the bash version and says so once" t_status_without_a_go_build_for_this_machine_runs_the_bash_version_and_says_so_once
 run_test "status with a Go build that cannot start runs the bash version" t_status_with_a_go_build_that_cannot_start_runs_the_bash_version
+run_test "status: a Go build that crashes reports it and does not fall back" t_status_go_build_that_crashes_reports_it_and_does_not_fall_back
+run_test "the launcher finds the plugin folder however it is called" t_the_launcher_finds_the_plugin_folder_however_it_is_called
 run_test "scan flags secrets in outgoing commits without printing them" t_scan_flags_secrets_without_printing_them
 run_test "scan checks every outgoing commit, not only the last" t_scan_checks_every_outgoing_commit_not_only_the_last
 run_test "scan checks the commits of a branch merged into main" t_scan_checks_a_branch_merged_into_main

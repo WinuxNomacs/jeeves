@@ -136,6 +136,23 @@ start), each with a test that makes it happen where one can:
 
 Not in Phase 0: porting more commands (Phase 1), and the per-machine worker (Phase 2).
 
+As built (2026-11-21, branch `feat/go-dist`):
+- `lib/launch.sh` finds the plugin folder by name (the same string as `cd .. && pwd`, checked for relative,
+  absolute, symlinked and doubled-slash calls and a bare name) and the platform from `$OSTYPE` and
+  `$HOSTTYPE`; it checks the executable bit with a builtin and runs the build directly rather than
+  capturing its messages (a subshell cost about 100 ms on Windows), so a build in a wrong format falls back
+  after bash's own error line. The program converts the plugin folder with `cygpath` only when a command
+  needs it (an encrypted repo's filter settings). Windows, 50 files, Go `status`: 662 ms (spike) to
+  391 ms; the program alone 318 ms to 172 ms. The rest is bash starting the wrapper and the program's git
+  calls (about 110 ms each there).
+- `dist/` is kept current on `main` with each Go change rather than rebuilt at release (the builds hold no
+  version), and release step 4 checks it with `build-go.sh --check`; `go-builds.sha256` and `--record`
+  are gone.
+- Tests: a Go crash (`JEEVES_TEST_PANIC=1`) exits 2 with its message and no fallback; the launcher finds the
+  plugin folder however it is called; a build that is not executable falls back with only the note. The
+  rehearsal from 1.4.1 checks that the Go build runs on the old state, agrees with the bash version, and
+  leaves git's filter settings as the bash version writes them (plain and encrypted): REHEARSAL OK.
+
 ## Go rewrite: spike (requested and planned 2026-11-20)
 
 The request: the user questioned bash (hard to debug; tools that differ between systems change output) and

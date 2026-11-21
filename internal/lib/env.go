@@ -16,11 +16,13 @@ type Env struct {
 	Home       string // $HOME
 	ClaudeHome string // CLAUDE_HOME, else CLAUDE_CONFIG_DIR, else $HOME/.claude
 	Host       string // this device's name in the data repo
-	Root       string // the plugin folder (bin/ and lib/ are under it), in the scripts' form
+	// Root gives the plugin folder (bin/ and lib/ are under it) in the scripts' form. A function, so the
+	// conversion (a cygpath run on Windows, about 150 ms there) happens only when a command needs it.
+	Root func() string
 }
 
-// LoadEnv reads the environment as lib.sh does. root is the plugin folder, as the launcher found it.
-func LoadEnv(root string) Env {
+// LoadEnv reads the environment as lib.sh does. root gives the plugin folder.
+func LoadEnv(root func() string) Env {
 	e := Env{Home: os.Getenv("HOME"), Root: root}
 	e.ClaudeHome = firstSet(os.Getenv("CLAUDE_HOME"), os.Getenv("CLAUDE_CONFIG_DIR"), e.Home+"/.claude")
 	e.Host = hostName()

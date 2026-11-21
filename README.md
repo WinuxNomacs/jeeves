@@ -330,8 +330,14 @@ project or a `JEEVES_DATA=` prefix, so commands written that way would each ask 
 
 ## What Jeeves runs, sends and changes
 
-Everything Jeeves does runs from the bash scripts in `bin/` (readable source, no binaries) and from the
-skills' instructions to Claude. In full:
+Everything Jeeves does runs from the commands in `bin/` and from the skills' instructions to Claude. The
+commands are bash scripts, except those already ported to Go (so far `jeeves-status`), whose `bin/` script
+runs the compiled program for your system from `dist/`, or the bash version in `lib/` where there is none.
+The programs are built from `cmd/` and `internal/` in this repo with the Go standard library only, and the
+build is reproducible: anyone with the Go version `go.mod` names gets the same bytes, which
+`bash .claude/skills/release/build-go.sh --check` confirms (CI checks it on Linux, macOS and Windows for each
+release, and the signed manifest holds their hashes). They are not signed by Apple or Microsoft; they arrive
+through git as the plugin's other files do. In full:
 
 **Network.** Jeeves sends nothing to the plugin's author and collects no usage data. It sends nothing to
 Anthropic itself, except through Claude Code when you turn background updates on (below).
@@ -462,7 +468,9 @@ A clone loaded this way gets no plugin options; Jeeves then uses the data repo t
 setup. Hook scripts run from the clone as soon as a file is saved, in every session on that machine: keep
 the loaded clone on a working `main`, and try changes in a `git worktree`. Edits to skills take effect on
 `/reload-plugins`. The tests (`bash tests/run.sh`) need age 1.3 or later for the encryption tests (on
-macOS, `brew install age`). To install or try the published plugin on that machine while the setting is on,
+macOS, `brew install age`). Changing the Go code needs the Go version `go.mod` names: rebuild `dist/` with
+`bash .claude/skills/release/build-go.sh` and commit the builds with the change (CI fails on builds that do
+not match the source). To install or try the published plugin on that machine while the setting is on,
 run `claude` without it (`env -u CLAUDE_CODE_PLUGIN_DIRS claude ...`): an install made with it set has
 failed to load. To go back to the installed release, remove the `env` line (or stop passing
 `--plugin-dir`), start a new session, and update it with the commands above.
@@ -524,7 +532,8 @@ folder and its copy on GitHub: delete those yourself if you no longer want the b
 
 `tests/run.sh` (or `tests/run.sh <part of a test name>`). Each test uses a scratch `~/.claude`, data repo and
 bare remote, so nothing real is touched. The encryption tests need age 1.3.0 or later on the PATH and are
-skipped without it.
+skipped without it. The Go code has its own tests (`go test ./...`); the suite's parity tests run each
+ported command's Go build and bash version on the same state and compare them byte for byte.
 
 ## License
 

@@ -21,6 +21,12 @@ A new version reaches installed copies only when `version` in `.claude-plugin/pl
   anything is pushed; a refused edit is kept for you, never pushed. No worker is left behind: a watchdog
   stops a stranded session, and each session start cleans up after a run that crashed.
 - Background updates need `perl` with JSON::PP (standard on macOS, Linux and Git for Windows).
+- **`jeeves-status` runs as a compiled program** (Go) on macOS, Linux and Windows: the first command of a
+  port that makes Jeeves faster and the same on every system (about 16 times faster on a Mac, 28 on
+  Windows). Where no build fits your machine, the bash version runs, as before. The builds are
+  reproducible from the source; the README says how to check them.
+- Fixed: the order of paths in `jeeves-status` no longer depends on your system's language settings.
+- The README explains how to uninstall Jeeves and what stays behind.
 - New splash image: a friendlier Jeeves.
 
 ## 1.4.1 (2026-11-20)

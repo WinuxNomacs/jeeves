@@ -117,7 +117,7 @@ func scratch(t *testing.T) (Env, string) {
 	t.Setenv("JEEVES_DATA", "")
 	t.Setenv("CLAUDE_PLUGIN_OPTION_DATA_REPO", "")
 	t.Setenv("ALLOW_LOCKED", "")
-	return Env{Home: home, ClaudeHome: filepath.Join(home, ".claude"), Host: "testhost", Root: "/plugin"}, repo
+	return Env{Home: home, ClaudeHome: filepath.Join(home, ".claude"), Host: "testhost", Root: func() string { return "/plugin" }}, repo
 }
 
 func TestFindDataRepoWithNothingSetPointsToSetup(t *testing.T) {

@@ -62,7 +62,7 @@ jobs:
           [ "$got" = "$sum" ] || { echo "::error::go1.27.4.$a has SHA-256 $got, expected $sum"; exit 1; }
           case "$a" in *.zip) unzip -q "go-$a" ;; *) tar xzf "go-$a" ;; esac
           echo "$RUNNER_TEMP/go/bin" >> "$GITHUB_PATH"
-      # The five builds must match the hashes recorded from a local build: the same bytes from any machine.
+      # The five builds committed in dist/ must be what this source builds to here, byte for byte.
       - name: Go checks and builds
         shell: bash
         env:

@@ -183,7 +183,7 @@ func (r *Repo) Unlocked() bool {
 // cryptSetup points git at this plugin's jeeves-crypt (the path changes with each plugin version), as
 // lib.sh's crypt_setup does, writing the settings only when they differ.
 func (r *Repo) cryptSetup(e Env) {
-	bin := e.Root + "/bin/jeeves-crypt"
+	bin := e.Root() + "/bin/jeeves-crypt"
 	want := []string{
 		`filter.jeeves.clean "` + bin + `" clean %f`,
 		`filter.jeeves.smudge "` + bin + `" smudge %f`,

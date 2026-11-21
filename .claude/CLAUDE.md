@@ -85,11 +85,15 @@ code that runs, and the release check would warn at every session start.
 - Go port (in progress, `upcoming-changes.md` "Go port"): `go.mod`, `cmd/jeeves/` (one program, a
   subcommand per script), `internal/lib/` (the port of `lib/lib.sh`), `internal/<command>/`. A ported
   command's `bin/` script is a launcher that runs `dist/jeeves-<os>-<arch>[.exe] <command>` and falls back
-  to its bash version in `lib/<command>.sh` (`JEEVES_NO_GO=1` forces bash); so far only `status`. Build
-  with `bash .claude/skills/release/build-go.sh` (needs the Go version `go.mod` names; `--record` after a
-  Go change, `--check` as CI runs it); `go test ./...` and the suite's parity test, which compares both
-  versions byte for byte. Go and bash must agree; a difference is a bug in one of them. `jeeves-verify`
-  stays bash.
+  to its bash version in `lib/<command>.sh` (`JEEVES_NO_GO=1` forces bash); so far only `status`. Each
+  wrapper sources `lib/launch.sh`, which starts no process of its own (each costs tens of milliseconds in
+  Git Bash). `dist/` is committed: after any Go change, rebuild it with
+  `bash .claude/skills/release/build-go.sh` (needs the Go version `go.mod` names) and commit the builds
+  with the change; `--check` (CI, release step 4) fails when `dist/` is not a build of the source.
+  `go test ./...` and the suite's parity tests, which compare both versions byte for byte. Go and bash must
+  agree; a difference is a bug in one of them. `jeeves-verify` stays bash. On Windows, Git Bash hands the
+  program Windows-form paths; it converts them back with `cygpath` (about 150 ms a call there) only where
+  a path is printed or recorded.
 - `.claude/skills/release/` — the release procedure (a skill for working on the repo, not shipped as one).
 - This file is `.claude/CLAUDE.md`, for working on the repo; Claude Code loads it here as project context.
   At the root it would be shipped with the plugin to no effect, and `claude plugin validate --strict` fails.
