@@ -1561,6 +1561,39 @@ END
 }
 encrypt() { "$SRC/bin/jeeves-encrypt" "$@"; }
 
+t_a_corrupted_cache_entry_is_dropped_never_served() {
+  crypt_env; snap >/dev/null; encrypt on >/dev/null
+  for c in "$R"/.git/jeeves/clean/*; do echo "not ciphertext" > "$c"; done
+  key=$(cat "$W/keys/$(cat "$R/recipient")")
+  touch "$R/home/CLAUDE.md"; git -C "$R" update-index --really-refresh >/dev/null 2>&1
+  JEEVES_AGE_KEY=$key git -C "$R" add --renormalize home/CLAUDE.md
+  check "the staged file is real ciphertext" bash -c 'git -C "$1" cat-file blob :home/CLAUDE.md | head -c 21 | grep -q age-encryption.org/v1' _ "$R"
+  check "and opens to the plain text" grep -qx "rules v1" <<< "$(git -C "$R" cat-file --textconv :home/CLAUDE.md 2>/dev/null || JEEVES_AGE_KEY=$key "$SRC/bin/jeeves-crypt" textconv <(git -C "$R" cat-file blob :home/CLAUDE.md))"
+}
+
+t_a_key_store_that_refuses_and_a_mismatched_identity_change_nothing() {
+  crypt_env; snap >/dev/null; n=$(commits)
+  case "$OSTYPE" in msys*|cygwin*) ;; *)
+    mkdir -p "$W/keys"; chmod 500 "$W/keys"
+    if ! ( : > "$W/keys/probe" ) 2>/dev/null; then
+      out=$(encrypt on); rc=$?
+      check "a store that refuses: said, exit 1" bash -c '[ $2 = 1 ] && grep -q "could not keep the key" <<< "$1"' _ "$out" $rc
+      check "and nothing changed" bash -c '[ ! -e "$1/recipient" ] && [ ! -e "$1/identity.age" ] && [ "$(git -C "$1" rev-list --count HEAD)" = "$2" ]' _ "$R" "$n"
+    fi
+    chmod 700 "$W/keys" ;;
+  esac
+  encrypt on >/dev/null; encrypt lock >/dev/null
+  git -C "$R" show HEAD:identity.age > "$W/identity.saved"
+  # identity.age for another key, sealed with the same passphrase.
+  printf '%s\n%s\n' "$PASS" "$PASS" > "$W/answers"
+  ( export JEEVES_DATA=$W/other-repo; git init -q -b main "$W/other-repo"; cd "$W/other-repo" && git commit -q --allow-empty -m x && "$SRC/bin/jeeves-encrypt" on >/dev/null 2>&1 )
+  cp "$W/other-repo/identity.age" "$R/identity.age"
+  out=$(encrypt unlock); rc=$?
+  check "an identity.age for another key is refused" bash -c '[ $2 = 1 ] && grep -q "does not match the recipient file" <<< "$1"' _ "$out" $rc
+  check "the device stays locked" grep -q "^encryption	locked" <<< "$(encrypt status)"
+  cp "$W/identity.saved" "$R/identity.age"
+}
+
 # jeeves-encrypt's parity while its bash version exists: the same steps on two fresh copies of the world,
 # Go then bash; output and exit statuses compared, the random parts (keys, recipients, the scratch path)
 # and status's age line (built in, so the Go build has none) set aside.
@@ -3106,6 +3139,8 @@ age_cli() { age --version >/dev/null 2>&1 && command -v age-plugin-batchpass >/d
 age_cli || echo "skip age command line checks: age 1.3 or later with age-plugin-batchpass is not on the PATH"
 if true; then
   age_cli && run_test "jeeves-encrypt: the Go build and the bash version say the same" t_encrypt_go_and_bash_say_the_same
+  run_test "a corrupted cache entry is dropped, never served" t_a_corrupted_cache_entry_is_dropped_never_served
+  run_test "a key store that refuses, and a mismatched identity, change nothing" t_a_key_store_that_refuses_and_a_mismatched_identity_change_nothing
   run_test "encrypt on keeps files encrypted in git and plain in the working tree" t_encrypt_on_keeps_files_encrypted_in_git_and_plain_in_the_working_tree
   run_test "encrypt on refuses a short or mismatched passphrase, a cancel, and no dialog" t_encrypt_on_refuses_a_short_or_mismatched_passphrase_or_a_cancel
   run_test "a locked clone refuses to sync until unlocked" t_a_locked_clone_refuses_to_sync_until_unlocked
