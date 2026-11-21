@@ -2,7 +2,9 @@
 
 A new version reaches installed copies only when `version` in `.claude-plugin/plugin.json` changes.
 
-## 1.5.0 (2026-11-20)
+## 2.0.0 (unreleased: the Go rewrite)
+
+Built so far (prepared as 1.5.0, never published):
 
 **Background updates: Jeeves can keep your rules up to date while you work. Off until you turn it on.**
 
