@@ -30,7 +30,11 @@ func Run(e lib.Env, args []string, stdout, stderr io.Writer) int {
 		say("the data repo's key is not in this device's key store: run /jeeves:encryption")
 		return 1
 	}
-	flags := Flags(r, rng)
+	flags, err := Flags(r, rng)
+	if err != nil {
+		say("%s; do not push until it reads", err)
+		return 1
+	}
 	if len(flags) == 0 {
 		say("nothing flagged")
 		return 0
@@ -41,10 +45,15 @@ func Run(e lib.Env, args []string, stdout, stderr io.Writer) int {
 }
 
 // Flags lists the flagged lines a push of the commits in rng would add under home/, each with the line
-// itself (Text) when it can be found. The key must be loaded when the data repo is encrypted.
-func Flags(r *lib.Repo, rng string) []lib.Flag {
+// itself (Text) when it can be found. The key must be loaded when the data repo is encrypted. An error when
+// the commits could not be read.
+func Flags(r *lib.Repo, rng string) ([]lib.Flag, error) {
+	added, err := r.OutgoingAdded(rng)
+	if err != nil {
+		return nil, err
+	}
 	var lines []lib.Flag
-	for _, l := range r.OutgoingAdded(rng) {
+	for _, l := range added {
 		if strings.HasPrefix(l.File, "home/") {
 			lines = append(lines, lib.Flag{Where: l.Where(), Text: l.Text})
 		}
@@ -62,7 +71,7 @@ func Flags(r *lib.Repo, rng string) []lib.Flag {
 			}
 		}
 	}
-	return flags
+	return flags, nil
 }
 
 // Print lists flags as Run does: each flag, then its line cut to 200 characters.

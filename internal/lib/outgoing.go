@@ -1,6 +1,7 @@
 package lib
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"regexp"
@@ -16,10 +17,18 @@ type Added struct {
 
 // OutgoingAdded lists each line the commits in rng add, each commit's own diff (a merge's combined diff:
 // only lines that match none of its parents, as the rest come from commits checked anyway), as lib.sh's
-// outgoing_added.
-func (r *Repo) OutgoingAdded(rng string) []Added {
-	out, _ := r.Git("-c", "core.quotepath=false", "log", "--no-color", "--no-ext-diff", "--format=commit %h",
-		"-p", "--cc", "-U0", rng, "--")
+// outgoing_added. Fails closed: an error when git does (a textconv that cannot decrypt, say), so a check
+// built on it never passes over lines it could not read. The diff is pinned against the user's git config
+// and against content that would hide lines: no rename detection (a file moved into home/ is all new
+// lines), binary files as text (a NUL byte, UTF-16), the a/ and b/ prefixes whatever diff.noprefix or
+// diff.mnemonicPrefix say, and names git quotes (a quote, tab or backslash in them) unquoted.
+func (r *Repo) OutgoingAdded(rng string) ([]Added, error) {
+	out, err := r.Git("-c", "core.quotepath=false", "-c", "diff.mnemonicPrefix=false", "-c", "diff.noprefix=false",
+		"log", "--no-color", "--no-ext-diff", "--no-renames", "--text", "--src-prefix=a/", "--dst-prefix=b/",
+		"--format=commit %h", "-p", "--cc", "-U0", rng, "--")
+	if err != nil {
+		return nil, fmt.Errorf("could not read the outgoing commits (%s): %w", rng, err)
+	}
 	var res []Added
 	var c, f string
 	hunk, np, n := false, 0, 0
@@ -35,11 +44,7 @@ func (r *Repo) OutgoingAdded(rng string) []Added {
 		case strings.HasPrefix(l, "diff "):
 			hunk = false
 		case !hunk && strings.HasPrefix(l, "+++ "):
-			f = ""
-			if len(l) > 6 {
-				// git ends the name with a tab when it holds a space (for patch tools); not part of it.
-				f = strings.TrimSuffix(l[6:], "\t")
-			}
+			f = DiffName(l[4:])
 		case strings.HasPrefix(l, "@@"):
 			np = len(l) - len(strings.TrimLeft(l, "@")) - 1
 			hunk = true
@@ -55,12 +60,31 @@ func (r *Repo) OutgoingAdded(rng string) []Added {
 				continue
 			}
 			if np > 0 && strings.Trim(m, "+") == "" {
-				res = append(res, Added{File: f, Line: n, Commit: c, Text: l[np:]})
+				// A NUL byte is dropped from the text checked: UTF-16 text (PowerShell 5's redirection
+				// writes it) then reads as the ASCII it holds.
+				res = append(res, Added{File: f, Line: n, Commit: c, Text: strings.ReplaceAll(l[np:], "\x00", "")})
 			}
 			n++
 		}
 	}
-	return res
+	return res, nil
+}
+
+// DiffName is the file named on a "+++ " line: git's C-style quoting undone (a name holding a quote, tab,
+// backslash or control character), the b/ prefix dropped, and the tab git ends a name holding a space with
+// (for patch tools) dropped too. "" for /dev/null.
+func DiffName(s string) string {
+	if strings.HasPrefix(s, `"`) {
+		if u, err := strconv.Unquote(s); err == nil {
+			s = u
+		}
+	} else {
+		s = strings.TrimSuffix(s, "\t")
+	}
+	if s == "/dev/null" {
+		return ""
+	}
+	return strings.TrimPrefix(s, "b/")
 }
 
 // hunkStart is the new side's first line number in a hunk header (@@ -a,b +c,d @@ heading), read only up
@@ -138,7 +162,7 @@ func AddedLines(oldFile, newFile string) []Flag {
 		oldFile = "/dev/null"
 	}
 	out, _ := exec.Command("git", "-c", "core.autocrlf=false", "-c", "core.quotepath=false", "diff", "--no-index",
-		"--no-color", "--no-ext-diff", "--no-textconv", "-U0", "--", oldFile, newFile).Output()
+		"--no-color", "--no-ext-diff", "--no-textconv", "--text", "-U0", "--", oldFile, newFile).Output()
 	var res []Flag
 	hunk, n := false, 0
 	for _, l := range strings.Split(strings.TrimSuffix(string(out), "\n"), "\n") {

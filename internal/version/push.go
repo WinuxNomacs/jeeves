@@ -2,6 +2,7 @@ package version
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"regexp"
 	"strings"
@@ -49,7 +50,11 @@ func Push(e lib.Env, args []string, stdout, stderr io.Writer) int {
 		return 0
 	}
 	rng := s.r.OutgoingRange()
-	found, _ := scan.Findings(s.r, rng)
+	found, _, err := scan.Findings(s.r, rng)
+	if err != nil {
+		s.say("%s; nothing pushed", err)
+		return 1
+	}
 	var stop []scan.Finding
 	for _, f := range found {
 		if f.Plain || !accepted[f.Where] {
@@ -65,9 +70,18 @@ func Push(e lib.Env, args []string, stdout, stderr io.Writer) int {
 	}
 	// A flag counts only while its line is still in what main would bring every device: a line added and
 	// taken out again in commits not yet pushed never reaches one.
-	net := s.netAdded(origin)
+	net, err := s.netAdded(origin)
+	if err != nil {
+		s.say("%s; nothing pushed", err)
+		return 1
+	}
+	all, err := risk.Flags(s.r, rng)
+	if err != nil {
+		s.say("%s; nothing pushed", err)
+		return 1
+	}
 	var flags []lib.Flag
-	for _, f := range risk.Flags(s.r, rng) {
+	for _, f := range all {
 		if !accepted[f.Where] && net[flagFile(f.Where)+"\x00"+f.Text] {
 			flags = append(flags, f)
 		}
@@ -106,25 +120,29 @@ func flagFile(where string) string {
 }
 
 // netAdded lists the lines under home/ that main adds over origin (over nothing before the first push),
-// as file NUL text: the change every device would install, decrypted when the data repo is encrypted.
-func (s *session) netAdded(origin string) map[string]bool {
+// as file NUL text: the change every device would install, decrypted when the data repo is encrypted. The
+// diff is pinned as lib.Repo.OutgoingAdded's is, so its names match the flags'; an error when it fails (no
+// flag may be dropped because the diff could not be read).
+func (s *session) netAdded(origin string) (map[string]bool, error) {
 	base := origin
 	if base == "" {
-		base = s.out("hash-object", "-t", "tree", "--stdin") // git's empty tree
-		if base == "" {
-			base = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
-		}
+		base = "4b825dc642cb6eb9a060e54bf8d69288fbee4904" // git's empty tree
 	}
-	out := s.out("-c", "core.quotepath=false", "diff", "--no-color", "--textconv", "-U0", "--no-renames", base, "main", "--", "home")
+	out, err := s.r.Git("-c", "core.quotepath=false", "-c", "diff.mnemonicPrefix=false", "-c", "diff.noprefix=false",
+		"diff", "--no-color", "--no-ext-diff", "--textconv", "--text", "--src-prefix=a/", "--dst-prefix=b/",
+		"-U0", "--no-renames", base, "main", "--", "home")
+	if err != nil {
+		return nil, fmt.Errorf("could not compare main with origin/main: %w", err)
+	}
 	set := map[string]bool{}
 	file := ""
 	for _, l := range strings.Split(out, "\n") {
 		switch {
 		case strings.HasPrefix(l, "+++ "):
-			file = strings.TrimSuffix(strings.TrimPrefix(strings.TrimPrefix(l, "+++ "), "b/"), "\t")
+			file = lib.DiffName(l[4:])
 		case strings.HasPrefix(l, "+"):
-			set[file+"\x00"+l[1:]] = true
+			set[file+"\x00"+strings.ReplaceAll(l[1:], "\x00", "")] = true
 		}
 	}
-	return set
+	return set, nil
 }
