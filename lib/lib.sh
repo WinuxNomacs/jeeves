@@ -348,7 +348,7 @@ added_lines() {
   [ -f "$old" ] || old=/dev/null
   git -c core.autocrlf=false -c core.quotepath=false diff --no-index --no-color --no-ext-diff --no-textconv \
     -U0 -- "$old" "$2" 2>/dev/null | awk '
-    /^@@/ { for (i = 2; i <= NF; i++) if (substr($i, 1, 1) == "+") { split(substr($i, 2), a, ","); n = a[1] + 0 }
+    /^@@/ { for (i = 2; i <= NF && $i !~ /^@+$/; i++) if (substr($i, 1, 1) == "+") { split(substr($i, 2), a, ","); n = a[1] + 0 }
             hunk = 1; next }
     !hunk || /^\\/ { next }
     /^\+/ { print "line " n "\t" substr($0, 2); n++ }'
@@ -362,9 +362,10 @@ outgoing_added() {
   awk '
   /^commit / { c = $2; hunk = 0; next }
   /^diff / { hunk = 0; next }
-  !hunk && /^\+\+\+ / { f = substr($0, 7); next }
+  # git ends the name with a tab when it holds a space (for patch tools); the tab is not part of it.
+  !hunk && /^\+\+\+ / { f = substr($0, 7); sub(/\t$/, "", f); next }
   /^@@/ { match($0, /^@+/); np = RLENGTH - 1; hunk = 1
-          for (i = 2; i <= NF; i++) if (substr($i, 1, 1) == "+") { split(substr($i, 2), a, ","); n = a[1] + 0 }
+          for (i = 2; i <= NF && $i !~ /^@+$/; i++) if (substr($i, 1, 1) == "+") { split(substr($i, 2), a, ","); n = a[1] + 0 }
           next }
   /^\\/ { next }
   hunk { m = substr($0, 1, np)
