@@ -35,7 +35,7 @@ memory_files() {
     [ -d "$dir" ] || continue
     key=$(basename "$(dirname "$dir")")
     find "$dir" -type f -name '*.md' ! -name MEMORY.md | sort | while IFS= read -r f; do
-      printf '%s\t%s\t%s\t%s\n' "$(git hash-object --no-filters -- "$f")" "$2" "$key" "$f"
+      printf '%s\t%s\t%s\t%s\n' "$(blob_hash -- "$f")" "$2" "$key" "$f"
     done
   done
 }

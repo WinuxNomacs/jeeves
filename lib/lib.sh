@@ -191,7 +191,7 @@ tracked_under() {
   for d in $TRACKED_DIRS; do
     [ -d "$root/$d" ] || continue
     (cd "$root" && find "$d" -type f) | while IFS= read -r f; do
-      excluded "$f" || printf '%s\n' "$f"
+      inside "$d" "$f" && ! excluded "$f" && printf '%s\n' "$f"
     done
   done
 }
@@ -199,8 +199,16 @@ tracked_under() {
 # Tracked files in one folder under the given root, following the folder itself when it is a symlink.
 files_in_dir() {
   (cd "$1/$2" 2>/dev/null && find . -type f) | sed "s#^\./#$2/#" | while IFS= read -r f; do
-    excluded "$f" || printf '%s\n' "$f"
+    inside "$2" "$f" && ! excluded "$f" && printf '%s\n' "$f"
   done
+}
+
+# inside <folder> <path>: the path is under <folder>/ with no . or .. part. find prints a name holding a line
+# break on two lines, and the second, read as a path of its own, could be "../x": outside ~/.claude or home/
+# (a folder named "a<line break>.." in the data repo would have had apply write ~/.claude/../x).
+inside() {
+  case "$2" in "$1"/*) ;; *) return 1 ;; esac
+  case "/$2/" in */../*|*/./*) return 1 ;; esac
 }
 
 # This machine's own ID (random, made once, kept in ~/.claude outside the synced files): two devices that
@@ -221,15 +229,19 @@ all_tracked() {
   { tracked_under "$CLAUDE_HOME"; tracked_under "$HOME_COPY"; } | LC_ALL=C sort -u
 }
 
+# git hash-object outside any repository, so always SHA-1 like the data repos jeeves-init makes: inside a
+# repository it takes that repository's format, and the current folder may be in a SHA-256 one.
+blob_hash() { GIT_DIR=/nonexistent git hash-object --no-filters "$@"; }
+
 # Git blob hash of a file, or "-" when it does not exist.
 hash_of() {
-  if [ -f "$1" ]; then git hash-object --no-filters -- "$1"; else printf -- '-\n'; fi
+  if [ -f "$1" ]; then blob_hash -- "$1"; else printf -- '-\n'; fi
 }
 
 # Hash recorded at the last sync on this device, empty when never synced.
 base_of() {
   [ -f "$STATE_FILE" ] || return 0
-  awk -F'\t' -v p="$1" '$2 == p { print $1 }' "$STATE_FILE"
+  P=$1 awk -F'\t' '$2 == ENVIRON["P"] { print $1 }' "$STATE_FILE"
 }
 
 # Record (or with "-", forget) the synced hash of a path. With the file holding that version, its content
@@ -242,7 +254,7 @@ set_base() {
   mkdir -p "$STATE_DIR" || return 1
   tmp=$STATE_FILE.tmp
   # A failed write (a full disk) keeps the old record: a truncated one would lose every other base.
-  if { { [ ! -f "$STATE_FILE" ] || awk -F'\t' -v p="$path" '$2 != p' "$STATE_FILE"; } &&
+  if { { [ ! -f "$STATE_FILE" ] || P=$path awk -F'\t' '$2 != ENVIRON["P"]' "$STATE_FILE"; } &&
        { [ "$hash" = "-" ] || printf '%s\t%s\n' "$hash" "$path"; }; } > "$tmp"; then
     mv "$tmp" "$STATE_FILE" && return 0
   fi
@@ -295,8 +307,8 @@ staged_is() {
   blob=$(git_repo rev-parse -q --verify ":$1") || return 1
   [ "$blob" = "$2" ] && return 0
   c=$CRYPT_DIR/clean/$2
-  [ -s "$c" ] && [ "$(git hash-object --no-filters -- "$c")" = "$blob" ] && return 0
-  [ "$(git_repo cat-file --filters ":$1" 2>/dev/null | git hash-object --stdin --no-filters)" = "$2" ]
+  [ -s "$c" ] && [ "$(blob_hash -- "$c")" = "$blob" ] && return 0
+  [ "$(git_repo cat-file --filters ":$1" 2>/dev/null | blob_hash --stdin)" = "$2" ]
 }
 
 # True when a file holds git conflict markers (an unfinished merge): such a file is never installed or

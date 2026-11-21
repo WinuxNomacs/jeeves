@@ -564,6 +564,37 @@ t_status_with_a_go_build_that_cannot_start_runs_the_bash_version() {
   esac
 }
 
+t_a_name_with_a_line_break_never_points_outside_the_tracked_folders() {
+  snap >/dev/null
+  nl='
+'
+  # Planted through the data repo: a folder "a<line break>.." under home/skills/, and the file it would reach.
+  mkdir -p "$R/home/skills/a${nl}.."; echo planted > "$R/home/skills/a${nl}../outside.md"
+  echo planted > "$R/outside.md"
+  git -C "$R" add -A && git -C "$R" commit -qm "odd name"
+  out=$(status)
+  check "status lists no path outside the tracked folders" bash -c '! grep -q "\.\./" <<< "$1"' _ "$out"
+  apply_all >/dev/null 2>&1
+  check "apply writes nothing outside ~/.claude" [ ! -e "$W/outside.md" ]
+}
+
+t_a_path_with_a_backslash_keeps_its_sync_record() {
+  # The snapshot refuses such a name (Windows cannot hold it), so the record is written here as a sync would.
+  snap >/dev/null
+  mkdir -p "$W/claude/skills/x"; echo one > "$W/claude/skills/x/a\b.md"
+  printf '%s\tskills/x/a\\b.md\n' "$(git hash-object "$W/claude/skills/x/a\b.md")" >> "$R/.sync-state/hashes"
+  echo two > "$W/claude/skills/x/a\b.md"
+  check "its recorded base is found" grep -q "^[a-z]*	skills/x/a\\\\b.md	[0-9a-f]\{40\}	-	[0-9a-f]\{40\}$" <<< "$(status)"
+}
+
+t_hashes_do_not_depend_on_the_current_folder() {
+  snap >/dev/null
+  git init -q --object-format=sha256 "$W/sha256" 2>/dev/null || { echo "skip: this git has no SHA-256 repos"; return; }
+  echo "disk side" > "$W/claude/CLAUDE.md"
+  out=$(cd "$W/sha256" && status)
+  check "a 40-digit hash from inside a SHA-256 repo, matching the base" grep -q "^disk	CLAUDE.md	[0-9a-f]\{40\}	[0-9a-f]\{40\}	[0-9a-f]\{40\}$" <<< "$out"
+}
+
 t_scan_flags_secrets_without_printing_them() {
   snap >/dev/null
   tok="sk-ant-api03-$(printf 'x%.0s' 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24)"
@@ -2530,6 +2561,9 @@ run_test "the edit hook ignores edits to other files" t_edit_hook_ignores_other_
 run_test "the edit hook's systemMessage is valid JSON" t_edit_hook_escapes_json
 run_test "status lists out-of-sync paths with their disk, repo and base hashes" t_status_lists_out_of_sync_paths
 run_test "status reports a diverged main and a dirty data repo" t_status_reports_diverged_and_dirty
+run_test "a name with a line break never points outside the tracked folders" t_a_name_with_a_line_break_never_points_outside_the_tracked_folders
+run_test "a path with a backslash keeps its sync record" t_a_path_with_a_backslash_keeps_its_sync_record
+run_test "hashes do not depend on the current folder" t_hashes_do_not_depend_on_the_current_folder
 run_test "status: the Go build matches the bash version, byte for byte" t_status_go_build_matches_the_bash_version
 run_test "status without a Go build for this machine runs the bash version and says so once" t_status_without_a_go_build_for_this_machine_runs_the_bash_version_and_says_so_once
 run_test "status with a Go build that cannot start runs the bash version" t_status_with_a_go_build_that_cannot_start_runs_the_bash_version
