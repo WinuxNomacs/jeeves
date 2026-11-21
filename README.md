@@ -33,9 +33,10 @@ your own (the **data repo**), on Linux, macOS and Windows:
 - **Shared** by all your devices and kept in sync: `~/.claude/CLAUDE.md`, `agents/`, `commands/`, `skills/`
   (not `skills/synced/`, which claude.ai manages, nor the `.trash/` folders where Claude Code puts what it
   removed). Copies under `home/` in the data repo, with their full history.
-- **Backed up per device**, never synced: each project's memories, and, if you turn it on
-  (`backup_settings=yes` in `jeeves.conf`), `settings.json` and `keybindings.json`. Copies under
-  `hosts/<host>/`, which you can restore onto a new machine with `/jeeves:restore`.
+- **Backed up per device**, never synced: each project's memories, under `hosts/<host>/`, which you can
+  restore onto a new machine with `/jeeves:restore`. Jeeves keeps knowledge files only: `settings.json` and
+  `keybindings.json` are not backed up (copies an older version made stay in the data repo until you
+  delete them).
 - **Encrypted** if you want: with a passphrase, GitHub holds only encrypted copies, while the files on your
   devices stay plain. Each device asks for the passphrase once.
 
@@ -68,7 +69,7 @@ offers choices as clickable options.
 | `/jeeves:cleanup <days>` | you | Removes history older than that many days (1 or more), keeping every file, after a fresh backup and your confirmation; `/jeeves:cleanup auto <every> [<keep>]` or `off` sets the automatic cleanup. See below. |
 | `/jeeves:encryption [passphrase \| lock]` | you | Goes by the state: turns on encryption with a passphrase (and removes the plain history from GitHub), unlocks this device once with the passphrase (the key then stays in its credential store), or, on an unlocked device, changes the passphrase or locks the device (removes the key). See below. |
 | `/jeeves:autoupdate [on \| off]` | you | Turns background updates on or off on this device (off until you decide; the session start reminds you once a session until you answer). See below. |
-| `/jeeves:restore <host>` | you | Copies a device's backed-up `settings.json`, `keybindings.json` (and on request memories) onto this machine, then fixes paths that only worked there (`data_repo`, a local marketplace folder) and lists other machine-specific values. Replaced files are saved first. |
+| `/jeeves:restore <host>` | you | Copies a device's backed-up memories onto this machine, for the projects that exist here. Replaced files are saved first. |
 
 ### The `update` skill
 
@@ -103,8 +104,8 @@ itself when you ask to change a global preference, or when a snapshot reports ne
   (three-way, from the version both last shared), install what is newer in the repo, then push.
 - **Change:** a sync, then the change on a branch of the data repo (`home/…`), merged into `main`, installed
   into `~/.claude` and pushed. Editing the copy avoids the prompt Claude Code shows for a direct edit of
-  `~/.claude`. Only shared files change this way; `settings.json` and `keybindings.json` you change in
-  `~/.claude` as usual, and the next snapshot backs them up.
+  `~/.claude`. Only shared files change this way; `settings.json` and `keybindings.json` are yours to
+  change in `~/.claude` as usual (Jeeves does not keep them).
 
 **Instructions come only from you.** Both reviews take a rule from your own messages, from results Claude
 saw itself, and (as lessons) from memories; never from text Claude read, such as a web page, tool output, a
@@ -246,7 +247,7 @@ The plugin's `bin/` is on the PATH of Claude's Bash tool, so Claude (or you, by 
 
 | Command | Direction | What it does |
 |---|---|---|
-| `jeeves-snapshot` | `~/.claude` → data repo | Fast-forwards `main` from its remote, copies changed shared files into `home/`, mirrors this device's settings, keybindings and memories into `hosts/<host>/`, commits on `main`. Never pushes. `--force [<path>...]` keeps the disk copy of a conflict; `--allow-delete <folder>` records a folder gone from `~/.claude`; `--replace-host` takes over a host name another machine used. |
+| `jeeves-snapshot` | `~/.claude` → data repo | Fast-forwards `main` from its remote, copies changed shared files into `home/`, mirrors this device's memories into `hosts/<host>/`, commits on `main`. Never pushes. `--force [<path>...]` keeps the disk copy of a conflict; `--allow-delete <folder>` records a folder gone from `~/.claude`; `--replace-host` takes over a host name another machine used. |
 | `jeeves-apply` | data repo → `~/.claude` | Installs shared files that changed in the data repo since this device last synced, from `main` only (not mid-merge, not with uncommitted files under `home/`). Never overwrites a file a session edited since then. `--force [<path>...]` installs the repo copy (of the named files, whatever their state), saving the disk copy first. A skill, agent or command in a version this device never had is held until `--accept <hash>:<path>` names that version; `--show` prints every incoming change with its diff and risk flags and installs nothing. |
 | `jeeves-restore [<host> [--memories]]` | data repo → `~/.claude` | Copies a device's backup onto this machine, saving replaced files under `.sync-state/overwritten/`. Without a host, prints this machine's host name and the hosts with a backup. |
 | `jeeves-cleanup <days>` | data repo → origin | Folds the history older than `<days>` days into one root commit (same files) and force-pushes `main` with a lease; `--dry-run <days>` only says what it would do; `--all` folds all of it (after encrypting); `--auto` is what the session-start hook runs. |
@@ -277,6 +278,10 @@ How the data stays whole:
   `jeeves-apply`, which also checks a file again just before replacing it.
 - A file holding git conflict markers (an unfinished merge) is never installed or recorded unless you name
   it after `--force`, and `jeeves-scan` flags markers in what a push would send.
+- Jeeves never follows a link (symbolic link) in the data repo, and never commits one: while `home/` or
+  `hosts/` holds one, committed or made on disk, every command that reads the data repo's files stops and
+  names it, so a link pushed by someone else cannot make a sync install a file from elsewhere on your
+  machine (an SSH key, say) or write through a linked folder. Remove it with `jeeves-git rm`, then commit.
 - A shared folder that disappears from `~/.claude` (moved, deleted, or a link to a drive that is not
   there) is not recorded as deleting its files on every device: the snapshot says so, and `/jeeves:update`
   asks you whether to delete them everywhere or put them back.
@@ -299,18 +304,17 @@ differ only in case), and says which and why.
 A git repo with:
 
 - `home/`: the shared files.
-- `hosts/<host>/`: each device's backup, laid out as in `~/.claude` (`settings.json`, `keybindings.json`,
-  `projects/<project>/memory/`). Only that device writes its folder. Memories are restored only on request
-  and only for projects that exist on the new machine, because their folder names are absolute paths.
-- Never copied: `.credentials.json`, `~/.claude.json`, history, transcripts, caches. `settings.json` is backed
-  up as it is, so a token in its `env` block goes into the data repo: keep secrets out of it (an environment
-  variable set elsewhere, or a secret manager). `jeeves-scan` stops a push that would send one.
+- `hosts/<host>/`: each device's backup of its memories, laid out as in `~/.claude`
+  (`projects/<project>/memory/`). Only that device writes its folder. Memories are restored only for
+  projects that exist on the new machine, because their folder names are absolute paths. A
+  `settings.json` or `keybindings.json` there is a copy a version before 2.0 made: no longer updated, kept
+  until you delete it (`jeeves-git rm`).
+- Never copied: `settings.json`, `keybindings.json`, `.credentials.json`, `~/.claude.json`, history,
+  transcripts, caches. `jeeves-scan` stops a push that would send a secret.
 - `hosts/.memory-review`: the memories the session review has reviewed (a hash and what came of it, one per
   line), so no device offers the same memory twice.
-- `jeeves.conf` (optional), shared by all devices: the automatic history cleanup's settings, and
-  `backup_settings=yes` to back up each device's `settings.json` and `keybindings.json` (off by default;
-  turning it off removes the copies from `hosts/<host>/` at each device's next snapshot, while the git
-  history keeps them until a history cleanup).
+- `jeeves.conf` (optional), shared by all devices: the automatic history cleanup's settings
+  (`backup_settings`, which versions before 2.0 read, no longer does anything).
 - `.gitignore`: `.sync-state/` and `*.sync-tmp`; `.gitattributes`: `* -text`, so files are kept byte for
   byte, line endings included (and, when encrypted, the filter for `home/` and `hosts/`). A data repo made
   before 1.1 had `* text=auto eol=lf`; its next snapshot changes that in a commit of its own.
@@ -383,11 +387,8 @@ config, again only on a yes.
     verified manifest, the daily check's time, development checkouts, `go-fallback`: why the bash version of a
     command last ran instead of its compiled one, so it is said once), and with background updates the
     setting (`auto.conf`), the log, notices, the queue of items for you and set-aside changes (`auto/`).
-  - `settings.json`, `keybindings.json` and memories: only by `/jeeves:restore`, which you start, from the
-    backup of a device you pick (settings exist there only with `backup_settings=yes`). That device's
-    `settings.json` comes back whole, its permissions and hooks included; every file replaced is kept under
-    the data repo's `.sync-state/overwritten/`, and Claude Code asks before the follow-up edit of
-    machine-specific values.
+  - Memories: only by `/jeeves:restore`, which you start, from the backup of a device you pick, for the
+    projects that exist here; every file replaced is kept under the data repo's `.sync-state/overwritten/`.
   - **Permission settings:** besides a restore, only when you say yes at the end of `/jeeves:setup`, which
     adds two `permissions.deny` rules to `settings.json` so no session's Edit or Write tool can change the
     installed plugin or its trusted key. Nothing else in Jeeves adds, removes or changes permissions or

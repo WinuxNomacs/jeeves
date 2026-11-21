@@ -1,12 +1,13 @@
 ---
 name: restore
 description: >-
-  Restore another machine's (or this machine's earlier) Claude Code settings, keybindings and optionally
-  memories from its Jeeves backup onto this machine, then fix the paths that only worked there.
+  Restore another machine's (or this machine's earlier) Claude Code memories from its Jeeves backup onto
+  this machine, for the projects that exist here.
 argument-hint: "<host>"
 disable-model-invocation: true
 allowed-tools:
   - Bash(jeeves-restore)
+  - Bash(jeeves-restore *)
   - Bash(jeeves-status *)
 ---
 
@@ -14,8 +15,8 @@ allowed-tools:
 
 Host to restore from (or nothing to choose): $ARGUMENTS
 
-Each machine's memories, and its `settings.json` and `keybindings.json` when `jeeves.conf` has
-`backup_settings=yes`, are backed up in the Jeeves data repo under `hosts/<host>/`, laid out as in `~/.claude`; the git history holds earlier versions. The shared files
+Each machine's memories are backed up in the Jeeves data repo under `hosts/<host>/`, laid out as in
+`~/.claude`; the git history holds earlier versions. Settings and keybindings are not kept by Jeeves. The shared files
 (`CLAUDE.md`, `agents/`, `commands/`, `skills/`) are not part of a restore: `/jeeves:update` syncs them.
 
 ## Voice

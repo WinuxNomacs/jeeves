@@ -21,12 +21,16 @@ import (
 	"github.com/WinuxNomacs/jeeves/internal/apply"
 	"github.com/WinuxNomacs/jeeves/internal/cleanup"
 	"github.com/WinuxNomacs/jeeves/internal/lib"
-	"github.com/WinuxNomacs/jeeves/internal/restore"
 	"github.com/WinuxNomacs/jeeves/internal/updatecheck"
 )
 
 // hostMark is the file in hosts/<host>/ that holds the machine ID of the host that wrote it.
 const hostMark = ".jeeves-machine"
+
+// oldHostFiles are the per-device files backups held before 2.0 (Jeeves keeps knowledge files only, the
+// user's decision of 2026-11-20). A copy already in hosts/<host>/ stays as it is, never removed silently,
+// until the user deletes it.
+var oldHostFiles = []string{"settings.json", "keybindings.json"}
 
 type options struct {
 	hook, force, pull, replaceHost bool
@@ -103,7 +107,7 @@ func (s *run) say(f string, v ...any) { fmt.Fprintf(s.stdout, "jeeves snapshot: 
 // Run:
 //
 //	jeeves snapshot           pull (fast-forward only), copy changed shared files into home/, back up this
-//	                          device's settings, keybindings and memories to hosts/<host>/, commit
+//	                          device's memories to hosts/<host>/, commit
 //	jeeves snapshot --force [<path>...]
 //	                          also take the disk copy of files changed on both sides (conflicts), or holding
 //	                          conflict markers; with paths, only of those (relative to ~/.claude)
@@ -183,6 +187,9 @@ func (s *run) main(a lib.DataRepoArg) int {
 		s.say("skipped, %s is on '%s', not main; ~/.claude changes are not recorded yet", r.ShellDir, b)
 		return 1
 	}
+	if !s.noLinks() {
+		return 1
+	}
 	if st, _ := r.Out("status", "--porcelain"); r.Merging() || (st != "" && !s.onlyOwnLeftovers()) {
 		s.say("skipped, %s has uncommitted changes; ~/.claude changes are not recorded yet", r.ShellDir)
 		return 1
@@ -193,6 +200,10 @@ func (s *run) main(a lib.DataRepoArg) int {
 	}
 
 	s.pullOrigin()
+	// What the pull brought in is checked too.
+	if !s.noLinks() {
+		return 1
+	}
 
 	// A ~/.claude with none of the shared files, on a device that has synced them: most likely the folder
 	// moved or was emptied, and taking that would delete them on every device. Record nothing and say so.
@@ -209,6 +220,15 @@ func (s *run) main(a lib.DataRepoArg) int {
 		return 1
 	}
 	return s.record()
+}
+
+// noLinks: the data repo holds no link (said, nothing recorded, when it does).
+func (s *run) noLinks() bool {
+	if msg := s.r.LinkProblem(); msg != "" {
+		s.say("skipped, %s", msg)
+		return false
+	}
+	return true
 }
 
 // onlyOwnLeftovers: the uncommitted changes are only what an earlier snapshot left (it failed or was
@@ -508,12 +528,12 @@ func (s *run) record() int {
 		}
 	}
 
-	dropped, hostClash, ok := s.backup()
+	hostClash, ok := s.backup()
 	if !ok {
 		return 1
 	}
 	// Layout before per-device backups: per-device files were shared in home/, memories in memory/<host>/.
-	for _, f := range restore.HostFiles {
+	for _, f := range oldHostFiles {
 		os.Remove(r.HomeCopy + "/" + f)
 		r.SetBase(f, "-", "")
 	}
@@ -616,14 +636,6 @@ func (s *run) record() int {
 			strings.Join(held, "/ "), lib.ShellPath(e.ClaudeHome), heldCount)
 		status = 1
 	}
-	if len(dropped) > 0 {
-		var ds []string
-		for _, f := range dropped {
-			ds = append(ds, "hosts/"+e.Host+"/"+f)
-		}
-		s.say("%s removed: settings are backed up only with backup_settings=yes in jeeves.conf (the git history "+
-			"keeps the old copies until a history cleanup)", strings.Join(ds, " "))
-	}
 	if hostClash {
 		s.say("backup skipped: hosts/%s/ in the data repo belongs to another machine named %s; set JEEVES_HOST to "+
 			"a name of its own for this machine (or, if this machine replaces that one, run jeeves-snapshot --replace-host)", e.Host, e.Host)
@@ -669,12 +681,12 @@ func (s *run) record() int {
 	return status
 }
 
-// backup mirrors this device's memory folders, and its per-device files when backup_settings=yes, into
-// hosts/<host>/ (laid out as in ~/.claude), so deletions show up in history too. It is built aside first,
-// so a failed copy leaves the last backup whole. hosts/<host>/ holds the machine's ID: another machine
-// reporting the same name is stopped. Returns the per-device files dropped (backup turned off), whether
-// another machine owns the name, and false when the backup failed (said, nothing recorded).
-func (s *run) backup() (dropped []string, clash bool, ok bool) {
+// backup mirrors this device's memory folders into hosts/<host>/ (laid out as in ~/.claude), so deletions
+// show up in history too. It is built aside first, so a failed copy leaves the last backup whole; a
+// settings.json or keybindings.json an older version backed up is carried over unchanged. hosts/<host>/
+// holds the machine's ID: another machine reporting the same name is stopped. Returns whether another
+// machine owns the name, and false when the backup failed (said, nothing recorded).
+func (s *run) backup() (clash bool, ok bool) {
 	r, e := s.r, s.e
 	hostDir := r.Dir + "/hosts/" + e.Host
 	mine := e.MachineID()
@@ -683,22 +695,13 @@ func (s *run) backup() (dropped []string, clash bool, ok bool) {
 		theirs = strings.TrimRight(string(b), "\n")
 	}
 	if mine != "" && theirs != "" && theirs != mine && !s.o.replaceHost {
-		return nil, true, true
+		return true, true
 	}
 	tmp := r.StateDir + "/host.sync-tmp"
 	good := os.RemoveAll(tmp) == nil && os.MkdirAll(tmp, 0o777) == nil
-	if s.backupSettingsOn() {
-		for _, f := range restore.HostFiles {
-			if fi, err := os.Stat(e.ClaudeHome + "/" + f); good && err == nil && fi.Mode().IsRegular() {
-				good = lib.CopyFile(e.ClaudeHome+"/"+f, tmp+"/"+f) == nil
-			}
-		}
-	} else {
-		// Off: copies an earlier backup holds go, once (history keeps them until a cleanup folds them away).
-		for _, f := range restore.HostFiles {
-			if fi, err := os.Stat(hostDir + "/" + f); err == nil && fi.Mode().IsRegular() {
-				dropped = append(dropped, f)
-			}
+	for _, f := range oldHostFiles {
+		if fi, err := os.Lstat(hostDir + "/" + f); good && err == nil && fi.Mode().IsRegular() {
+			good = lib.CopyFile(hostDir+"/"+f, tmp+"/"+f) == nil
 		}
 	}
 	dirs, _ := filepath.Glob(e.ClaudeHome + "/projects/*/memory")
@@ -725,20 +728,11 @@ func (s *run) backup() (dropped []string, clash bool, ok bool) {
 	}
 	if !good {
 		os.RemoveAll(tmp)
-		s.say("could not back up this device's settings and memories into hosts/%s/ (disk full?); nothing recorded", e.Host)
+		s.say("could not back up this device's memories into hosts/%s/ (disk full?); nothing recorded", e.Host)
 		s.undo()
-		return nil, false, false
+		return false, false
 	}
-	return dropped, false, true
-}
-
-// backupSettingsOn: settings.json and keybindings.json are backed up only when the user turned it on.
-func (s *run) backupSettingsOn() bool {
-	switch strings.ToLower(s.r.ConfValue("backup_settings")) {
-	case "yes", "true", "on", "1":
-		return true
-	}
-	return false
+	return false, true
 }
 
 // copyTree copies a folder's files and folders (cp -pR: modes and times kept). A link inside is not

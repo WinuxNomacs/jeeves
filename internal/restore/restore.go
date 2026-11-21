@@ -1,6 +1,7 @@
-// Package restore is `jeeves restore`, the Go port of bin/jeeves-restore: a device's backup (hosts/<host>/
-// in the data repo) copied onto this machine's ~/.claude. Files it replaces are saved first under
-// .sync-state/overwritten/<time>/. It never commits: the next snapshot backs up this machine as it is then.
+// Package restore is `jeeves restore`: a device's backed-up memories (hosts/<host>/projects/*/memory in the
+// data repo) copied onto this machine's ~/.claude, for the projects that exist here. Files it replaces are
+// saved first under .sync-state/overwritten/<time>/. It never commits: the next snapshot backs up this
+// machine as it is then. Settings are not restored: Jeeves keeps knowledge files only.
 package restore
 
 import (
@@ -17,22 +18,18 @@ import (
 	"github.com/WinuxNomacs/jeeves/internal/lib"
 )
 
-// HostFiles are the per-device files a backup may hold.
-var HostFiles = []string{"settings.json", "keybindings.json"}
-
 // Run:
 //
 //	jeeves restore                    this machine's host name, and the hosts that have a backup
-//	jeeves restore <host>             restore its settings.json and keybindings.json
-//	jeeves restore <host> --memories  also its memories, for projects that exist on this machine
+//	jeeves restore <host>             restore its memories, for projects that exist on this machine
+//	                                  (--memories, which older versions needed, is still taken)
 func Run(e lib.Env, args []string, stdout, stderr io.Writer) int {
 	a, args := lib.ParseDataRepoArg(args)
 	say := func(f string, v ...any) { fmt.Fprintf(stdout, "jeeves restore: "+f+"\n", v...) }
-	host, memories := "", false
+	host := ""
 	for _, arg := range args {
 		switch {
 		case arg == "--memories":
-			memories = true
 		case strings.HasPrefix(arg, "-"):
 			fmt.Fprintf(stderr, "restore: unknown option %s\n", arg)
 			return 2
@@ -46,6 +43,10 @@ func Run(e lib.Env, args []string, stdout, stderr io.Writer) int {
 	r, err := lib.FindDataRepo(e, a, stderr)
 	if err != nil {
 		say("%s", err)
+		return 1
+	}
+	if msg := r.LinkProblem(); msg != "" {
+		say("%s; nothing restored", msg)
 		return 1
 	}
 
@@ -95,12 +96,7 @@ func Run(e lib.Env, args []string, stdout, stderr io.Writer) int {
 		return true
 	}
 
-	for _, f := range HostFiles {
-		if fi, err := os.Stat(src + "/" + f); err == nil && fi.Mode().IsRegular() && put(f) {
-			restored = append(restored, f)
-		}
-	}
-	if memories {
+	{
 		dirs, _ := filepath.Glob(src + "/projects/*/memory")
 		sort.Strings(dirs)
 		for _, dir := range dirs {
