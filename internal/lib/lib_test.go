@@ -210,7 +210,7 @@ func TestAnUnlockedDeviceNeedsTheMarkerToNameTheRecipient(t *testing.T) {
 func TestParseDataRepoArg(t *testing.T) {
 	t.Setenv("JEEVES_DATA", "")
 	a, rest := ParseDataRepoArg([]string{"--data-repo", "/x", "more"})
-	if a.JeevesData != "/x" || !a.Given || len(rest) != 1 {
+	if a.JeevesData != NativePath("/x") || !a.Given || len(rest) != 1 { // on Windows, X:\ (Git Bash's drive form)
 		t.Errorf("got %+v %v", a, rest)
 	}
 	a, rest = ParseDataRepoArg([]string{"--data-repo", "${user_config.data_repo}"})
