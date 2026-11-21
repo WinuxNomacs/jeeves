@@ -23,6 +23,10 @@ Built so far (prepared as 1.5.0, never published):
   anything is pushed; a refused edit is kept for you, never pushed. No worker is left behind: a watchdog
   stops a stranded session, and each session start cleans up after a run that crashed.
 - Background updates need `perl` with JSON::PP (standard on macOS, Linux and Git for Windows).
+- **One worker per machine:** the commands that change the data repo or `~/.claude` queue a request in
+  `~/.claude/jeeves/queue/` and a short-lived background process runs them one at a time. A hook no
+  longer skips its snapshot when another run is at work ("skipped, another run at work"): it waits up to
+  20 seconds, then leaves the request to finish. `JEEVES_NO_WORKER=1` runs a command directly.
 - **Jeeves keeps knowledge files only:** CLAUDE.md, skills, agents, commands, and each device's memories.
   `settings.json` and `keybindings.json` are no longer backed up or restored, and `backup_settings` in
   `jeeves.conf` no longer does anything; copies an earlier version backed up stay in the data repo, no

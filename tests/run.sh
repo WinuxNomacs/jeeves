@@ -21,6 +21,8 @@ unset JEEVES_DATA CLAUDE_PLUGIN_OPTION_DATA_REPO CLAUDE_CONFIG_DIR
 export CLAUDE_HOME=$SCRATCH/claude-home
 # No test asks GitHub for releases; the update notice test turns the check back on with a local repo.
 export JEEVES_UPDATE_CHECK=off
+# Each test's worker ends a second after its last request, so none outlives its scratch folder for long.
+export JEEVES_WORKER_IDLE=1
 
 # Fresh world: $W/remote.git, $W/repo (the data repo, a clone with home/), $W/claude (CLAUDE_HOME).
 setup() {
@@ -36,8 +38,8 @@ setup() {
   echo "rules v1" > "$W/claude/CLAUDE.md"
   echo '{"a":1}' > "$W/claude/settings.json"
   mkdir -p "$W/repo/hosts/testhost" && echo '{"a":1}' > "$W/repo/hosts/testhost/settings.json"
-  # Settings backed up (off by default; most tests check that backup), and this machine's ID, as a snapshot
-  # of this version writes it.
+  # A settings backup an older version made (2.0 keeps knowledge files only; such copies stay), and this
+  # machine's ID, as a snapshot of this version writes it.
   echo backup_settings=yes > "$W/repo/jeeves.conf"
   echo testmachine > "$W/claude/.jeeves-machine-id"; echo testmachine > "$W/repo/hosts/testhost/.jeeves-machine"
   git -C "$W/repo" checkout -q -b main
@@ -2634,6 +2636,146 @@ t_memories_record_refuses_bad_input_and_another_branch() {
   check "nothing committed" [ "$(commits)" = "$n" ]
 }
 
+# The machine's worker (internal/worker): the queue folder, and a way to wait for a condition.
+queue() { printf '%s' "$CLAUDE_HOME/jeeves/queue"; }
+wait_until() { # wait_until <seconds> <command...>: true once the command is, false at the deadline
+  local i=0
+  until "${@:2}"; do i=$((i + 1)); [ $i -ge $(($1 * 10)) ] && return 1; sleep 0.1; done
+}
+worker_pid() { tr -d '\r\n' < "$(queue)/worker.lock" 2>/dev/null; }
+# The worker writes its PID into the lock file it holds.
+worker_alive() { local p; p=$(worker_pid); [ -n "$p" ] && kill_check "$p"; }
+worker_gone() { ! worker_alive; }
+kill_check() { case "$OSTYPE" in msys*|cygwin*) tasklist //FI "PID eq $1" 2>/dev/null | grep -q " $1 " ;; *) kill -0 "$1" 2>/dev/null ;; esac; }
+kill_hard() { case "$OSTYPE" in msys*|cygwin*) taskkill //F //PID "$1" >/dev/null 2>&1 ;; *) kill -9 "$1" 2>/dev/null ;; esac; }
+
+t_commands_that_change_things_go_through_one_worker() {
+  snap >/dev/null
+  echo "rules v2" > "$W/claude/CLAUDE.md"
+  out=$(snap); rc=$?
+  check "the output is the command's own" grep -q "committed CLAUDE.md" <<< "$out"
+  check "and its exit status" [ $rc = 0 ]
+  check "a worker ran it" [ -f "$(queue)/worker.lock" ]
+  check "nothing is left in the queue" [ -z "$(ls "$(queue)" | grep -E '\.(req|out|ans|raw)$')" ]
+  out=$(snap --no-such-flag 2>&1); rc=$?
+  check "a failing command's status comes back" [ $rc != 0 ]
+  echo "rules v3" > "$W/claude/CLAUDE.md"
+  rm -rf "$(queue)"
+  out=$(JEEVES_NO_WORKER=1 snap); rc=$?
+  check "JEEVES_NO_WORKER=1 runs it in the caller" grep -q "committed CLAUDE.md" <<< "$out"
+  check "with no queue" [ ! -e "$(queue)" ]
+  out=$(JEEVES_TEST_PANIC=1 snap 2>&1); rc=$?
+  check "a child that crashes: its message and status come back" grep -q "panic: JEEVES_TEST_PANIC" <<< "$out"
+  check "crash status" [ $rc = 2 ]
+  "$SRC/bin/jeeves-status" >/dev/null
+  check "a command that changes nothing runs in the caller" [ -z "$(ls "$(queue)" | grep -E '\.req$')" ]
+}
+
+t_two_callers_at_once_get_one_worker_and_both_answers() {
+  snap >/dev/null
+  echo "agent b" > "$W/claude/agents/b.md"
+  snap > "$W/o1" 2>&1 & p1=$!; snap > "$W/o2" 2>&1 & p2=$!; apply > "$W/o3" 2>&1 & p3=$!
+  wait $p1; r1=$?; wait $p2; r2=$?; wait $p3; r3=$?
+  check "every caller answered, status 0" [ "$r1$r2$r3" = 000 ]
+  check "the change was recorded once" [ "$(git -C "$R" log --format=%s | grep -c 'agents/b.md')" = 1 ]
+  check "nothing is left in the queue" [ -z "$(ls "$(queue)" | grep -E '\.(req|out|ans)$')" ]
+  echo 999999 > "$(queue)/worker.lock"
+  echo "rules v2" > "$W/claude/CLAUDE.md"
+  check "a lock file no process holds does not stop a new worker" grep -q "committed CLAUDE.md" <<< "$(snap)"
+}
+
+t_a_worker_killed_mid_request_runs_it_again() {
+  snap >/dev/null
+  echo "rules v2" > "$W/claude/CLAUDE.md"
+  # The first copy waits, so the worker can be killed while its child runs.
+  fake_cp "claude/CLAUDE.md" "if [ ! -e '$W/once' ]; then touch '$W/once'; sleep 3; fi"
+  with_fake_cp snap > "$W/o" 2>&1 & p=$!
+  check "the request started" wait_until 10 test -e "$W/once"
+  kill_hard "$(worker_pid)"
+  wait $p; rc=$?
+  check "the caller still got an answer" [ $rc = 0 ]
+  check "the change is recorded, once" [ "$(git -C "$R" log --format=%s | grep -c 'CLAUDE.md')" = 1 ] && grep -qx "rules v2" "$R/home/CLAUDE.md"
+  check "nothing is left in the queue" wait_until 10 bash -c '[ -z "$(ls "$1" | grep -E "\.(req|ans)$")" ]' _ "$(queue)"
+}
+
+t_a_hung_request_is_stopped_at_its_deadline() {
+  snap >/dev/null
+  echo "rules v2" > "$W/claude/CLAUDE.md"
+  fake_cp "claude/CLAUDE.md" "sleep 30"
+  out=$(JEEVES_WORKER_DEADLINE=2 with_fake_cp snap 2>&1); rc=$?
+  check "answered: stopped after the deadline" grep -q "jeeves-snapshot: stopped after 2s" <<< "$out"
+  check "status 124" [ $rc = 124 ]
+  check "nothing recorded" grep -qx "rules v1" "$R/home/CLAUDE.md"
+  check "the next request runs" grep -q "committed CLAUDE.md" <<< "$(snap)"
+}
+
+t_a_hook_past_its_wait_says_nothing_and_its_request_still_runs() {
+  snap >/dev/null
+  echo "rules v2" > "$W/claude/CLAUDE.md"
+  fake_cp "claude/CLAUDE.md" "sleep 3"
+  out=$(JEEVES_HOOK_WAIT=1 with_fake_cp snap --hook 2>&1); rc=$?
+  check "the hook says nothing" [ -z "$out" ]
+  check "and exits 0" [ $rc = 0 ]
+  check "the request still runs: the edit is recorded" wait_until 15 grep -qx "rules v2" "$R/home/CLAUDE.md"
+}
+
+t_a_request_the_worker_cannot_run_is_set_aside_with_why() {
+  snap >/dev/null
+  q=$(queue)
+  printf 'not json' > "$q/00000000000000000001-aaaaaaaa.req"
+  printf '{"version":1,"id":"00000000000000000002-bbbbbbbb","exe":"x","command":"git","args":["push","-f"]}' > "$q/00000000000000000002-bbbbbbbb.req"
+  printf '{"version":7,"id":"00000000000000000003-cccccccc","command":"snapshot"}' > "$q/00000000000000000003-cccccccc.req"
+  echo "rules v2" > "$W/claude/CLAUDE.md"
+  out=$(snap); rc=$?
+  check "the caller's own request still runs" grep -q "committed CLAUDE.md" <<< "$out"
+  check "each one set aside" [ "$(ls "$q/rejected" | wc -l | tr -d ' ')" = 3 ]
+  check "and answered with why" grep -q "does not read" <<< "$(tr -c '[:print:]\n' ' ' < "$q/00000000000000000001-aaaaaaaa.out")"
+  check "a command the worker does not run" grep -q '"git" is not a command the worker runs' <<< "$(tr -c '[:print:]\n' ' ' < "$q/00000000000000000002-bbbbbbbb.out")"
+  check "an unknown format version" grep -q "format version 7" <<< "$(tr -c '[:print:]\n' ' ' < "$q/00000000000000000003-cccccccc.out")"
+  check "never run (no push)" [ "$(git -C "$R" rev-parse HEAD)" != "$(git -C "$W/remote.git" rev-parse main)" ]
+}
+
+t_another_programs_request_is_left_to_its_worker() {
+  snap >/dev/null
+  q=$(queue)
+  printf '{"version":1,"id":"00000000000000000001-aaaaaaaa","exe":"/elsewhere/jeeves","command":"snapshot","args":[]}' > "$q/00000000000000000001-aaaaaaaa.req"
+  echo "rules v2" > "$W/claude/CLAUDE.md"
+  out=$(snap); rc=$?
+  check "this program's request runs past it" grep -q "committed CLAUDE.md" <<< "$out"
+  check "the other program's request is left waiting" [ -f "$q/00000000000000000001-aaaaaaaa.req" ]
+  check "and the worker steps aside for that program's" wait_until 10 worker_gone
+  touch -t 202001010000 "$q/00000000000000000001-aaaaaaaa.req"
+  echo "rules v3" > "$W/claude/CLAUDE.md"; snap >/dev/null
+  check "one waiting over a day (its program gone) is set aside" [ -f "$q/rejected/00000000000000000001-aaaaaaaa.req" ]
+}
+
+t_the_queue_refuses_when_full_or_unwritable_and_clears_old_answers() {
+  snap >/dev/null
+  q=$(queue)
+  printf '{"exit":0}' > "$q/00000000000000000001-aaaaaaaa.ans"; echo x > "$q/00000000000000000001-aaaaaaaa.out"
+  touch -t 202001010000 "$q/00000000000000000001-aaaaaaaa.ans" "$q/00000000000000000001-aaaaaaaa.out"
+  printf '{"exit":0}' > "$q/00000000000000000002-bbbbbbbb.ans"
+  snap >/dev/null
+  check "an answer nobody collected for a day is removed" [ ! -e "$q/00000000000000000001-aaaaaaaa.ans" ] && [ ! -e "$q/00000000000000000001-aaaaaaaa.out" ]
+  check "a fresh one is kept" [ -e "$q/00000000000000000002-bbbbbbbb.ans" ]
+  check "the worker ends when idle" wait_until 15 worker_gone
+  for i in $(seq -w 1 100); do echo x > "$q/0000000000000000$i-full$i.req"; done
+  out=$(snap 2>&1); rc=$?
+  check "a full queue refuses a new request" grep -q "over 100 requests are waiting" <<< "$out"
+  check "exit 1" [ $rc = 1 ]
+  rm -f "$q"/*-full*.req
+  case "$OSTYPE" in msys*|cygwin*) return ;; esac
+  chmod 500 "$q"
+  if ! ( : > "$q/probe" ) 2>/dev/null; then
+    out=$(snap 2>&1); rc=$?
+    check "a queue that cannot be written: says so" grep -q "could not queue the request" <<< "$out"
+    check "exit 1" [ $rc = 1 ]
+    out=$(snap --hook 2>&1); rc=$?
+    check "a hook stays quiet" [ -z "$out" ] && [ $rc = 0 ]
+  fi
+  chmod 700 "$q"
+}
+
 run_test "apply installs a file changed in the repo" t_apply_installs_repo_change
 run_test "apply refuses a file changed on disk since the last sync" t_apply_refuses_disk_change
 run_test "a file changed on both sides is reported, not merged" t_both_changed_is_conflict
@@ -2741,6 +2883,14 @@ run_test "restore leaves a file whose disk copy cannot be saved" t_restore_leave
 run_test "settings are not backed up, and copies an older version made stay" t_settings_are_not_backed_up_and_old_copies_stay
 run_test "memories lists what is not reviewed yet, from this machine and other devices" t_memories_lists_what_is_not_reviewed_yet_from_this_machine_and_other_devices
 run_test "memories record refuses bad input and another branch" t_memories_record_refuses_bad_input_and_another_branch
+run_test "commands that change things go through one worker" t_commands_that_change_things_go_through_one_worker
+run_test "two callers at once get one worker and both answers" t_two_callers_at_once_get_one_worker_and_both_answers
+run_test "a worker killed mid-request runs it again" t_a_worker_killed_mid_request_runs_it_again
+run_test "a hung request is stopped at its deadline" t_a_hung_request_is_stopped_at_its_deadline
+run_test "a hook past its wait says nothing, and its request still runs" t_a_hook_past_its_wait_says_nothing_and_its_request_still_runs
+run_test "a request the worker cannot run is set aside with why" t_a_request_the_worker_cannot_run_is_set_aside_with_why
+run_test "another program's request is left to its worker" t_another_programs_request_is_left_to_its_worker
+run_test "the queue refuses when full or unwritable, and clears old answers" t_the_queue_refuses_when_full_or_unwritable_and_clears_old_answers
 run_test "background updates are off until the user decides" t_background_updates_are_off_until_the_user_decides
 run_test "a background run learns, pushes, installs and tells the user once" t_a_background_run_learns_pushes_installs_and_tells_the_user_once
 run_test "the background child is confined and gets no session variables" t_the_background_child_is_confined_and_gets_no_session_variables
