@@ -69,12 +69,7 @@ merges, pulls and pushes: the skill manages the content, the worker manages the 
 
 Phases (each ships only when the suite passes on all three OSes, with the parity test covering every ported
 command against its bash version until that version is deleted):
-- **Phase 0, distribution:** one launcher (`lib/launch.sh`) that every `bin/jeeves-*` wrapper calls with
-  its command name; `dist/` committed (out of `.gitignore`), the release skill builds it with
-  `build-go.sh --record`, checks it, and writes `MANIFEST` after it; CI keeps `--check`. The upgrade
-  rehearsal from 1.4.1 covers a machine with no build for it (the bash fallback). README: the builds, what
-  they are, how to check them against the source (`build-go.sh --check`), Go in "Working on Jeeves".
-  Released as 1.5.0.
+- **Phase 0, distribution:** planned below ("Go port, Phase 0"). Released as 1.5.0.
 - **Phase 1, the small commands:** `git`, `risk`, `scan`, `check`, `memories`, `update-check`, `github`,
   `init`; `status`'s bash version removed (one release after 1.5.0).
 - **Phase 2, the sync core:** `snapshot`, `apply`, `hook-edit`, `restore`, `cleanup`, and the settings
@@ -89,6 +84,57 @@ command against its bash version until that version is deleted):
   needed); its eight safeguards and failure list carried over with their tests.
 - **Phase 5:** the last bash versions and the launcher's fallback removed; `bin/` holds only the wrappers
   and `jeeves-verify`.
+
+## Go port, Phase 0: distribution (planned with the user, 2026-11-21)
+
+Goal: the Go build ships in a signed release and runs on real installs, with `status` as its only command,
+so later phases only add commands. Released as 1.5.0, with background updates (folded in).
+
+Decided with the user (2026-11-21): **Claude builds the release's five builds on this PC** (as it signs the
+manifest), commits them on the release branch, and CI on Linux, macOS and Windows rebuilds from source and
+fails unless every byte matches. No new CI action.
+
+Build:
+1. **One launcher**, `lib/launch.sh`, sourced by each ported command's wrapper
+   (`. "$(dirname "$0")/../lib/launch.sh" status "$@"`), so a wrapper is two lines and adds no process.
+   It picks the build from bash's own `$OSTYPE` and `$HOSTTYPE` instead of two `uname` calls (each a
+   process: slow on Windows, where the spike's Go run took 662 ms, most of it outside the program).
+   Measured again on Windows with `time-status.sh`, and trimmed where it is the launcher (or the program's
+   `cygpath` calls) that costs. The fallback and its once-per-reason note stay as the spike built them.
+2. **`dist/` committed:** out of `.gitignore`; `.gitattributes` marks `dist/**` binary (no line-ending
+   conversion, no text diffs). `go-builds.sha256` goes: the committed builds are the record, and the signed
+   `MANIFEST` holds their hashes. `build-go.sh --check` builds into a temp folder and compares with
+   `dist/`; `--record` is replaced by a plain build into `dist/`.
+3. **Release skill:** step 4 adds gofmt, `go vet`, `go test` and `build-go.sh --check`; step 6 builds `dist/`
+   right after the version bump and commits it ("Release X.Y.Z: Go builds"), before the manifest, so the
+   signature covers the builds; step 7's CI run then reproduces them on three OSes.
+4. **Rehearsal** (`rehearse.sh` and the published-plugin check in a scratch `CLAUDE_CONFIG_DIR`): after the
+   upgrade from 1.4.1, the cached copy holds `dist/` with the executable bit kept (not yet checked: whether
+   Claude Code's install copy keeps file modes; the scripts in `bin/` rely on it already), `jeeves-status`
+   runs the Go build (no fallback note), and `jeeves-verify` passes; and on a copy with this machine's
+   build removed, the bash version runs.
+5. **Docs:** README's "What Jeeves runs, sends and changes" (compiled programs in `dist/`, built from
+   `cmd/` and `internal/`, the same bytes from any machine, and how to check that:
+   `build-go.sh --check` with the Go version `go.mod` names), "Working on Jeeves" (Go needed only to change
+   Go code; rebuild `dist/` before committing a Go change), "Tests" (`go test ./...`). CHANGELOG's 1.5.0
+   entry gains the Go `status`, the sort fix and the uninstall section. The directory note: compiled files
+   over 256 KiB are held for a reviewer from 1.5.0 on.
+
+Failure list (the launcher runs wherever a ported command runs; once hooks are ported, at every session
+start), each with a test that makes it happen where one can:
+- No build for this OS or processor: the bash version, a note once (tested in the spike).
+- A build that cannot start (lost its executable bit in an install copy, a wrong format): the bash version,
+  a note once (tested in the spike; the rehearsal checks the bit on a real install).
+- A build removed or changed on disk (an antivirus quarantine, tampering): the launcher runs the bash
+  version when it is missing; `jeeves-verify` reports it either way at session start, and the hooks stop.
+- The program crashes (a Go panic exits 2, as a usage error does): no fallback, since the two cannot be told
+  apart; its message reaches the caller. A test makes it panic through a test-only setting.
+- A build that does not match the source (stale, or not reproducible): CI's `--check` and the release
+  step fail; the suite's parity test fails when a stale build differs from bash.
+- A development checkout with a Go change but no rebuild: the same checks; "Working on Jeeves" says to
+  rebuild.
+
+Not in Phase 0: porting more commands (Phase 1), and the per-machine worker (Phase 2).
 
 ## Go rewrite: spike (requested and planned 2026-11-20)
 
