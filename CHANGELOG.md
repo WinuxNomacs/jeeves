@@ -23,6 +23,10 @@ Built so far (prepared as 1.5.0, never published):
   anything is pushed; a refused edit is kept for you, never pushed. No worker is left behind: a watchdog
   stops a stranded session, and each session start cleans up after a run that crashed.
 - Background updates need `perl` with JSON::PP (standard on macOS, Linux and Git for Windows).
+- **Jeeves keeps knowledge files only:** CLAUDE.md, skills, agents, commands, and each device's memories.
+  `settings.json` and `keybindings.json` are no longer backed up or restored, and `backup_settings` in
+  `jeeves.conf` no longer does anything; copies an earlier version backed up stay in the data repo, no
+  longer updated, until you delete them. `/jeeves:restore` restores memories.
 - **`jeeves-status` runs as a compiled program** (Go) on macOS, Linux and Windows: the first command of a
   port that makes Jeeves faster and the same on every system (about 16 times faster on a Mac, 28 on
   Windows). The builds are reproducible from the source; the README says how to check them. Also ported: `jeeves-git`,

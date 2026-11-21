@@ -24,8 +24,8 @@ const gitattributes = `# Byte for byte: no line-ending conversion, also in a Win
 
 const readme = "# Jeeves data repo\n\nGlobal Claude Code preferences, versioned by the [Jeeves](https://github.com/WinuxNomacs/jeeves) plugin.\n\n" +
 	"- `home/`: shared by every device: `~/.claude/` `CLAUDE.md`, `agents/`, `commands/`, `skills/`.\n" +
-	"- `hosts/<host>/`: each device's backup of its `settings.json`, `keybindings.json` and memories, laid out\n" +
-	"  as in `~/.claude`. Restore one onto a machine with `/jeeves:restore <host>`.\n"
+	"- `hosts/<host>/`: each device's backup of its memories, laid out as in `~/.claude`. Restore them onto a\n" +
+	"  machine with `/jeeves:restore <host>`.\n"
 
 // Run: jeeves init <folder> [<remote url>]. The folder must not exist yet, or be empty. Makes a git repo on
 // main with .gitignore, .gitattributes and a README, commits them, and sets origin when a remote URL (of an

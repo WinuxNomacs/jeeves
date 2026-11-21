@@ -93,8 +93,7 @@ if it says one is still at work, tell the user to try again in a few minutes, an
 ends from here, stopped early included, run `jeeves-auto release` last.
 
 The live files are in `~/.claude`. The data repo keeps the shared ones under `home/` (`CLAUDE.md`, `agents/`,
-`commands/`, `skills/` but not `skills/synced/`) and each device's backup of its memories (and,
-with `backup_settings=yes` in `jeeves.conf`, its `settings.json` and `keybindings.json`) under
+`commands/`, `skills/` but not `skills/synced/`) and each device's backup of its memories under
 `hosts/<host>/`, with history in git. The commands `jeeves-status`,
 `jeeves-snapshot`, `jeeves-apply` and `jeeves-scan` are on the Bash PATH.
 
@@ -379,8 +378,8 @@ not, go back to the step that applies. Notices the snapshot may print:
 
    **Any other change** to a shared file: `jeeves-git switch -c pref/<short-name>`, then make the requested change in
    `home/<path>`. A file goes in `home/` only if it is one of the shared paths above; a change to
-   `settings.json` or `keybindings.json` is per device: make it in `~/.claude` (the next snapshot backs it
-   up), not here. Shared files must work on Linux, macOS and Windows: no absolute paths, a skill runs its
+   `settings.json` or `keybindings.json` is per device and not kept by Jeeves: make it in `~/.claude`, not
+   here. Shared files must work on Linux, macOS and Windows: no absolute paths, a skill runs its
    scripts as `bash <script>` (Windows keeps no executable bit), and file names without `: * ? " < > | \`.
 
    **A request to revert a commit** (`revert <commit>`, from a report): `jeeves-git revert --no-edit

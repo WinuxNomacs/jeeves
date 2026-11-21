@@ -117,8 +117,7 @@ t_new_dirs_tracked_synced_excluded() {
   check "agent copied" [ -f "$R/home/agents/reviewer.md" ]
   check "own skill copied" [ -f "$R/home/skills/mine/SKILL.md" ]
   check "keybindings not shared" [ ! -e "$R/home/keybindings.json" ]
-  check "keybindings backed up for this host" [ -f "$R/hosts/testhost/keybindings.json" ]
-  check "settings backed up for this host" [ -f "$R/hosts/testhost/settings.json" ]
+  check "keybindings not backed up either (knowledge files only)" [ ! -e "$R/hosts/testhost/keybindings.json" ]
   check "skills/synced not copied" [ ! -e "$R/home/skills/synced" ]
   check "skills Claude Code removed (skills/.trash) not copied" [ ! -e "$R/home/skills/.trash" ]
 }
@@ -701,12 +700,12 @@ t_scan_flags_secrets_without_printing_them() {
   tok="sk-ant-api03-$(printf 'x%.0s' 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24)"
   printf 'line one\nexport ANTHROPIC_API_KEY=%s\n' "$tok" > "$R/home/CLAUDE.md"
   git -C "$R" commit -qam "oops"
-  printf '%s\n' '{"env":{"SERVICE_TOKEN":"abcdefghijklmnop1234"}}' > "$W/claude/settings.json"
+  mkdir -p "$W/claude/projects/-p/memory"; printf '%s\n' 'SERVICE_TOKEN=abcdefghijklmnop1234' > "$W/claude/projects/-p/memory/m.md"
   snap >/dev/null
   out=$(scan); rc=$?
   check "exit status 1" [ $rc = 1 ]
   check "names file and line" grep -q "possible Anthropic API key at home/CLAUDE.md:2" <<< "$out"
-  check "catches a token in this host's settings backup" grep -q "value at hosts/testhost/settings.json:1" <<< "$out"
+  check "catches a token in this host's memory backup" grep -q "value at hosts/testhost/projects/-p/memory/m.md:1" <<< "$out"
   check "never prints the secret" bash -c '! grep -Eq "x{10}|abcdefghijklmnop" <<< "$1"' _ "$out"
 }
 
@@ -1025,16 +1024,17 @@ fake() { # fake <name> <script body>
 }
 
 t_host_files_never_applied() {
+  mkdir -p "$W/claude/projects/-p/memory"; echo fact > "$W/claude/projects/-p/memory/one.md"
   snap >/dev/null
-  echo '{"other":1}' > "$R/hosts/testhost/settings.json"
-  mkdir -p "$R/hosts/laptop"; echo '{"laptop":1}' > "$R/hosts/laptop/settings.json"
+  echo edited > "$R/hosts/testhost/projects/-p/memory/one.md"
+  mkdir -p "$R/hosts/laptop/projects/-p/memory"; echo laptop > "$R/hosts/laptop/projects/-p/memory/one.md"
   git -C "$R" add -A && git -C "$R" commit -qm "edits to backups"
   apply >/dev/null
-  check "this host's settings untouched by apply" grep -q '"a":1' "$W/claude/settings.json"
+  check "this host's memory untouched by apply" grep -qx fact "$W/claude/projects/-p/memory/one.md"
   check "status lists no paths" [ "$(status | wc -l | tr -d ' ')" = 3 ]
   snap >/dev/null
-  check "the next snapshot puts back this host's own backup" grep -q '"a":1' "$R/hosts/testhost/settings.json"
-  check "other hosts' backups are left alone" [ -f "$R/hosts/laptop/settings.json" ]
+  check "the next snapshot puts back this host's own backup" grep -qx fact "$R/hosts/testhost/projects/-p/memory/one.md"
+  check "other hosts' backups are left alone" grep -qx laptop "$R/hosts/laptop/projects/-p/memory/one.md"
 }
 
 t_old_layout_moved_to_host_folder() {
@@ -1080,7 +1080,7 @@ t_native_windows_host_name_gets_suffix() {
   unset JEEVES_HOST
   h=$(hostname | cut -d. -f1); want=$h
   case "$OSTYPE" in msys*|cygwin*) want=$h-win ;; esac
-  echo "rules v2" > "$W/claude/CLAUDE.md"
+  snap >/dev/null; echo "rules v2" > "$W/claude/CLAUDE.md"
   snap >/dev/null
   check "the commit names $want (native Windows adds -win, elsewhere the plain name)" bash -c '[[ "$(git -C "$1" log -1 --format=%s)" == "snapshot($2): "* ]]' _ "$R" "$want"
   check "and the backup is under hosts/$want" [ -d "$R/hosts/$want" ]
@@ -1101,38 +1101,31 @@ t_restore_copies_a_host_backup() {
   echo m > "$R/hosts/old/projects/-home-u-here/memory/MEMORY.md"
   echo g > "$R/hosts/old/projects/-home-u-gone/memory/MEMORY.md"
   git -C "$R" add -A && git -C "$R" commit -qm "old host backup"
-  mkdir -p "$W/claude/projects/-home-u-here"
+  mkdir -p "$W/claude/projects/-home-u-here/memory"; echo mine > "$W/claude/projects/-home-u-here/memory/MEMORY.md"
   check "lists the backups" grep -q "this host: testhost; backups: old testhost" <<< "$(restore)"
   out=$(restore nosuch); rc=$?
   check "unknown host: exit 1 and names the backups" [ $rc = 1 ] && check "unknown host message" grep -q "no backup for nosuch (backups: old testhost)" <<< "$out"
   out=$(restore old)
-  check "settings restored" grep -q old "$W/claude/settings.json"
-  check "keybindings restored" [ "$(cat "$W/claude/keybindings.json")" = kb ]
-  check "the replaced settings saved" grep -rq '"a":1' "$R/.sync-state/overwritten"
-  check "says what it restored" grep -q "restored from old: settings.json, keybindings.json" <<< "$out"
-  check "memories only on request" [ ! -e "$W/claude/projects/-home-u-here/memory" ]
-  out=$(restore old --memories)
-  check "memory of a project here restored" [ -f "$W/claude/projects/-home-u-here/memory/MEMORY.md" ]
+  check "memory of a project here restored" grep -qx m "$W/claude/projects/-home-u-here/memory/MEMORY.md"
+  check "the replaced memory saved" grep -rqx mine "$R/.sync-state/overwritten"
   check "memory of a missing project not restored" [ ! -e "$W/claude/projects/-home-u-gone" ]
+  check "says what it restored" grep -q "restored from old: memories of -home-u-here" <<< "$out"
   check "says which were not restored" grep -q "not restored (no such project on this machine): -home-u-gone" <<< "$out"
+  check "settings and keybindings are not restored (knowledge files only)" bash -c '! grep -q old "$1/settings.json" && [ ! -e "$1/keybindings.json" ]' _ "$W/claude"
+  check "--memories, which older versions needed, is still taken" grep -q "restored from old: memories of -home-u-here" <<< "$(restore old --memories)"
   check "restore never commits" [ -z "$(git -C "$R" status --porcelain)" ]
 }
 
-t_settings_backup_is_opt_in_and_old_copies_go_once() {
+t_settings_are_not_backed_up_and_old_copies_stay() {
   mkdir -p "$W/claude/projects/-p/memory"; echo fact > "$W/claude/projects/-p/memory/one.md"
   snap >/dev/null
-  check "on: settings backed up" [ -f "$R/hosts/testhost/settings.json" ]
-  git -C "$R" rm -q jeeves.conf; git -C "$R" commit -qm "settings backup off"
-  out=$(snap --hook)
-  check "off: says the old copy was removed and where it still is" grep -q "hosts/testhost/settings.json removed: settings are backed up only with backup_settings=yes" <<< "$out"
-  check "off: the copy is gone" [ ! -e "$R/hosts/testhost/settings.json" ]
-  check "off: the git history keeps it" bash -c 'git -C "$1" log --format=%H -- hosts/testhost/settings.json | grep -q .' _ "$R"
-  check "off: memories are still backed up" [ -f "$R/hosts/testhost/projects/-p/memory/one.md" ]
-  echo '{"b":2}' > "$W/claude/settings.json"
-  check "off: a settings change is not recorded, and nothing is said" [ -z "$(snap --hook)" ]
-  echo "backup_settings = Yes" > "$R/jeeves.conf"; git -C "$R" add jeeves.conf; git -C "$R" commit -qm "on again"
-  snap >/dev/null
-  check "on again: backed up" grep -q '"b":2' "$R/hosts/testhost/settings.json"
+  check "the copy an older version backed up stays as it was" grep -qx '{"a":1}' "$R/hosts/testhost/settings.json"
+  echo '{"b":2}' > "$W/claude/settings.json"; echo k > "$W/claude/keybindings.json"
+  check "a settings change is not recorded, and nothing is said" [ -z "$(snap --hook)" ]
+  check "the old copy is not updated" grep -qx '{"a":1}' "$R/hosts/testhost/settings.json"
+  check "keybindings are not backed up" [ ! -e "$R/hosts/testhost/keybindings.json" ]
+  check "memories are backed up" [ -f "$R/hosts/testhost/projects/-p/memory/one.md" ]
+  check "backup_settings=yes in jeeves.conf changes nothing" grep -qx backup_settings=yes "$R/jeeves.conf"
 }
 
 t_init_creates_a_data_repo() {
@@ -2277,7 +2270,7 @@ run_test "snapshot does nothing when disk matches the repo" t_nothing_changed
 run_test "snapshot commits a changed CLAUDE.md" t_disk_change_committed
 run_test "snapshot skips when the repo has uncommitted changes" t_dirty_repo_skips
 run_test "snapshot skips when the repo is not on main" t_other_branch_skips
-run_test "agents and own skills are shared, skills/synced and .trash are not, settings and keybindings are backed up per host" t_new_dirs_tracked_synced_excluded
+run_test "agents and own skills are shared, skills/synced and .trash are not, settings and keybindings are not backed up" t_new_dirs_tracked_synced_excluded
 run_test "memories go under the host folder and are never applied" t_memories_backed_up_never_applied
 run_test "a file deleted on disk is deleted from the repo copy" t_disk_deletion_recorded
 # ---- Data integrity: each failure injected ----
@@ -2514,15 +2507,16 @@ t_a_file_deleted_while_it_is_copied_is_left_for_the_next_snapshot() {
 
 t_another_machine_with_the_same_name_keeps_its_backup() {
   snap >/dev/null
-  echo othermachine > "$R/hosts/testhost/.jeeves-machine"; echo '{"theirs":1}' > "$R/hosts/testhost/settings.json"
-  git -C "$R" commit -qam "the other testhost's backup"
-  echo '{"mine":1}' > "$W/claude/settings.json"
+  mkdir -p "$R/hosts/testhost/projects/-p/memory" "$W/claude/projects/-p/memory"
+  echo othermachine > "$R/hosts/testhost/.jeeves-machine"; echo theirs > "$R/hosts/testhost/projects/-p/memory/m.md"
+  git -C "$R" add -A; git -C "$R" commit -qm "the other testhost's backup"
+  echo mine > "$W/claude/projects/-p/memory/m.md"
   out=$(snap); rc=$?
   check "says the backup belongs to another machine" grep -q "belongs to another machine named testhost; set JEEVES_HOST" <<< "$out"
   check "exit 1" [ $rc = 1 ]
-  check "its backup is untouched" grep -q theirs "$R/hosts/testhost/settings.json"
+  check "its backup is untouched" grep -q theirs "$R/hosts/testhost/projects/-p/memory/m.md"
   snap --replace-host >/dev/null
-  check "--replace-host takes the name over" grep -q mine "$R/hosts/testhost/settings.json"
+  check "--replace-host takes the name over" grep -q mine "$R/hosts/testhost/projects/-p/memory/m.md"
   check "with this machine's ID" grep -qx testmachine "$R/hosts/testhost/.jeeves-machine"
 }
 
@@ -2563,13 +2557,14 @@ t_a_stale_lock_is_taken_over_by_one_waiter_only() {
 }
 
 t_restore_leaves_a_file_whose_disk_copy_cannot_be_saved() {
+  mkdir -p "$W/claude/projects/-p/memory"; echo backed > "$W/claude/projects/-p/memory/m.md"
   snap >/dev/null
-  echo '{"mine":2}' > "$W/claude/settings.json"
+  echo mine > "$W/claude/projects/-p/memory/m.md"
   mkdir -p "$R/.sync-state"; : > "$R/.sync-state/overwritten"   # a file where the folder of saved copies goes
   out=$("$SRC/bin/jeeves-restore" testhost); rc=$?
-  check "says it was not restored" grep -q "not restored, left as they were: settings.json" <<< "$out"
+  check "says it was not restored" grep -q "not restored, left as they were: projects/-p/memory/m.md" <<< "$out"
   check "exit 1" [ $rc = 1 ]
-  check "the disk copy is kept" grep -q mine "$W/claude/settings.json"
+  check "the disk copy is kept" grep -qx mine "$W/claude/projects/-p/memory/m.md"
 }
 
 t_the_memory_review_record_is_stored_encrypted() {
@@ -2737,7 +2732,7 @@ run_test "a cleaned history is not taken when the old one cannot be kept" t_a_cl
 run_test "a lock taken during the stale check is kept" t_a_lock_taken_during_the_stale_check_is_kept
 run_test "a stale lock is taken over by one waiter only" t_a_stale_lock_is_taken_over_by_one_waiter_only
 run_test "restore leaves a file whose disk copy cannot be saved" t_restore_leaves_a_file_whose_disk_copy_cannot_be_saved
-run_test "the settings backup is opt-in, and old copies go once" t_settings_backup_is_opt_in_and_old_copies_go_once
+run_test "settings are not backed up, and copies an older version made stay" t_settings_are_not_backed_up_and_old_copies_stay
 run_test "memories lists what is not reviewed yet, from this machine and other devices" t_memories_lists_what_is_not_reviewed_yet_from_this_machine_and_other_devices
 run_test "memories record refuses bad input and another branch" t_memories_record_refuses_bad_input_and_another_branch
 run_test "background updates are off until the user decides" t_background_updates_are_off_until_the_user_decides

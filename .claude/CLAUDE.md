@@ -1,7 +1,8 @@
 # CLAUDE.md (this repo)
 
 Jeeves (`jeeves`, display name Jeeves) is a Claude Code plugin that versions the user's global Claude Code
-preferences (`~/.claude/CLAUDE.md`, `settings.json` and friends) in a separate **data repo** (the user's own:
+preferences (`~/.claude/CLAUDE.md`, skills, agents, commands, and memories as a per-device backup) in a
+separate **data repo** (the user's own:
 `WinuxNomacs/jeeves-cmd`). This repo is the plugin code only; it holds no preferences.
 
 ## Purpose (the user's, 2026-11-18)
@@ -76,8 +77,9 @@ code that runs, and the release check would warn at every session start.
   Such a `claude -p` session runs the installed plugin's hooks with the real `data_repo` option: never give
   it a scratch `CLAUDE_HOME` or `JEEVES_HOST` (one test did, and its session-start snapshot committed the
   scratch `CLAUDE.md` into the real data repo); point only `PATH` at a worktree's `bin/`.
-- Shared files (`home/`, synced) vs per-device files (`hosts/<host>/`, backup only; settings and keybindings
-  only with `backup_settings=yes` in `jeeves.conf`): the lists are at the top of `lib/lib.sh`.
+- Shared files (`home/`, synced) vs per-device memories (`hosts/<host>/`, backup only): the lists are in
+  `internal/lib/tracked.go`. Knowledge files only (the user's decision, 2026-11-20): settings and
+  keybindings are not backed up; copies a version before 2.0 left in `hosts/<host>/` are kept as they are.
 - `lib/lib.sh` — shared code: finding the data repo, tracked paths list, hashes, three-way classification.
   `lib/crypt.sh` — encryption: the key stores (Keychain, Windows Credential Manager through PowerShell,
   `secret-tool`, a key file), the passphrase dialogs, age helpers.

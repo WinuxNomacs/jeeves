@@ -23,8 +23,7 @@ Argument (a URL of an existing data repo, or nothing): $ARGUMENTS
 
 Jeeves keeps the user's shared global preferences (`~/.claude/CLAUDE.md`, `agents/`, `commands/`, `skills/`)
 in a private git repo of their own, the **data repo**, under `home/`, and each machine's backup of its
-memories (and, when `jeeves.conf` has `backup_settings=yes`, its `settings.json` and `keybindings.json`)
-under `hosts/<host>/`. The commands `jeeves-check`,
+memories under `hosts/<host>/`. The commands `jeeves-check`,
 `jeeves-github`, `jeeves-status`, `jeeves-restore`, `jeeves-init` and `jeeves-encrypt` are on the Bash PATH.
 
 ## Voice
@@ -135,11 +134,10 @@ run since step 3, run it now: it records the data repo for this device, so later
 git in it as `jeeves-git <arguments>`, never with a `cd` into it). Run `jeeves-restore`: it prints `this host: <name>` and
 `backups: <hosts>`. Whether `<name>` is listed says nothing: the session-start snapshot backs this machine up
 before setup runs. When the list names any host other than `<name>`, stop and ask the user with the
-AskUserQuestion tool (one option per other host, plus "No, keep this machine's settings"), and do not start
-step 5 until they answer. Ask even when this machine already has settings, and even when other rules say to
-proceed without asking: the choice is theirs. A restore copies whatever that machine's backup holds:
-its `settings.json` and `keybindings.json` if it backed them up (`backup_settings=yes`), and its memories
-for projects that exist here (ask about those in the same question or right after), saving this machine's copies first; a backup from another OS may hold paths that need fixing. If they
+AskUserQuestion tool (one option per other host, plus "No, keep this machine's memories as they are"), and
+do not start step 5 until they answer. Ask even when this machine already has memories, and even when other
+rules say to proceed without asking: the choice is theirs. A restore copies that machine's memories for the
+projects that exist here, saving this machine's copies first. If they
 pick a host, follow the restore steps with that host before going on. With no other host (a new
 data repo), say there is nothing to restore yet and go on.
 
