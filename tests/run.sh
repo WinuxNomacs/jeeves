@@ -26,7 +26,10 @@ export JEEVES_WORKER_IDLE=1
 
 # Fresh world: $W/remote.git, $W/repo (the data repo, a clone with home/), $W/claude (CLAUDE_HOME).
 setup() {
-  W=$SCRATCH/$1; mkdir -p "$W/claude"
+  # A fresh folder for each run, also of a test run twice (the bash-version pass).
+  W=$SCRATCH/$1; n=1
+  while [ -e "$W" ]; do n=$((n + 1)); W=$SCRATCH/$1.$n; done
+  mkdir -p "$W/claude"
   git init -q --bare -b main "$W/remote.git"
   git clone -q "$W/remote.git" "$W/repo" 2>/dev/null
   mkdir -p "$W/repo/home"
@@ -2214,9 +2217,16 @@ t_a_killed_supervisors_child_is_stopped_by_its_watchdog() {
   "$SRC/bin/jeeves-auto" run sess1 "$TP" "$W/proj" & sup=$!
   wait_for 20 test -s "$FAKE_LOG.pid"
   check "the child is recorded with its run folder" grep -q "jeeves-auto\." "$CLAUDE_HOME/jeeves/auto/child"
-  check "status shows the run at work and its child" grep -q "at work now (auto, .*child PID $(cat "$FAKE_LOG.pid")" <<< "$(autobin status)"
+  case "$OSTYPE" in
+    # On Windows the record holds the child's Windows PID, which Git Bash's $$ in the stand-in is not.
+    msys*|cygwin*) check "status shows the run at work and its child" grep -qE "at work now \(auto, .*child PID [0-9]+" <<< "$(autobin status)" ;;
+    *) check "status shows the run at work and its child" grep -q "at work now (auto, .*child PID $(cat "$FAKE_LOG.pid")" <<< "$(autobin status)" ;;
+  esac
   kill -9 $sup; wait $sup 2>/dev/null
   check "the watchdog stops the child" wait_for 20 bash -c '! kill -0 "$(cat "$1")" 2>/dev/null' _ "$FAKE_LOG.pid"
+  # On Windows the Go build's child dies with its supervisor (a job object) and no watchdog is left to clean
+  # up: the next session start does.
+  case "$OSTYPE" in msys*|cygwin*) autobin --session-start >/dev/null ;; esac
   check "and removes the run folder" wait_for 5 bash -c '! grep -rqs UNIQUE-SESSION-TEXT "$XDG_RUNTIME_DIR"/jeeves-auto.*'
   check "and the child record" wait_for 5 test ! -e "$CLAUDE_HOME/jeeves/auto/child"
   check "no watchdog is left" wait_for 5 bash -c '! ps -o args= -A 2>/dev/null | grep -v grep | grep -qE "jeeves-auto run sess1|auto --watch "'

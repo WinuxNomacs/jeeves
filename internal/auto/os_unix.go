@@ -3,6 +3,7 @@
 package auto
 
 import (
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -41,3 +42,6 @@ func ownedBy(fi interface{ Sys() any }) bool {
 
 // umask makes what the run writes private to this user.
 func umask() { syscall.Umask(0o077) }
+
+// private: only this user may enter the folder (mode 0700, the shell's find -perm 0700).
+func private(fi interface{ Mode() os.FileMode }) bool { return fi.Mode().Perm() == 0o700 }
