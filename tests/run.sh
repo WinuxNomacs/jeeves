@@ -662,6 +662,14 @@ t_the_launcher_finds_the_plugin_folder_however_it_is_called() {
   mkdir -p "$W/x/y" "$W/x/lib"; printf 'echo planted; exit 0\n' > "$W/x/lib/launch.sh"
   out=$(cd "$W/x/y" && PATH="$W/plugin/bin:$PATH" JEEVES_NO_GO=1 bash jeeves-status 2>&1)
   check "and by its bare name from the PATH, never a launcher relative to the current folder" [ "$out" = "bash version of status" ]
+  # Git for Windows starts a filter by the path in its config, which a bash script's git config call wrote
+  # in Windows form (D:/...: Git Bash converts a POSIX path passed to a native program).
+  case "$OSTYPE" in msys*|cygwin*)
+    for p in "$(cygpath -m "$W/plugin")/bin/jeeves-status"; do
+      out=$(JEEVES_NO_GO=1 bash "$p" 2>&1)
+      check "by a Windows path: $p" [ "$out" = "bash version of status" ]
+    done ;;
+  esac
 }
 
 t_a_name_with_a_line_break_never_points_outside_the_tracked_folders() {
