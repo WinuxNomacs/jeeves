@@ -185,8 +185,7 @@ The headless session does not read your `settings.json` beyond its model and `en
 there (such as `apiKeyHelper`) does not reach it: the run then fails, and the next session start says so.
 
 Settings, in `~/.claude/jeeves/auto.conf` on each device: `enabled`, `interval_minutes` (60),
-`min_new_chars` (8000), `deadline_minutes` (15). Background updates need `perl` with JSON::PP (on macOS,
-Linux and Git for Windows by default) to read transcripts.
+`min_new_chars` (8000), `deadline_minutes` (15).
 
 ### History cleanup
 
