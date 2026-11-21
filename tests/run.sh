@@ -668,7 +668,7 @@ t_the_launcher_finds_the_plugin_folder_however_it_is_called() {
   # Git for Windows starts a filter by the path in its config, which a bash script's git config call wrote
   # in Windows form (D:/...: Git Bash converts a POSIX path passed to a native program).
   case "$OSTYPE" in msys*|cygwin*)
-    for p in "$(cygpath -m "$W/plugin")/bin/jeeves-status"; do
+    for p in "$(cygpath -m "$W/plugin")/bin/jeeves-status" "$(cygpath -w "$W/plugin")/bin/jeeves-status"; do
       out=$(JEEVES_NO_GO=1 bash "$p" 2>&1)
       check "by a Windows path: $p" [ "$out" = "bash version of status" ]
     done ;;
@@ -2072,7 +2072,9 @@ t_the_background_child_is_confined_and_gets_no_session_variables() {
   for gone in CLAUDE_CODE_MESSAGING_TOKEN CLAUDE_CODE_SESSION_ID JEEVES_AGE_KEY CLAUDE_HOME JEEVES_DATA CLAUDE_CODE_PLUGIN_DIRS; do
     check "the child does not get $gone" bash -c '! grep -q "^$1=" <<< "$2"' _ "$gone" "$e"
   done
-  check "the child keeps what its sign-in or platform needs" grep -qx "CLAUDE_CODE_GIT_BASH_PATH=/bin/bash" <<< "$e"
+  # On Windows Git Bash gives a native program a path-like value in Windows form (right for Claude Code).
+  gbp=/bin/bash; case "$OSTYPE" in msys*|cygwin*) [ "$JEEVES_NO_GO" = 1 ] || gbp=$(cygpath -m /bin)/bash ;; esac
+  check "the child keeps what its sign-in or platform needs" grep -qxF "CLAUDE_CODE_GIT_BASH_PATH=$gbp" <<< "$e"
   check "the settings' env is carried over" grep -qx "MY_SETTING=x y" <<< "$e"
   check "but never sits in the folder the child can read" bash -c '! grep -q settings-env "$1"' _ "$FAKE_LOG.files"
   check "and is removed" [ ! -e "$CLAUDE_HOME/jeeves/auto/settings-env" ]
