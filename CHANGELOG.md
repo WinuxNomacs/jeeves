@@ -9,10 +9,13 @@ review.**
 
 **Background updates: Jeeves can keep your rules up to date while you work. Off until you turn it on.**
 
-- **`/jeeves:autoupdate`** turns background updates on or off on each device. When on, at most once an hour
-  per session (once there is enough new to review), a separate headless Claude Code session reviews what the
-  session taught, as `/jeeves:update` does, adds or revises global rules, syncs and pushes. Your session is
-  not interrupted. Each run uses plan usage (measured at about $0.35 to $0.80 of list-price usage per run).
+- **`/jeeves:autoupdate`** turns background updates on or off on each device. When on, a separate headless
+  Claude Code session reviews what the session taught, as `/jeeves:update` does, adds or revises global
+  rules, syncs and pushes. Your session is not interrupted. Nothing runs on a timer: a run starts only when
+  Claude ends a reply in a session you are using, at most once an hour per session and once it has grown
+  enough. It draws on your Claude plan's session and weekly usage like any session, with no charge per run
+  (an API-key sign-in is billed by the token): about 125,000 to 930,000 tokens per run on Opus, mostly the
+  prompt cache read again. `jeeves-auto status` shows each run's tokens.
 - **The next session start tells you** what a background update changed, with the command to undo it, and
   what waits for you. New sessions mention `/jeeves:autoupdate` once until you decide.
 - **Background runs do less than `/jeeves:update`:** they never remove or merge a rule, rename a heading, or
