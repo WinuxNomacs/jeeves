@@ -2,7 +2,7 @@
 
 A new version reaches installed copies only when `version` in `.claude-plugin/plugin.json` changes.
 
-## 2.0.0 (unreleased)
+## 2.0.0 (2026-11-21)
 
 **Jeeves rewritten as one compiled program, with background updates, built-in encryption and a security
 review.**

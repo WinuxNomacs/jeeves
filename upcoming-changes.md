@@ -4,8 +4,8 @@
 
 - **No release before 2.0** (the user's decision, 2026-11-21): 2.0 is the completed Go rewrite. Work merges
   into `main` as each phase is done; nothing is cut or tagged until then, except the 1.4.2 security fix.
-- **Up next:** 1. Release 2.0: the release steps (`.claude/skills/release/SKILL.md`) from step 4 (the
-  review, step 3, is done: below, "2.0 review (2026-11-21)"); the tag is the user's
+- **Up next:** 1. After the user's `v2.0.0` tag: release step 9 (marketplace pin, the scratch install's
+  update to 2.0.0)
 - **The user's, any time:** submit 1.4.2 in the Anthropic portal (below, "Anthropic directory submission")
 - **Later:** 0. Review text gaps (below, under "Review text gaps") · 0. Injection docs: threat model in the README, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
@@ -1394,6 +1394,11 @@ Suite 105 passed (2026-11-19).
   tests ported to Go (`internal/lib/lock_test.go`); the launcher execs the build with no fallback, and
   `JEEVES_NO_GO` is gone. Jeeves is the Go program, `lib/launch.sh` and `bin/jeeves-verify` (CI run
   44953875377, 165 tests on each OS). Not released.
+- Release 2.0.0 (2026-11-21): the Go port (Phases 0 to 5) and the 2.0 review's fixes (R1 to R8, "2.0
+  review" above). Checks: syntax, `claude plugin validate`, `build-go.sh --check`, `go test`, the suite
+  (184 passed), REHEARSAL OK from `v1.4.2` (its filter check updated for the single-quoted config), the
+  published 1.4.2 installed in a scratch `CLAUDE_CONFIG_DIR` and verified; signed manifest; CI on the release
+  branch. The tag is the user's.
 
 ## Review text gaps (found by the 2026-11-19 dry run; older text, not this phase's)
 
