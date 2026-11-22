@@ -157,7 +157,7 @@ func (s *state) sessionStart() int {
 	}
 	s.recoverIdle()
 	if !exists(s.conf) {
-		fmt.Fprintln(s.stdout, "jeeves: background updates (a /jeeves:update review about once an hour of use, in a separate headless session; off by default) are not decided on this device. Tell the user once, in one line, that /jeeves:autoupdate turns them on or keeps them off; either answer ends this reminder.")
+		fmt.Fprintln(s.stdout, "jeeves: background updates (a /jeeves:update review in a separate headless session, at most once an hour while a session is in use; off by default) are not decided on this device. Tell the user once, in one line, that /jeeves:autoupdate turns them on or keeps them off; either answer ends this reminder.")
 	}
 	for _, n := range sortedNames(s.dir + "/notices") {
 		p := s.dir + "/notices/" + n
