@@ -57,7 +57,7 @@ for kind in plain crypt; do
   st=$(A "$NEW/bin/jeeves-status" 2>&1)
   chk "new status: the same output as the old release's on the old state" [ "$st" = "$bst" ]
   if [ $kind = crypt ]; then
-    chk "new status: git's filter runs this checkout's jeeves-crypt" bash -c 'git -C "$1" config filter.jeeves.clean | grep -qF "\"$2/bin/jeeves-crypt\" clean"' _ "$K/repoA" "$NEW"
+    chk "new status: git's filter runs this checkout's jeeves-crypt" bash -c 'git -C "$1" config filter.jeeves.clean | grep -qF "$2"' _ "$K/repoA" "'$NEW/bin/jeeves-crypt' clean"
   fi
   # background updates (1.5.0): off on an upgraded device until the user decides; their hooks change nothing
   n=$(git -C "$K/repoA" rev-list --count main)
