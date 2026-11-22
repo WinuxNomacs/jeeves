@@ -119,6 +119,9 @@ code that runs, and the release check would warn at every session start.
   command trips Claude Code's safety check, which denies the command (2026-11-20). After first adding the env, start a new
   session: when `/reload-plugins` swapped the installed copy for the inline one, the VS Code panel's command
   menu showed no Jeeves commands, while a fresh session listed them all (2026-11-19).
+- Work on a branch, a release branch included, in a `git worktree`, and keep the checkout a development setup
+  loads on `main`: every session on that device runs the checkout as it is, so switching its branch changes what
+  they run.
 - To run a `bin/` script by hand against scratch folders, `export CLAUDE_HOME=<scratch>/.claude
   JEEVES_DATA=<scratch>/data` (and `JEEVES_HOST=<name>` to act as another host) first; never put `env ...`
   in a variable and run `$VAR cmd`, which zsh (the macOS shell) does not split.
