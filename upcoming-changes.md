@@ -1411,7 +1411,9 @@ Suite 105 passed (2026-11-19).
   review" above). Checks: syntax, `claude plugin validate`, `build-go.sh --check`, `go test`, the suite
   (184 passed), REHEARSAL OK from `v1.4.2` (its filter check updated for the single-quoted config), the
   published 1.4.2 installed in a scratch `CLAUDE_CONFIG_DIR` and verified; signed manifest; CI on the release
-  branch. The tag is the user's.
+  branch. Then, at the user's request, background update usage in tokens (measured again, "Measured again in
+  tokens" above) and a project rule on worktrees merged in: suite 184 passed, rehearsal again, manifest
+  signed again, CI again. The tag is the user's.
 
 ## Review text gaps (found by the 2026-11-19 dry run; older text, not this phase's)
 
