@@ -269,3 +269,14 @@ func TestTheRunLocksClockRestartsOnlyWhileItIsThisRunsOwn(t *testing.T) {
 		t.Errorf("another run's lock was changed: %v", f)
 	}
 }
+
+func TestTokenFiguresSumsTheResultsUsageAndNeverPrintsADollarFigure(t *testing.T) {
+	b := []byte(`{"type":"result","total_cost_usd":0.5,"usage":{"input_tokens":12,"cache_creation_input_tokens":30000,"cache_read_input_tokens":45000,"output_tokens":2100,"server_tool_use":{"web_search_requests":0}}}`)
+	want := "tokens=77112 input=12 cache_write=30000 cache_read=45000 output=2100"
+	if got := tokenFigures(b); got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+	if got := tokenFigures([]byte("not json")); got != "tokens=0 input=0 cache_write=0 cache_read=0 output=0" {
+		t.Fatalf("unreadable result: got %q", got)
+	}
+}

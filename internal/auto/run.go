@@ -306,7 +306,7 @@ func (u *runner) body(sid, tp, folder string) {
 `, nonce, u.e.Host, runSh, topLine, projLine)
 	os.WriteFile(run+"/brief.md", []byte(brief), 0o600)
 
-	cost, ms, turns, ok := u.runChild(run)
+	use, ms, turns, ok := u.runChild(run)
 	if !ok {
 		return
 	}
@@ -361,7 +361,7 @@ func (u *runner) body(sid, tp, folder string) {
 	}
 	u.writeSession(sid, newOffset, now())
 	os.Remove(u.dir + "/backoff")
-	u.logRun(u.outcome, fmt.Sprintf("cost=%s ms=%s turns=%s", cost, ms, turns))
+	u.logRun(u.outcome, fmt.Sprintf("%s ms=%s turns=%s", use, ms, turns))
 }
 
 // runBase is where run folders go. Claude Code reads every CLAUDE.md on the way up from the child's folder,
@@ -498,7 +498,7 @@ func rulePath(native string) string {
 // it): this plugin is loaded by path, and only the settings' model and env carried over. Deny rules win over
 // a skill's allowed-tools, so the update skill's own grants give it no shell either. ok is false when the
 // run ends here (the child failed or hung: logged, backed off).
-func (u *runner) runChild(run string) (cost, ms, turns string, ok bool) {
+func (u *runner) runChild(run string) (use, ms, turns string, ok bool) {
 	runN, runR := filepath.ToSlash(run), rulePath(run)
 	model, senv := u.userSettings()
 	args := []string{"-p", "/jeeves:update auto " + runN, "--setting-sources", "project",
@@ -578,20 +578,34 @@ wait:
 	exit := lib.ExitCode(werr)
 	b, _ := os.ReadFile(run + "/result.json")
 	isErr := jsonField(b, "is_error")
-	cost, ms, turns = jsonField(b, "total_cost_usd"), jsonField(b, "duration_ms"), jsonField(b, "num_turns")
+	use, ms, turns = tokenFigures(b), jsonField(b, "duration_ms"), jsonField(b, "num_turns")
 	if exit != 0 || isErr != "false" {
 		if usageLimit.MatchString(jsonField(b, "result")) {
 			u.backoff(86400)
 			u.notice("problem-usage", "jeeves: background updates are paused for a day: the plan's usage limit was reached.")
-			u.logRun("failed", "(usage limit; paused a day) cost="+cost)
+			u.logRun("failed", "(usage limit; paused a day) "+use)
 		} else {
 			u.backoff(3600)
 			u.notice("problem-child", fmt.Sprintf("jeeves: a background update failed (Claude Code exit %d; signed out, or the plugin not found?) and is paused for an hour; jeeves-auto status shows the last runs.", exit))
-			u.logRun("failed", fmt.Sprintf("(child exit %d) cost=%s ms=%s turns=%s", exit, cost, ms, turns))
+			u.logRun("failed", fmt.Sprintf("(child exit %d) %s ms=%s turns=%s", exit, use, ms, turns))
 		}
 		return "", "", "", false
 	}
-	return cost, ms, turns, true
+	return use, ms, turns, true
+}
+
+// tokenFigures is the child's token use from its result's "usage" object, for the log: the total, then
+// input, cache writes, cache reads and output. Tokens, not the result's dollar figure: on a Claude plan a run
+// draws on the plan's usage like any session, and nothing is charged per run.
+func tokenFigures(b []byte) string {
+	u, _ := decodeObject(bytes.TrimSpace(b))["usage"].(map[string]any)
+	var f [4]int64
+	for i, k := range []string{"input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "output_tokens"} {
+		if n, ok := u[k].(json.Number); ok {
+			f[i], _ = n.Int64()
+		}
+	}
+	return fmt.Sprintf("tokens=%d input=%d cache_write=%d cache_read=%d output=%d", f[0]+f[1]+f[2]+f[3], f[0], f[1], f[2], f[3])
 }
 
 // readSummary is the run's summary as it may go into a notice and a commit message: carriage returns and

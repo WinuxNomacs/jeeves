@@ -1,8 +1,8 @@
 ---
 name: autoupdate
 description: >-
-  Turn Jeeves's background updates on or off on this device: when on, about once an hour of use a separate
-  headless Claude Code session reviews what the session taught and saves it to the global rules, as
+  Turn Jeeves's background updates on or off on this device: when on, at most once an hour while a session is
+  in use, a separate headless Claude Code session reviews what the session taught and saves it to the global rules, as
   /jeeves:update does, and the next session start says what changed and how to undo it. Shows the setting,
   the last runs and what waits for the user.
 argument-hint: "[on | off]"
@@ -39,10 +39,15 @@ AskUserQuestion: the obvious options, the recommended one first; they can still 
    session-start reminder).
 
    What to tell them, in plain words:
-   - At most once an hour per session, once the session has grown enough, a separate headless Claude Code
-     session (it does not interrupt this one) reviews what was learned, as `/jeeves:update` does, and
-     saves it to the global rules, then syncs and pushes the data repo. Each run uses plan usage: measured
-     on 2026-11-20 at about $0.35 to $0.80 of list-price usage per run on Opus.
+   - Nothing runs on a timer: when Claude ends a reply in a session in use, at most once an hour per session
+     and once it has grown by about 8,000 characters, a separate headless Claude Code session (it does not
+     interrupt this one) reviews what was learned, as `/jeeves:update` does, and saves it to the global
+     rules, then syncs and pushes the data repo.
+   - Each run draws on their Claude plan's session and weekly usage, like any session they start; nothing
+     is charged per run (only a Claude Code signed in with an API key is billed by the token). Measured on
+     Opus (2026-11-21): about 125,000 tokens for a one-exchange session to about 930,000 for the largest
+     extract a run reads, most of it the prompt cache read again on each turn. `jeeves-auto status` shows
+     each run's tokens. Give these figures in tokens, never as a dollar amount.
    - It only adds or revises rules. Removals, project rules, risky items, skills from other devices and
      anything that needs the user's decision wait for their next `/jeeves:update`; the next session start
      says what changed (with the command to undo it) and what waits.

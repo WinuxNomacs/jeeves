@@ -150,12 +150,17 @@ starts from a rule or a result you are unhappy with.
 
 ### Background updates
 
-Off until you turn them on, per device: `/jeeves:autoupdate`. When on, at most once an hour per session (once
-the session has grown enough to be worth it), the end of one of Claude's replies starts a separate headless
-Claude Code session in the background. It reviews what the session taught, as `/jeeves:update` does, adds or
+Off until you turn them on, per device: `/jeeves:autoupdate`. When on, the end of one of Claude's replies starts a
+separate headless Claude Code session in the background. It reviews what the session taught, as `/jeeves:update` does, adds or
 revises global rules, syncs and pushes; your session is not interrupted. The next session start says what
-changed, with the command to undo it, and what waits for you. Each run uses your plan's usage: measured at
-about $0.35 to $0.80 of list-price usage per run on Opus (2026-11-20).
+changed, with the command to undo it, and what waits for you.
+
+Nothing runs on a timer: a run starts only when Claude ends a reply in a session you are using, at most once an hour
+per session, and only once that session has grown by about 8,000 characters since its last run. A run draws on your
+Claude plan's session and weekly usage like any session you start; nothing is charged per run (only if Claude Code
+signs in with an API key is it billed by the token). Measured on Opus (2026-11-21): about 125,000 tokens for a session
+of one exchange to about 930,000 for the largest extract a run reads (200,000 characters), most of it the prompt cache
+read again on each of its turns; 600 to 4,300 tokens of output. `jeeves-auto status` shows each run's tokens.
 
 What it may do alone is narrower than `/jeeves:update`: it adds rules and revises them in place, and never
 removes or merges one, renames a heading, or changes the Security section or a rule you set firmly. Project

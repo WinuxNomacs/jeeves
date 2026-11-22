@@ -2070,7 +2070,7 @@ run=${2#/jeeves:update auto }
 cp "$run/extract.txt" "$FAKE_LOG.extract" 2>/dev/null
 cp "$run/brief.md" "$FAKE_LOG.brief" 2>/dev/null
 ls -A "$run" > "$FAKE_LOG.files"
-ok() { echo '{"type":"result","is_error":false,"total_cost_usd":0.01,"duration_ms":5,"num_turns":2,"result":"done"}'; exit 0; }
+ok() { echo '{"type":"result","is_error":false,"total_cost_usd":0.01,"duration_ms":5,"num_turns":2,"result":"done","usage":{"input_tokens":5,"cache_creation_input_tokens":1000,"cache_read_input_tokens":2000,"output_tokens":300}}'; exit 0; }
 edit=$run/edit/CLAUDE.md
 case ",$FAKE_CLAUDE_MODE," in
   *,hang,*) exec sleep 300 ;;
@@ -2165,7 +2165,7 @@ t_a_background_run_learns_pushes_installs_and_tells_the_user_once() {
   check "the queued item holds the proposal" grep -q 'run make lint' <<< "$q"
   check "the memory reviewed is recorded" grep -q "promoted 1 (background)" "$R/hosts/.memory-review"
   check "a hash the run was not given is not recorded" bash -c '! grep -q "^ffffffff" "$1"' _ "$R/hosts/.memory-review"
-  check "the log has figures, no session text" bash -c 'grep -q "learned,pushed cost=0.01" "$1" && ! grep -rq "UNIQUE-SESSION-TEXT" "$2"' _ "$CLAUDE_HOME/jeeves/auto/log" "$CLAUDE_HOME/jeeves/auto"
+  check "the log has figures, no session text" bash -c 'grep -q "learned,pushed tokens=3305 input=5 cache_write=1000 cache_read=2000 output=300 " "$1" && ! grep -rq "UNIQUE-SESSION-TEXT" "$2"' _ "$CLAUDE_HOME/jeeves/auto/log" "$CLAUDE_HOME/jeeves/auto"
   check "the run folder is gone" bash -c '! ls -d "$XDG_RUNTIME_DIR"/jeeves-auto.* 2>/dev/null | grep -q . || ! grep -rqs UNIQUE-SESSION-TEXT "$XDG_RUNTIME_DIR"/jeeves-auto.*'
   check "the run lock is released" [ ! -e "$CLAUDE_HOME/jeeves/auto/run.lock" ]
   check "the data repo is clean" [ -z "$(git -C "$R" status --porcelain)" ]

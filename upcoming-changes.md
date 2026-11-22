@@ -783,6 +783,19 @@ The floor (about $0.35 on Opus) is the skill and the two CLAUDE.md files, paid o
 session held: a run should start only when the session has new activity worth reviewing, not on a clock
 alone. Opus found one useful item that Sonnet left out; both left out what was already saved.
 
+Measured again in tokens (2026-11-21, the user's request: the docs give tokens, not dollars, since on a Claude
+plan a run draws on the plan's session and weekly usage and nothing is charged per run). Through the real
+`jeeves-auto run` (2.0 build, Opus `opus[1m]`, this repo as the project, the user's global rules, no memories
+pending), scratch data repo and remote; each run now logs these figures:
+
+| Session reviewed                       | Total   | Input | Cache write | Cache read | Output | Turns | Time |
+|----------------------------------------|---------|-------|-------------|------------|--------|-------|------|
+| one exchange                           | 125,601 | 8     | 25,396      | 99,604     | 593    | 7     | 11 s |
+| 200,000-character extract (the cap)    | 927,304 | 20    | 140,451     | 782,568    | 4,265  | 15    | 56 s |
+
+Most of a run is the prompt cache read again on each turn. How the plan's limits weigh cache reads is not
+published, so the docs give the token counts and no share of a plan.
+
 
 As built (1b, 2026-11-20, branch `feat/auto-update`), where it differs from the plan above:
 - No git worktree: the model never touches the data repo at all. The script copies into a private temp

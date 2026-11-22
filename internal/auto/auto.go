@@ -262,7 +262,7 @@ func Run(e lib.Env, args []string, stdout, stderr io.Writer) int {
 		if !s.setEnabled("yes") {
 			return 1
 		}
-		s.say("on: a background review at most every %d minutes per session, once it has grown by %d characters", s.interval/60, s.minNew)
+		s.say("on: a background review when Claude ends a reply in a session in use, at most every %d minutes per session, once it has grown by %d characters", s.interval/60, s.minNew)
 	case "off":
 		if !s.setEnabled("no") {
 			return 1
@@ -320,7 +320,7 @@ func (s *state) status() {
 	default:
 		s.say("off")
 	}
-	s.say("at most every %d minutes per session, after %d new characters; deadline %d minutes", s.interval/60, s.minNew, s.deadline/60)
+	s.say("runs only when Claude ends a reply in a session in use: at most every %d minutes per session, after %d new characters; deadline %d minutes", s.interval/60, s.minNew, s.deadline/60)
 	if exists(s.lock) && !s.lockStale() {
 		f := strings.Fields(firstLine(s.lock))
 		start := int64(0)
