@@ -2,12 +2,10 @@
 
 ## Phases (current and upcoming)
 
-- **No release before 2.0** (the user's decision, 2026-11-21): 2.0 is the completed Go rewrite. Work merges
-  into `main` as each phase is done; nothing is cut or tagged until then, except the 1.4.2 security fix.
-- **Up next:** 1. After the user's `v2.0.0` tag: release step 9 (marketplace pin, the scratch install's
-  update to 2.0.0)
-- **The user's, any time:** submit 1.4.2 in the Anthropic portal (below, "Anthropic directory submission")
-- **Later:** 0. Review text gaps (below, under "Review text gaps") · 0. Injection docs: threat model in the README, plugin repo protection · 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
+- **Up next:** 1. Review text gaps (below, under "Review text gaps") · 2. Injection docs: threat model in the
+  README, plugin repo protection
+- **The user's, any time:** submit the current release (2.0.0) in the Anthropic portal (below, "Anthropic directory submission")
+- **Later:** 1. Key rotation (a new key after a leaked passphrase) · 2. Follow symlinked folders under
   `~/.claude` · 3. Recover a cleanup killed after moving `main` · 4. Per-device overlay (only if a shared file
   must differ per host)
 
@@ -1413,7 +1411,9 @@ Suite 105 passed (2026-11-19).
   published 1.4.2 installed in a scratch `CLAUDE_CONFIG_DIR` and verified; signed manifest; CI on the release
   branch. Then, at the user's request, background update usage in tokens (measured again, "Measured again in
   tokens" above) and a project rule on worktrees merged in: suite 184 passed, rehearsal again, manifest
-  signed again, CI again. The tag is the user's.
+  signed again, CI again. Tagged `v2.0.0` on c1c4976 by Claude (the user's word for this release), the tag's
+  CI green on three OSes, marketplace pinned (be4ace9's merge); a scratch install of 1.4.2 updated to 2.0.0
+  and `jeeves-verify` passes.
 
 ## Review text gaps (found by the 2026-11-19 dry run; older text, not this phase's)
 
